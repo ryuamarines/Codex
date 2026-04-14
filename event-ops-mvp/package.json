@@ -1,0 +1,16 @@
+{
+  "name": "event-ops-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lumaを公開・申込の母艦として使いながら、内部向けにイベント運営を管理するMVP",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test:smoke": "node --experimental-default-type=module ./scripts/smoke-tests.mjs",
+    "firebase:deploy": "npx firebase-tools deploy --only hosting,firestore:rules",
+    "firebase:serve": "npx firebase-tools emulators:start --only hosting,auth,firestore"
+  },
+  "dependencies": {
+    "firebase": "^12.12.0"
+  }
+}

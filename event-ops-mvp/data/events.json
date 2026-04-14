@@ -1,0 +1,645 @@
+[
+  {
+    "id": "event_mnvpvl3n_u6z5yp",
+    "name": "おとぎmeetup",
+    "startsAt": "2026-04-17T18:00",
+    "venue": "たん清",
+    "status": "企画中",
+    "summary": "",
+    "theme": "",
+    "speakers": "",
+    "owners": "",
+    "lumaUrl": "",
+    "lumaStatus": "未着手",
+    "lumaRegistrationCount": "",
+    "lumaCheckedAt": "",
+    "lumaNotes": "",
+    "templateId": "networking",
+    "notes": "",
+    "tasks": [
+      {
+        "id": "task_mnvpvl3n_hv0pa3",
+        "title": "会場確認",
+        "assignee": "",
+        "dueDate": "",
+        "status": "進行中",
+        "memo": "",
+        "category": "会場"
+      },
+      {
+        "id": "task_mnvpvl3n_jtps2u",
+        "title": "登壇者確認",
+        "assignee": "",
+        "dueDate": "",
+        "status": "進行中",
+        "memo": "",
+        "category": "登壇者対応"
+      },
+      {
+        "id": "task_mnvpvl3n_askycm",
+        "title": "Lumaページ作成",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "Luma対応"
+      },
+      {
+        "id": "task_mnvpvl3n_y1d6t6",
+        "title": "告知文作成",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "告知"
+      },
+      {
+        "id": "task_mnvpvl3n_kz4isu",
+        "title": "告知投稿",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "告知"
+      },
+      {
+        "id": "task_mnvpvl3n_v0lapa",
+        "title": "当日役割確認",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "当日準備"
+      },
+      {
+        "id": "task_mnvpvl3n_yjfqby",
+        "title": "備品確認",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "備品"
+      },
+      {
+        "id": "task_mnvpvl3n_v09dpy",
+        "title": "終了後お礼",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "終了後対応"
+      },
+      {
+        "id": "task_mnvpvl3n_2aa2t1",
+        "title": "振り返り記入",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "終了後対応"
+      },
+      {
+        "id": "task_mnvpvl3n_36w03x",
+        "title": "軽食発注",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "備品"
+      },
+      {
+        "id": "task_mnvpvl3n_95l6mw",
+        "title": "ネームカード準備",
+        "assignee": "",
+        "dueDate": "",
+        "status": "未着手",
+        "memo": "",
+        "category": "当日準備"
+      }
+    ],
+    "runbook": {
+      "timetable": [
+        {
+          "id": "time_mnvpvl3n_lk5d13",
+          "time": "18:30",
+          "title": "開場",
+          "owner": "受付",
+          "note": ""
+        },
+        {
+          "id": "time_mnvpvl3n_eeva90",
+          "time": "19:00",
+          "title": "乾杯",
+          "owner": "司会",
+          "note": ""
+        },
+        {
+          "id": "time_mnvpvl3n_nr1om9",
+          "time": "19:10",
+          "title": "交流",
+          "owner": "全員",
+          "note": ""
+        },
+        {
+          "id": "time_mnvpvl3n_ft61zu",
+          "time": "20:30",
+          "title": "締め",
+          "owner": "司会",
+          "note": ""
+        }
+      ],
+      "roles": [
+        {
+          "id": "role_mnvpvl3n_l69il6",
+          "role": "受付",
+          "owner": "",
+          "note": ""
+        },
+        {
+          "id": "role_mnvpvl3n_i2oafh",
+          "role": "会場導線",
+          "owner": "",
+          "note": ""
+        },
+        {
+          "id": "role_mnvpvl3n_24vt5l",
+          "role": "写真確認",
+          "owner": "",
+          "note": ""
+        }
+      ],
+      "attentionNotes": "飲食導線と、交流しやすい声掛けを当日確認する。",
+      "receptionMemo": "",
+      "emergencyMemo": "",
+      "checklist": [
+        {
+          "id": "check_mnvpvl3n_1nkjs3",
+          "label": "受付札配置",
+          "checked": false,
+          "note": ""
+        },
+        {
+          "id": "check_mnvpvl3n_2a8yfv",
+          "label": "飲食物配置",
+          "checked": false,
+          "note": ""
+        },
+        {
+          "id": "check_mnvpvl3n_a7lav6",
+          "label": "写真可否アナウンス",
+          "checked": false,
+          "note": ""
+        }
+      ],
+      "participantMemoPlaceholder": ""
+    },
+    "result": {
+      "attendeeCount": "",
+      "impression": "",
+      "wentWell": "",
+      "improvements": "",
+      "nextMemo": "",
+      "contactNotes": "",
+      "closedAt": ""
+    },
+    "participantHub": {
+      "source": "Luma",
+      "importStatus": "未準備",
+      "checkedInCount": "",
+      "lastImportedAt": "",
+      "notes": "",
+      "touchedParticipants": []
+    },
+    "finance": {
+      "memo": "",
+      "lines": []
+    },
+    "createdAt": "2026-04-12T12:05:19.379Z",
+    "updatedAt": "2026-04-12T12:05:19.379Z"
+  },
+  {
+    "id": "event_otogi_meetup_12",
+    "name": "Otogi Meetup Vol.12",
+    "startsAt": "2026-05-14T19:00:00+09:00",
+    "venue": "渋谷 Bridge Lounge",
+    "status": "公開準備中",
+    "summary": "おとぎ達の近況共有と、小さめの交流を中心にしたミートアップ。",
+    "theme": "活動の裏側とこれから",
+    "speakers": "おとぎ運営チーム、ゲスト2名",
+    "owners": "Ryu / Miki",
+    "lumaUrl": "https://lu.ma/example-otogi-12",
+    "lumaStatus": "公開準備中",
+    "lumaRegistrationCount": 18,
+    "lumaCheckedAt": "2026-04-10T20:30:00+09:00",
+    "lumaNotes": "公開ページの会場画像差し替え待ち。申込数は毎週金曜に確認。",
+    "templateId": "talk",
+    "notes": "60名規模を想定。スポンサー調整はまだ未着手。",
+    "tasks": [
+      {
+        "id": "task_otogi_venue_check",
+        "title": "会場確認",
+        "assignee": "Ryu",
+        "dueDate": "2026-04-09",
+        "status": "進行中",
+        "memo": "レイアウト最終確認が残っている。",
+        "category": "会場"
+      },
+      {
+        "id": "task_otogi_speaker_check",
+        "title": "登壇者確認",
+        "assignee": "Miki",
+        "dueDate": "2026-04-12",
+        "status": "進行中",
+        "memo": "プロフィール文の回収待ち。",
+        "category": "登壇者対応"
+      },
+      {
+        "id": "task_otogi_luma_create",
+        "title": "Lumaページ作成",
+        "assignee": "Ryu",
+        "dueDate": "2026-04-11",
+        "status": "完了",
+        "memo": "下書き作成済み。",
+        "category": "Luma対応"
+      },
+      {
+        "id": "task_otogi_copy",
+        "title": "告知文作成",
+        "assignee": "Miki",
+        "dueDate": "2026-04-13",
+        "status": "未着手",
+        "memo": "",
+        "category": "告知"
+      },
+      {
+        "id": "task_otogi_post",
+        "title": "告知投稿",
+        "assignee": "Ryu",
+        "dueDate": "2026-04-15",
+        "status": "未着手",
+        "memo": "",
+        "category": "告知"
+      },
+      {
+        "id": "task_otogi_day_roles",
+        "title": "当日役割確認",
+        "assignee": "Miki",
+        "dueDate": "2026-05-08",
+        "status": "未着手",
+        "memo": "",
+        "category": "当日準備"
+      },
+      {
+        "id": "task_otogi_equipment",
+        "title": "備品確認",
+        "assignee": "Ryu",
+        "dueDate": "2026-05-10",
+        "status": "未着手",
+        "memo": "マイク本数だけ早めに確認したい。",
+        "category": "備品"
+      },
+      {
+        "id": "task_otogi_thanks",
+        "title": "終了後お礼",
+        "assignee": "Miki",
+        "dueDate": "2026-05-15",
+        "status": "未着手",
+        "memo": "",
+        "category": "終了後対応"
+      },
+      {
+        "id": "task_otogi_retrospective",
+        "title": "振り返り記入",
+        "assignee": "Ryu",
+        "dueDate": "2026-05-17",
+        "status": "未着手",
+        "memo": "",
+        "category": "終了後対応"
+      }
+    ],
+    "runbook": {
+      "timetable": [
+        {
+          "id": "time_otogi_1",
+          "time": "18:30",
+          "title": "開場",
+          "owner": "受付",
+          "note": "受付導線を1列にする"
+        },
+        {
+          "id": "time_otogi_2",
+          "time": "19:00",
+          "title": "オープニング",
+          "owner": "司会",
+          "note": "3分で全体共有"
+        },
+        {
+          "id": "time_otogi_3",
+          "time": "19:10",
+          "title": "トーク",
+          "owner": "登壇対応",
+          "note": "投影確認を事前に実施"
+        }
+      ],
+      "roles": [
+        {
+          "id": "role_otogi_1",
+          "role": "受付",
+          "owner": "Miki",
+          "note": "名札と誘導を担当"
+        },
+        {
+          "id": "role_otogi_2",
+          "role": "司会",
+          "owner": "Ryu",
+          "note": "時間管理も兼務"
+        }
+      ],
+      "attentionNotes": "プロジェクタ接続はHDMIとUSB-Cの両方を用意する。",
+      "receptionMemo": "当日参加があればLumaと別でメモを残す。",
+      "emergencyMemo": "会場責任者: 03-1234-5678 / 近隣病院一覧を当日印刷",
+      "checklist": [
+        {
+          "id": "check_otogi_1",
+          "label": "マイク電池を確認",
+          "checked": false,
+          "note": ""
+        },
+        {
+          "id": "check_otogi_2",
+          "label": "登壇資料の最終版を投影テスト",
+          "checked": false,
+          "note": ""
+        }
+      ],
+      "participantMemoPlaceholder": "後日、参加者一覧を取り込める前提で受付メモだけ残す。"
+    },
+    "result": {
+      "attendeeCount": "",
+      "impression": "",
+      "wentWell": "",
+      "improvements": "",
+      "nextMemo": "",
+      "contactNotes": "",
+      "closedAt": ""
+    },
+    "participantHub": {
+      "source": "Luma",
+      "importStatus": "取り込み準備中",
+      "checkedInCount": "",
+      "lastImportedAt": "",
+      "notes": "イベント前は名寄せせず、当日受付メモだけ残す方針。",
+      "touchedParticipants": []
+    },
+    "finance": {
+      "memo": "スポンサー収入はまだ打診前。会場費のみ暫定で入力。",
+      "lines": [
+        {
+          "id": "line_otogi_1",
+          "type": "支出",
+          "category": "会場費",
+          "name": "会場利用料",
+          "plannedAmount": 50000,
+          "actualAmount": 0,
+          "counterparty": "Bridge Lounge",
+          "advanceBy": "Ryu",
+          "settlementStatus": "未精算",
+          "memo": "開催後に請求書予定"
+        },
+        {
+          "id": "line_otogi_2",
+          "type": "収入",
+          "category": "スポンサー収入",
+          "name": "スポンサー候補A",
+          "plannedAmount": 30000,
+          "actualAmount": 0,
+          "counterparty": "未確定",
+          "advanceBy": "",
+          "settlementStatus": "未精算",
+          "memo": "打診前の仮置き"
+        }
+      ]
+    },
+    "createdAt": "2026-04-01T10:00:00+09:00",
+    "updatedAt": "2026-04-10T20:30:00+09:00"
+  },
+  {
+    "id": "event_otogi_reading_party",
+    "name": "Otogi Reading Party",
+    "startsAt": "2026-03-30T18:30:00+09:00",
+    "venue": "神保町 Tiny Hall",
+    "status": "開催済み",
+    "summary": "作品読み合わせと交流会。",
+    "theme": "短編を味わう夜",
+    "speakers": "運営 + 参加型",
+    "owners": "Miki / Sora",
+    "lumaUrl": "https://lu.ma/example-reading-party",
+    "lumaStatus": "終了",
+    "lumaRegistrationCount": 31,
+    "lumaCheckedAt": "2026-03-30T16:00:00+09:00",
+    "lumaNotes": "当日参加3名あり。後でLuma集計と照合済み。",
+    "templateId": "reading",
+    "notes": "次回は会場導線を改善したい。",
+    "tasks": [
+      {
+        "id": "task_reading_1",
+        "title": "会場確認",
+        "assignee": "Miki",
+        "dueDate": "2026-03-20",
+        "status": "完了",
+        "memo": "",
+        "category": "会場"
+      },
+      {
+        "id": "task_reading_2",
+        "title": "登壇者確認",
+        "assignee": "Sora",
+        "dueDate": "2026-03-22",
+        "status": "完了",
+        "memo": "",
+        "category": "登壇者対応"
+      },
+      {
+        "id": "task_reading_3",
+        "title": "Lumaページ作成",
+        "assignee": "Miki",
+        "dueDate": "2026-03-15",
+        "status": "完了",
+        "memo": "",
+        "category": "Luma対応"
+      },
+      {
+        "id": "task_reading_4",
+        "title": "告知文作成",
+        "assignee": "Sora",
+        "dueDate": "2026-03-16",
+        "status": "完了",
+        "memo": "",
+        "category": "告知"
+      },
+      {
+        "id": "task_reading_5",
+        "title": "告知投稿",
+        "assignee": "Miki",
+        "dueDate": "2026-03-17",
+        "status": "完了",
+        "memo": "",
+        "category": "告知"
+      },
+      {
+        "id": "task_reading_6",
+        "title": "当日役割確認",
+        "assignee": "Sora",
+        "dueDate": "2026-03-27",
+        "status": "完了",
+        "memo": "",
+        "category": "当日準備"
+      },
+      {
+        "id": "task_reading_7",
+        "title": "備品確認",
+        "assignee": "Miki",
+        "dueDate": "2026-03-28",
+        "status": "完了",
+        "memo": "",
+        "category": "備品"
+      },
+      {
+        "id": "task_reading_8",
+        "title": "終了後お礼",
+        "assignee": "Sora",
+        "dueDate": "2026-03-31",
+        "status": "完了",
+        "memo": "",
+        "category": "終了後対応"
+      },
+      {
+        "id": "task_reading_9",
+        "title": "振り返り記入",
+        "assignee": "Miki",
+        "dueDate": "2026-04-02",
+        "status": "完了",
+        "memo": "",
+        "category": "終了後対応"
+      }
+    ],
+    "runbook": {
+      "timetable": [
+        {
+          "id": "time_reading_1",
+          "time": "18:00",
+          "title": "集合",
+          "owner": "Miki",
+          "note": ""
+        },
+        {
+          "id": "time_reading_2",
+          "time": "18:30",
+          "title": "読み合わせ",
+          "owner": "Sora",
+          "note": ""
+        }
+      ],
+      "roles": [
+        {
+          "id": "role_reading_1",
+          "role": "受付",
+          "owner": "Miki",
+          "note": ""
+        },
+        {
+          "id": "role_reading_2",
+          "role": "記録",
+          "owner": "Sora",
+          "note": ""
+        }
+      ],
+      "attentionNotes": "入口が少し分かりづらかった。",
+      "receptionMemo": "受付はスムーズだったが、遅刻者対応の動線は改善余地あり。",
+      "emergencyMemo": "特になし",
+      "checklist": [
+        {
+          "id": "check_reading_1",
+          "label": "会場原状回復",
+          "checked": true,
+          "note": ""
+        },
+        {
+          "id": "check_reading_2",
+          "label": "写真共有",
+          "checked": true,
+          "note": ""
+        }
+      ],
+      "participantMemoPlaceholder": "印象の良かった参加者が数名いたので次回案内候補。"
+    },
+    "result": {
+      "attendeeCount": 28,
+      "impression": "全体として落ち着いた空気で、交流密度が高かった。",
+      "wentWell": "初参加者同士の会話が自然に生まれた。",
+      "improvements": "休憩案内と終了時の導線をもっと明確にしたい。",
+      "nextMemo": "次回は会場案内画像をLumaページにも載せる。",
+      "contactNotes": "作品持参の参加者に次回登壇候補がいそう。",
+      "closedAt": "2026-03-31T09:00:00+09:00"
+    },
+    "participantHub": {
+      "source": "Luma",
+      "importStatus": "手動メモのみ",
+      "checkedInCount": 28,
+      "lastImportedAt": "2026-03-31T09:00:00+09:00",
+      "notes": "次回案内候補だけを軽く残す。",
+      "touchedParticipants": [
+        {
+          "id": "participant_reading_1",
+          "name": "Haru",
+          "handle": "短編持参",
+          "note": "次回の読み手候補としてフォローしたい。",
+          "followUp": true
+        }
+      ]
+    },
+    "finance": {
+      "memo": "スポンサーなしでも小さく黒字。",
+      "lines": [
+        {
+          "id": "line_reading_1",
+          "type": "収入",
+          "category": "参加費収入",
+          "name": "チケット売上",
+          "plannedAmount": 45000,
+          "actualAmount": 47000,
+          "counterparty": "参加者",
+          "advanceBy": "",
+          "settlementStatus": "精算済み",
+          "memo": ""
+        },
+        {
+          "id": "line_reading_2",
+          "type": "支出",
+          "category": "会場費",
+          "name": "会場利用",
+          "plannedAmount": 22000,
+          "actualAmount": 22000,
+          "counterparty": "Tiny Hall",
+          "advanceBy": "",
+          "settlementStatus": "精算済み",
+          "memo": ""
+        },
+        {
+          "id": "line_reading_3",
+          "type": "支出",
+          "category": "備品費",
+          "name": "名札・印刷",
+          "plannedAmount": 3000,
+          "actualAmount": 2400,
+          "counterparty": "Print Center",
+          "advanceBy": "Sora",
+          "settlementStatus": "精算済み",
+          "memo": "立替済み"
+        }
+      ]
+    },
+    "createdAt": "2026-03-01T18:00:00+09:00",
+    "updatedAt": "2026-04-01T09:00:00+09:00"
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "name": "live-log-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "build:hosting": "node -e \"console.error('Static Firebase Hosting build is no longer supported after server-side Google Drive sync was introduced. Use a server runtime deployment instead.'); process.exit(1)\"",
+    "deploy:hosting": "node -e \"console.error('Static Firebase Hosting deploy is no longer supported after server-side Google Drive sync was introduced. Use a server runtime deployment instead.'); process.exit(1)\""
+  },
+  "dependencies": {
+    "firebase": "^12.11.0",
+    "html-to-image": "^1.11.13",
+    "next": "^15.5.14",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "firebase-tools": "^15.13.0",
+    "typescript": "^5.8.3"
+  }
+}
