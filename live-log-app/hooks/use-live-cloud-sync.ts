@@ -17,7 +17,14 @@ import {
   signInWithGoogle,
   signOutFromFirebase
 } from "@/lib/firebase/auth";
-import { isCloudConflictError, loadCloudEntries, saveCloudEntries } from "@/lib/live-cloud-service";
+import {
+  deleteCloudEntry,
+  isCloudConflictError,
+  loadCloudEntries,
+  saveCloudEntries,
+  saveCloudEntry,
+  saveCloudSettings
+} from "@/lib/live-cloud-service";
 import type { LiveEntry } from "@/lib/types";
 import { useDriveImageSync } from "@/hooks/use-drive-image-sync";
 import { useDriveSession } from "@/hooks/use-drive-session";
@@ -137,6 +144,50 @@ export function useLiveCloudSync({
     [cloudDriveFolderId, firebaseUser]
   );
 
+  const persistEntryToCloud = useCallback(
+    async (nextEntries: LiveEntry[], nextEntry: LiveEntry) => {
+      if (!firebaseUser || typeof window === "undefined") {
+        return;
+      }
+
+      const saveResult = await saveCloudEntry(
+        firebaseUser,
+        nextEntry,
+        {
+          driveFolderId: cloudDriveFolderId
+        },
+        cloudRevisionRef.current
+      );
+      lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
+      cloudRevisionRef.current = saveResult.revision;
+      lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
+      updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
+    },
+    [cloudDriveFolderId, firebaseUser]
+  );
+
+  const deleteEntryFromCloud = useCallback(
+    async (nextEntries: LiveEntry[], entryId: string) => {
+      if (!firebaseUser || typeof window === "undefined") {
+        return;
+      }
+
+      const saveResult = await deleteCloudEntry(
+        firebaseUser,
+        entryId,
+        {
+          driveFolderId: cloudDriveFolderId
+        },
+        cloudRevisionRef.current
+      );
+      lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
+      cloudRevisionRef.current = saveResult.revision;
+      lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
+      updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
+    },
+    [cloudDriveFolderId, firebaseUser]
+  );
+
   const {
     driveFolderId,
     hasDriveSession,
@@ -187,9 +238,8 @@ export function useLiveCloudSync({
 
     lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
 
-    void saveCloudEntries(
+    void saveCloudSettings(
       firebaseUser,
-      entries,
       {
         driveFolderId: cloudDriveFolderId
       },
@@ -199,7 +249,7 @@ export function useLiveCloudSync({
         cloudRevisionRef.current = saveResult.revision;
       })
       .catch(() => undefined);
-  }, [cloudDriveFolderId, entries, firebaseUser, localEntriesReady]);
+  }, [cloudDriveFolderId, firebaseUser, localEntriesReady]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !localEntriesReady) {
@@ -566,6 +616,8 @@ export function useLiveCloudSync({
     handleRetryImageSync,
     handleRetryEntryImageSync,
     handleConfigureDriveFolder,
-    handleDeleteImage
+    handleDeleteImage,
+    persistEntryToCloud,
+    deleteEntryFromCloud
   };
 }

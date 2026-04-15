@@ -227,7 +227,9 @@ export function LiveLogPage() {
     handleDeleteImage,
     handleRetryImageSync,
     handleRetryEntryImageSync,
-    handleConfigureDriveFolder
+    handleConfigureDriveFolder,
+    persistEntryToCloud,
+    deleteEntryFromCloud
   } = useLiveCloudSync({
     entries,
     setEntries,
@@ -708,7 +710,11 @@ export function LiveLogPage() {
       return;
     }
 
-    setEntries((current) => [nextEntry, ...current]);
+    const nextEntries = [nextEntry, ...entries];
+    setEntries(nextEntries);
+    void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
+      setActionNotice("追加は反映しました。クラウド保存は自動で再確認します。");
+    });
     setSelectedEntryId(nextEntry.id);
     setHighlightedEntryId(nextEntry.id);
     setActionNotice(`「${nextEntry.title}」を追加しました。`);
@@ -776,9 +782,14 @@ export function LiveLogPage() {
         )
       );
 
-      setEntries((current) =>
-        appendImagesToEntry(current, entryId, nextImages)
-      );
+      const nextEntries = appendImagesToEntry(entries, entryId, nextImages);
+      const nextEntry = nextEntries.find((entry) => entry.id === entryId);
+      setEntries(nextEntries);
+      if (nextEntry) {
+        void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
+          setImageMessage("画像は追加しました。クラウド保存は自動で再確認します。");
+        });
+      }
       setActionNotice(`${files.length} 件の画像を追加しました。`);
       setImageMessage(`${files.length} 件の画像を追加しました。`);
       event.target.value = "";
@@ -811,12 +822,16 @@ export function LiveLogPage() {
         )
       );
 
-      setEntries((current) => {
-        const result = applyPhotoImportToEntries(current, photoForm, nextImages);
-        setSelectedEntryId(result.selectedEntryId);
-        setHighlightedEntryId(result.selectedEntryId);
-        return result.entries;
-      });
+      const result = applyPhotoImportToEntries(entries, photoForm, nextImages);
+      const targetEntry = result.entries.find((entry) => entry.id === result.selectedEntryId);
+      setEntries(result.entries);
+      if (targetEntry) {
+        void persistEntryToCloud(result.entries, targetEntry).catch(() => {
+          setImageMessage("写真は登録しました。クラウド保存は自動で再確認します。");
+        });
+      }
+      setSelectedEntryId(result.selectedEntryId);
+      setHighlightedEntryId(result.selectedEntryId);
 
       setActionNotice("写真を登録しました。対象の記録を開いています。");
       setImageMessage("写真を登録しました。既存データがあれば紐づけ、なければ新規作成しています。");
@@ -877,7 +892,13 @@ export function LiveLogPage() {
       return;
     }
 
-    setEntries((current) => deleteEntriesById(current, selectedEntryIds));
+    const nextEntries = deleteEntriesById(entries, selectedEntryIds);
+    setEntries(nextEntries);
+    if (selectedEntryIds.length === 1) {
+      void deleteEntryFromCloud(nextEntries, selectedEntryIds[0]).catch(() => {
+        setActionNotice("削除は反映しました。クラウド保存は自動で再確認します。");
+      });
+    }
     setSelectedEntryIds([]);
   }
 

@@ -150,4 +150,183 @@ export class FirestoreLiveEntryRepository {
       };
     });
   }
+
+  async upsertEntry(
+    user: Pick<User, "uid" | "displayName" | "email">,
+    entry: LiveEntry,
+    settings?: CloudDriveSettings,
+    expectedRevision?: number
+  ) {
+    const db = getFirebaseDb();
+
+    if (!db) {
+      throw new Error("Firebase is not configured.");
+    }
+
+    const archiveRef = doc(db, ARCHIVE_COLLECTION, user.uid);
+    const sanitizedEntry = sanitizeEntries([entry])[0];
+
+    return runTransaction(db, async (transaction) => {
+      const archiveSnapshot = await transaction.get(archiveRef);
+      const archiveData = archiveSnapshot.exists() ? (archiveSnapshot.data() as ArchiveDocument) : undefined;
+      const currentRevision = typeof archiveData?.revision === "number" ? archiveData.revision : 0;
+
+      if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+        throw new CloudConflictError();
+      }
+
+      const previousEntryIds = Array.isArray(archiveData?.entryIds)
+        ? archiveData.entryIds.filter((value): value is string => typeof value === "string")
+        : [];
+      const nextEntryIds = previousEntryIds.includes(sanitizedEntry.id)
+        ? previousEntryIds
+        : [...previousEntryIds, sanitizedEntry.id];
+      const entriesCollectionRef = collection(archiveRef, ENTRIES_SUBCOLLECTION);
+
+      transaction.set(
+        archiveRef,
+        {
+          settings: normalizeCloudDriveSettings(settings),
+          revision: currentRevision + 1,
+          entryIds: nextEntryIds,
+          updatedAt: serverTimestamp(),
+          owner: {
+            displayName: user.displayName ?? null,
+            email: user.email ?? null
+          }
+        },
+        { merge: true }
+      );
+
+      if (archiveSnapshot.exists()) {
+        transaction.update(archiveRef, {
+          entries: deleteField()
+        });
+      }
+
+      transaction.set(
+        doc(entriesCollectionRef, sanitizedEntry.id),
+        {
+          ...serializeEntryForCloud(sanitizedEntry),
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+
+      return {
+        revision: currentRevision + 1
+      };
+    });
+  }
+
+  async deleteEntry(
+    user: Pick<User, "uid" | "displayName" | "email">,
+    entryId: string,
+    settings?: CloudDriveSettings,
+    expectedRevision?: number
+  ) {
+    const db = getFirebaseDb();
+
+    if (!db) {
+      throw new Error("Firebase is not configured.");
+    }
+
+    const archiveRef = doc(db, ARCHIVE_COLLECTION, user.uid);
+
+    return runTransaction(db, async (transaction) => {
+      const archiveSnapshot = await transaction.get(archiveRef);
+      const archiveData = archiveSnapshot.exists() ? (archiveSnapshot.data() as ArchiveDocument) : undefined;
+      const currentRevision = typeof archiveData?.revision === "number" ? archiveData.revision : 0;
+
+      if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+        throw new CloudConflictError();
+      }
+
+      const previousEntryIds = Array.isArray(archiveData?.entryIds)
+        ? archiveData.entryIds.filter((value): value is string => typeof value === "string")
+        : [];
+      const nextEntryIds = previousEntryIds.filter((value) => value !== entryId);
+      const entriesCollectionRef = collection(archiveRef, ENTRIES_SUBCOLLECTION);
+
+      transaction.set(
+        archiveRef,
+        {
+          settings: normalizeCloudDriveSettings(settings),
+          revision: currentRevision + 1,
+          entryIds: nextEntryIds,
+          updatedAt: serverTimestamp(),
+          owner: {
+            displayName: user.displayName ?? null,
+            email: user.email ?? null
+          }
+        },
+        { merge: true }
+      );
+
+      if (archiveSnapshot.exists()) {
+        transaction.update(archiveRef, {
+          entries: deleteField()
+        });
+      }
+
+      transaction.delete(doc(entriesCollectionRef, entryId));
+
+      return {
+        revision: currentRevision + 1
+      };
+    });
+  }
+
+  async saveSettings(
+    user: Pick<User, "uid" | "displayName" | "email">,
+    settings?: CloudDriveSettings,
+    expectedRevision?: number
+  ) {
+    const db = getFirebaseDb();
+
+    if (!db) {
+      throw new Error("Firebase is not configured.");
+    }
+
+    const archiveRef = doc(db, ARCHIVE_COLLECTION, user.uid);
+
+    return runTransaction(db, async (transaction) => {
+      const archiveSnapshot = await transaction.get(archiveRef);
+      const archiveData = archiveSnapshot.exists() ? (archiveSnapshot.data() as ArchiveDocument) : undefined;
+      const currentRevision = typeof archiveData?.revision === "number" ? archiveData.revision : 0;
+
+      if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+        throw new CloudConflictError();
+      }
+
+      const previousEntryIds = Array.isArray(archiveData?.entryIds)
+        ? archiveData.entryIds.filter((value): value is string => typeof value === "string")
+        : [];
+
+      transaction.set(
+        archiveRef,
+        {
+          settings: normalizeCloudDriveSettings(settings),
+          revision: currentRevision + 1,
+          entryIds: previousEntryIds,
+          updatedAt: serverTimestamp(),
+          owner: {
+            displayName: user.displayName ?? null,
+            email: user.email ?? null
+          }
+        },
+        { merge: true }
+      );
+
+      if (archiveSnapshot.exists()) {
+        transaction.update(archiveRef, {
+          entries: deleteField()
+        });
+      }
+
+      return {
+        revision: currentRevision + 1
+      };
+    });
+  }
 }
