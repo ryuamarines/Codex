@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { User } from "firebase/auth";
 import type { LiveEntry } from "@/lib/types";
 import { deleteDriveImage, uploadLocalImageToDrive } from "@/lib/google-drive-image-service";
+import { isCloudConflictError } from "@/lib/live-cloud-service";
 
 type UseDriveImageSyncParams = {
   entries: LiveEntry[];
@@ -124,6 +125,10 @@ export function useDriveImageSync({
         await onPersistEntries(nextEntries);
       }
     } catch (error) {
+      if (isCloudConflictError(error)) {
+        throw error;
+      }
+
       if (
         error instanceof Error &&
         (error.message.includes("Drive 連携が切れています") ||

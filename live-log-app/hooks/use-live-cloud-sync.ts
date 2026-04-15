@@ -17,7 +17,7 @@ import {
   signInWithGoogle,
   signOutFromFirebase
 } from "@/lib/firebase/auth";
-import { loadCloudEntries, saveCloudEntries } from "@/lib/live-cloud-service";
+import { isCloudConflictError, loadCloudEntries, saveCloudEntries } from "@/lib/live-cloud-service";
 import type { LiveEntry } from "@/lib/types";
 import { useDriveImageSync } from "@/hooks/use-drive-image-sync";
 import { useDriveSession } from "@/hooks/use-drive-session";
@@ -42,6 +42,7 @@ export function useLiveCloudSync({
   const [syncStatus, setSyncStatus] = useState("ローカル保存");
   const [lastSyncedAtLabel, setLastSyncedAtLabel] = useState("");
   const [cloudDriveFolderId, setCloudDriveFolderId] = useState("");
+  const cloudRevisionRef = useRef(0);
   const suppressCloudSyncEffectRef = useRef(false);
   const autoSaveTimeoutRef = useRef<number | null>(null);
   const lastSyncedHashRef = useRef<string>("");
@@ -125,10 +126,11 @@ export function useLiveCloudSync({
         return;
       }
 
-      await saveCloudEntries(firebaseUser, nextEntries, {
+      const saveResult = await saveCloudEntries(firebaseUser, nextEntries, {
         driveFolderId: cloudDriveFolderId
-      });
+      }, cloudRevisionRef.current);
       lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
+      cloudRevisionRef.current = saveResult.revision;
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
     },
@@ -185,9 +187,18 @@ export function useLiveCloudSync({
 
     lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
 
-    void saveCloudEntries(firebaseUser, entries, {
-      driveFolderId: cloudDriveFolderId
-    }).catch(() => undefined);
+    void saveCloudEntries(
+      firebaseUser,
+      entries,
+      {
+        driveFolderId: cloudDriveFolderId
+      },
+      cloudRevisionRef.current
+    )
+      .then((saveResult) => {
+        cloudRevisionRef.current = saveResult.revision;
+      })
+      .catch(() => undefined);
   }, [cloudDriveFolderId, entries, firebaseUser, localEntriesReady]);
 
   useEffect(() => {
@@ -285,6 +296,7 @@ export function useLiveCloudSync({
     if (!firebaseUser || !localEntriesReady) {
       autoHydratedUserIdRef.current = "";
       cloudHydrateRetryCountRef.current = 0;
+      cloudRevisionRef.current = 0;
       return;
     }
 
@@ -307,6 +319,7 @@ export function useLiveCloudSync({
 
         setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
         lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
+        cloudRevisionRef.current = cloudArchive.revision;
 
         const hasPendingLocalChanges = hasUnsyncedLocalChanges(
           window.localStorage,
@@ -394,14 +407,21 @@ export function useLiveCloudSync({
 
     autoSaveTimeoutRef.current = window.setTimeout(async () => {
       try {
-        await saveCloudEntries(firebaseUser, entries, {
+        const saveResult = await saveCloudEntries(firebaseUser, entries, {
           driveFolderId: cloudDriveFolderId
-        });
+        }, cloudRevisionRef.current);
         lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
+        cloudRevisionRef.current = saveResult.revision;
         lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, entries);
         updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
         setSyncStatus("クラウド同期済み");
-      } catch {
+      } catch (error) {
+        if (isCloudConflictError(error)) {
+          setSyncStatus("クラウド競合");
+          showAuthMessage(error.message, 7000);
+          return;
+        }
+
         setSyncStatus("クラウド保存失敗");
       }
     }, 1800);
@@ -480,6 +500,7 @@ export function useLiveCloudSync({
       setEntries(cloudEntries);
       setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
       lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
+      cloudRevisionRef.current = cloudArchive.revision;
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
@@ -517,6 +538,7 @@ export function useLiveCloudSync({
       setEntries(cloudEntries);
       setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
       lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
+      cloudRevisionRef.current = cloudArchive.revision;
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 

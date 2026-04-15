@@ -6,7 +6,19 @@ import { FirestoreLiveEntryRepository } from "@/lib/firebase/firestore-repositor
 export type CloudArchive = {
   entries: LiveEntry[];
   settings: CloudDriveSettings;
+  revision: number;
 };
+
+export class CloudConflictError extends Error {
+  constructor(message = "クラウド上で新しい更新が見つかりました。最新内容を確認してからやり直してください。") {
+    super(message);
+    this.name = "CloudConflictError";
+  }
+}
+
+export function isCloudConflictError(error: unknown): error is CloudConflictError {
+  return error instanceof CloudConflictError;
+}
 
 export async function loadCloudEntries(user: Pick<User, "uid">) {
   const repository = new FirestoreLiveEntryRepository();
@@ -16,8 +28,9 @@ export async function loadCloudEntries(user: Pick<User, "uid">) {
 export async function saveCloudEntries(
   user: Pick<User, "uid" | "displayName" | "email">,
   entries: LiveEntry[],
-  settings?: CloudDriveSettings
+  settings?: CloudDriveSettings,
+  expectedRevision?: number
 ) {
   const repository = new FirestoreLiveEntryRepository();
-  await repository.save(user, entries, settings);
+  return repository.save(user, entries, settings, expectedRevision);
 }
