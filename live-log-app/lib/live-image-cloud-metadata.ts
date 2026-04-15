@@ -44,18 +44,26 @@ function deserializeCloudImage(image: CloudLiveEntryImage): LiveEntryImage {
   };
 }
 
-export function serializeEntriesForCloud(entries: LiveEntry[]): CloudLiveEntry[] {
-  return entries.map((entry) => ({
+export function serializeEntryForCloud(entry: LiveEntry): CloudLiveEntry {
+  return {
     ...entry,
     images: entry.images.map(serializeImageForCloud)
-  }));
+  };
+}
+
+export function deserializeEntryFromCloud(entry: CloudLiveEntry): LiveEntry {
+  return {
+    ...entry,
+    images: (entry.images ?? []).map(deserializeCloudImage)
+  };
+}
+
+export function serializeEntriesForCloud(entries: LiveEntry[]): CloudLiveEntry[] {
+  return entries.map(serializeEntryForCloud);
 }
 
 export function deserializeEntriesFromCloud(entries: CloudLiveEntry[]): LiveEntry[] {
-  return entries.map((entry) => ({
-    ...entry,
-    images: (entry.images ?? []).map(deserializeCloudImage)
-  }));
+  return entries.map(deserializeEntryFromCloud);
 }
 
 export function createCloudComparableEntries(entries: LiveEntry[]) {

@@ -75,13 +75,18 @@
 現在の Live Log は、保存先を次のように分けています。
 
 - Firestore
-  - 公演テキストの正本
-  - 画像メタ情報
-    - `storageStatus`
-    - `uploadError`
-    - `driveFileId`
-    - `driveWebUrl`
-    - `driveThumbnailUrl`
+  - `liveLogArchives/{uid}`
+    - owner
+    - updatedAt
+    - `settings.driveFolderId`
+  - `liveLogArchives/{uid}/entries/{entryId}`
+    - 公演テキストの正本
+    - 画像メタ情報
+      - `storageStatus`
+      - `uploadError`
+      - `driveFileId`
+      - `driveWebUrl`
+      - `driveThumbnailUrl`
 - Google Drive
   - 画像本体
 - ローカルブラウザ

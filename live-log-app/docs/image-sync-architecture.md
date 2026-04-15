@@ -3,9 +3,13 @@
 ## いまの正本
 
 - Firestore
-  - 公演テキスト
-  - 画像メタ情報
-  - Google Drive 保存先フォルダ ID
+  - `liveLogArchives/{uid}`
+    - owner
+    - updatedAt
+    - settings.driveFolderId
+  - `liveLogArchives/{uid}/entries/{entryId}`
+    - 公演テキスト
+    - 画像メタ情報
 - Google Drive
   - 画像本体
 - ローカルブラウザ
