@@ -363,7 +363,7 @@ export function PlannerShell() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${project.name || "room-project"}.csv`;
+    anchor.download = `${project.name || "RoomPlaner-project"}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -382,7 +382,7 @@ export function PlannerShell() {
         const parsed = importProjectCsv(String(reader.result ?? ""));
         loadProjectState(parsed);
       } catch {
-        window.alert("CSV の読み込みに失敗しました。部屋再設計プランナーの書き出しCSVを選んでください。");
+        window.alert("CSV の読み込みに失敗しました。RoomPlaner の書き出しCSVを選んでください。");
       }
     };
     reader.readAsText(file);
@@ -793,8 +793,8 @@ export function PlannerShell() {
       <div className="mx-auto flex max-w-[1700px] flex-col gap-4">
         <header className="panel flex flex-col gap-4 p-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="panel-title">Room Redesign Planner</div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">部屋再設計プランナー MVP</h1>
+            <div className="panel-title">RoomPlaner</div>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">RoomPlaner</h1>
             <input
               className="input mt-3 max-w-md"
               value={project.name}

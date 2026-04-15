@@ -570,7 +570,7 @@ const server = http.createServer(async (req, res) => {
 
 if (require.main === module) {
   server.listen(port, host, () => {
-    console.log(`event-ops-mvp is running at http://${host}:${port}`);
+    console.log(`Event Hub is running at http://${host}:${port}`);
   });
 }
 

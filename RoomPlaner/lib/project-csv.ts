@@ -101,7 +101,7 @@ export function importProjectCsv(raw: string): PlannerProject {
 
   const header = rows[0];
   if (header.join("|") !== CSV_HEADER.join("|")) {
-    throw new Error("CSV ヘッダーが想定と違います。部屋再設計プランナーの書き出しCSVを選んでください。");
+    throw new Error("CSV ヘッダーが想定と違います。RoomPlaner の書き出しCSVを選んでください。");
   }
 
   const body = rows.slice(1).map(toRowObject);

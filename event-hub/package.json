@@ -1,5 +1,5 @@
 {
-  "name": "event-ops-mvp",
+  "name": "event-hub",
   "version": "0.1.0",
   "private": true,
   "description": "Lumaを公開・申込の母艦として使いながら、内部向けにイベント運営を管理するMVP",

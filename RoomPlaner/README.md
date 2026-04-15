@@ -1,4 +1,4 @@
-# 部屋再設計プランナー MVP
+# RoomPlaner
 
 間取り図画像を下敷きにして、自由形状の部屋、窓、扉、窓前制約ゾーン、家具を 2D 上で編集し、干渉を確認するためのローカル向け Web アプリです。
 
@@ -45,7 +45,7 @@
 ## 起動方法
 
 ```bash
-cd room-redesign-planner
+cd RoomPlaner
 npm install
 npm run dev
 ```

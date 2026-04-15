@@ -6,8 +6,8 @@
 
 - `live-log-app`
 - `conversation-log-app`
-- `event-ops-mvp`
-- `room-redesign-planner`
+- `event-hub`
+- `RoomPlaner`
 - `weight-audit-form-automation`
 
 各フォルダはそれぞれ独立したアプリです。  
@@ -35,8 +35,8 @@
 
 - `conversation-log-app` を公開したい
   - Root Directory: `conversation-log-app`
-- `event-ops-mvp` を公開したい
-  - Root Directory: `event-ops-mvp`
+- `event-hub` を公開したい
+  - Root Directory: `event-hub`
 
 ## 重要なポイント
 

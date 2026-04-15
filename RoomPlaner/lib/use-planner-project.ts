@@ -5,7 +5,7 @@ import { sampleProject } from "@/data/sample-project";
 import { detectCollisions } from "@/lib/geometry";
 import type { DoorObject, FurnitureKind, FurnitureObject, PlannerProject } from "@/lib/types";
 
-const STORAGE_KEY = "room-redesign-planner.mpp.v1";
+const STORAGE_KEY = "roomplaner.mpp.v1";
 
 export function usePlannerProject() {
   const [project, setProject] = useState<PlannerProject>(sampleProject);
