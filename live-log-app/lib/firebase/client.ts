@@ -2,7 +2,6 @@ import { getApps, initializeApp } from "firebase/app";
 import type { FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 type FirebaseConfig = {
   apiKey: string;
@@ -60,9 +59,4 @@ export function getFirebaseAuth() {
 export function getFirebaseDb() {
   const app = getFirebaseApp();
   return app ? getFirestore(app) : null;
-}
-
-export function getFirebaseStorageClient() {
-  const app = getFirebaseApp();
-  return app ? getStorage(app) : null;
 }

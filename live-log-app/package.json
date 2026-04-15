@@ -6,8 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "build:hosting": "node -e \"console.error('Static Firebase Hosting build is no longer supported after server-side Google Drive sync was introduced. Use a server runtime deployment instead.'); process.exit(1)\"",
-    "deploy:hosting": "node -e \"console.error('Static Firebase Hosting deploy is no longer supported after server-side Google Drive sync was introduced. Use a server runtime deployment instead.'); process.exit(1)\""
+    "deploy": "npx vercel --prod",
+    "env:pull": "npx vercel env pull .env.local"
   },
   "dependencies": {
     "firebase": "^12.11.0",
@@ -21,7 +21,6 @@
     "@types/node": "^22.14.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "firebase-tools": "^15.13.0",
     "typescript": "^5.8.3"
   }
 }

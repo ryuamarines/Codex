@@ -51,9 +51,9 @@
 
 ## いまの制約
 
-- この方式は `static export -> Firebase Hosting` とは両立しない
-- Drive API をサーバー側で呼ぶため、公開にはサーバー runtime が必要
-- つまり今後は `next build && next start` のような serverful 配備前提になる
+- この方式は静的 export 前提の Hosting とは両立しない
+- Drive API をサーバー側で呼ぶため、公開には server runtime が必要
+- 現在の公開先は Vercel のような serverful 配備を前提にしている
 
 ## 別ブラウザの扱い
 
