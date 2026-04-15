@@ -70,6 +70,7 @@ import {
   saveThemeMode
 } from "@/lib/live-ui-preferences";
 import { useLiveCloudSync } from "@/hooks/use-live-cloud-sync";
+import { countRenderableImages, hasUnsyncedImages } from "@/lib/live-image-state";
 import type { LiveEntry } from "@/lib/types";
 
 type PhotoUploadInput = PhotoImportInput;
@@ -336,13 +337,11 @@ export function LiveLogPage() {
       }
 
       if (recordVisibilityFilter === "withPhotos") {
-        return entry.images.length > 0;
+        return countRenderableImages(entry.images) > 0;
       }
 
       if (recordVisibilityFilter === "withUnsyncedImages") {
-        return entry.images.some(
-          (image) => image.storageStatus === "local_pending" || image.storageStatus === "error"
-        );
+        return hasUnsyncedImages(entry.images);
       }
 
       return true;

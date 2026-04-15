@@ -5,6 +5,7 @@
 - Firestore
   - 公演テキスト
   - 画像メタ情報
+  - Google Drive 保存先フォルダ ID
 - Google Drive
   - 画像本体
 - ローカルブラウザ
@@ -47,6 +48,7 @@
 - フロントは `Drive 保存したい / 削除したい` という要求だけを出す
 - 実際の Google Drive API 呼び出しはサーバー API 経由で行う
 - Drive セッションは `httpOnly cookie` に保存し、localStorage へは置かない
+- Drive 保存先フォルダは localStorage に加えて Firestore にも保存し、新しい URL や別ブラウザでも復元できるようにする
 - Firestore には `local_pending / syncing / cloud / error` を全部保存する
 
 ## いまの制約
@@ -60,3 +62,5 @@
 - プレビューが出ることは保証しない
 - 最低保証は `Driveで開く`
 - 画像メタ情報が Firestore に保存されていれば、別ブラウザでも Drive リンクは追える
+- ドメイン変更や別ブラウザでは Drive セッション cookie は引き継がれないため、必要なら `Drive連携更新` は再実行する
+- 保存先フォルダ ID は Firestore から復元するので、毎回入力し直さなくてよい設計に寄せる

@@ -706,6 +706,54 @@ select {
   text-decoration: underline;
 }
 
+.detailStatusOnlyImages {
+  display: grid;
+  gap: 10px;
+}
+
+.detailStatusOnlyImages h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--accent);
+}
+
+.detailStatusOnlyList {
+  display: grid;
+  gap: 10px;
+}
+
+.detailStatusOnlyCard {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+  border: 1px dashed rgba(31, 26, 23, 0.16);
+}
+
+.detailStatusOnlyCard > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.detailStatusOnlyCard strong {
+  color: var(--accent);
+  font-size: 0.82rem;
+}
+
+.detailStatusOnlyCard span,
+.detailStatusOnlyCard small {
+  color: var(--muted);
+}
+
+.detailStatusOnlyActions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .aggregateCard,
 .trendHeroCard,
 .artistTrendCard,

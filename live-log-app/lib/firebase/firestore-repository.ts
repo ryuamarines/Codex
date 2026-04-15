@@ -4,7 +4,9 @@ import type { LiveEntry } from "@/lib/types";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { sanitizeEntries } from "@/lib/live-entry-utils";
 import {
+  type CloudDriveSettings,
   deserializeEntriesFromCloud,
+  normalizeCloudDriveSettings,
   serializeEntriesForCloud
 } from "@/lib/live-image-cloud-metadata";
 
@@ -21,14 +23,24 @@ export class FirestoreLiveEntryRepository {
     const snapshot = await getDoc(doc(db, ARCHIVE_COLLECTION, user.uid));
 
     if (!snapshot.exists()) {
-      return [] as LiveEntry[];
+      return {
+        entries: [] as LiveEntry[],
+        settings: normalizeCloudDriveSettings(undefined)
+      };
     }
 
     const data = snapshot.data();
-    return sanitizeEntries(deserializeEntriesFromCloud((data.entries ?? []) as LiveEntry[]));
+    return {
+      entries: sanitizeEntries(deserializeEntriesFromCloud((data.entries ?? []) as LiveEntry[])),
+      settings: normalizeCloudDriveSettings(data.settings as CloudDriveSettings | undefined)
+    };
   }
 
-  async save(user: Pick<User, "uid" | "displayName" | "email">, entries: LiveEntry[]) {
+  async save(
+    user: Pick<User, "uid" | "displayName" | "email">,
+    entries: LiveEntry[],
+    settings?: CloudDriveSettings
+  ) {
     const db = getFirebaseDb();
 
     if (!db) {
@@ -39,6 +51,7 @@ export class FirestoreLiveEntryRepository {
       doc(db, ARCHIVE_COLLECTION, user.uid),
       {
         entries: serializeEntriesForCloud(sanitizeEntries(entries)),
+        settings: normalizeCloudDriveSettings(settings),
         updatedAt: serverTimestamp(),
         owner: {
           displayName: user.displayName ?? null,

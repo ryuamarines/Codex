@@ -1,4 +1,5 @@
 import type { LiveEntry } from "@/lib/types";
+import { countRenderableImages } from "@/lib/live-image-state";
 
 export type AggregateBucket = {
   label: string;
@@ -35,7 +36,7 @@ export function createTrendSummary(entries: LiveEntry[]) {
 export function createOverview(entries: LiveEntry[]) {
   const artistCount = new Set(entries.flatMap((entry) => entry.artists.map((artist) => artist.trim()).filter(Boolean)))
     .size;
-  const imageCount = entries.reduce((sum, entry) => sum + entry.images.length, 0);
+  const imageCount = entries.reduce((sum, entry) => sum + countRenderableImages(entry.images), 0);
 
   return {
     entryCount: entries.length,

@@ -13,6 +13,8 @@ import {
 
 type UseDriveSessionParams = {
   showMessage(message: string, durationMs?: number): void;
+  cloudDriveFolderId?: string;
+  onDriveFolderIdChange?(folderId: string): void;
 };
 
 function formatDriveSavedAtLabel(savedAt: string) {
@@ -34,7 +36,11 @@ function formatDriveSavedAtLabel(savedAt: string) {
   }).format(parsed);
 }
 
-export function useDriveSession({ showMessage }: UseDriveSessionParams) {
+export function useDriveSession({
+  showMessage,
+  cloudDriveFolderId = "",
+  onDriveFolderIdChange
+}: UseDriveSessionParams) {
   const [hasDriveSession, setHasDriveSession] = useState(false);
   const [driveSessionSavedAt, setDriveSessionSavedAt] = useState("");
   const [driveFolderId, setDriveFolderId] = useState("");
@@ -91,6 +97,26 @@ export function useDriveSession({ showMessage }: UseDriveSessionParams) {
     };
   }, [showMessage]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!cloudDriveFolderId) {
+      return;
+    }
+
+    const storage = window.localStorage;
+    const currentLocalFolderId = readDriveFolderId(storage);
+
+    if (currentLocalFolderId === cloudDriveFolderId) {
+      return;
+    }
+
+    saveDriveFolderId(storage, cloudDriveFolderId);
+    setDriveFolderId(cloudDriveFolderId);
+  }, [cloudDriveFolderId]);
+
   const registerDriveAccessToken = useCallback(
     async (accessToken: string) => {
       const session = await createDriveSession(accessToken);
@@ -123,8 +149,9 @@ export function useDriveSession({ showMessage }: UseDriveSessionParams) {
 
     const saved = saveDriveFolderId(window.localStorage, nextValue);
     setDriveFolderId(saved);
+    onDriveFolderIdChange?.(saved);
     showMessage(saved ? "Google Drive の保存先を更新しました。" : "Google Drive の保存先を解除しました。");
-  }, [driveFolderId, showMessage]);
+  }, [driveFolderId, onDriveFolderIdChange, showMessage]);
 
   return {
     driveFolderId,

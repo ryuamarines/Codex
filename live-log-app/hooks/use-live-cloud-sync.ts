@@ -10,6 +10,7 @@ import {
   readCloudSyncState,
   writeCloudSyncState
 } from "@/lib/cloud-sync";
+import { countUnsyncedImages } from "@/lib/live-image-state";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import {
   observeFirebaseUser,
@@ -40,6 +41,7 @@ export function useLiveCloudSync({
   const [imageService] = useState<ArchiveImageService>(new LocalArchiveImageService());
   const [syncStatus, setSyncStatus] = useState("ローカル保存");
   const [lastSyncedAtLabel, setLastSyncedAtLabel] = useState("");
+  const [cloudDriveFolderId, setCloudDriveFolderId] = useState("");
   const suppressCloudSyncEffectRef = useRef(false);
   const autoSaveTimeoutRef = useRef<number | null>(null);
   const lastSyncedHashRef = useRef<string>("");
@@ -47,6 +49,8 @@ export function useLiveCloudSync({
   const cloudHydrateRetryTimeoutRef = useRef<number | null>(null);
   const cloudHydrateRetryCountRef = useRef(0);
   const authMessageTimeoutRef = useRef<number | null>(null);
+  const imageSyncWarningKeyRef = useRef("");
+  const lastSavedDriveFolderIdRef = useRef("");
 
   const confirmCloudReplace = useCallback(
     (cloudEntries: LiveEntry[], mode: "sync" | "replace") => {
@@ -121,11 +125,14 @@ export function useLiveCloudSync({
         return;
       }
 
-      await saveCloudEntries(firebaseUser, nextEntries);
+      await saveCloudEntries(firebaseUser, nextEntries, {
+        driveFolderId: cloudDriveFolderId
+      });
+      lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
     },
-    [firebaseUser]
+    [cloudDriveFolderId, firebaseUser]
   );
 
   const {
@@ -136,7 +143,11 @@ export function useLiveCloudSync({
     registerDriveAccessToken,
     clearDriveState,
     handleConfigureDriveFolder
-  } = useDriveSession({ showMessage: showAuthMessage });
+  } = useDriveSession({
+    showMessage: showAuthMessage,
+    cloudDriveFolderId,
+    onDriveFolderIdChange: setCloudDriveFolderId
+  });
 
   const handleDriveAuthExpiry = useCallback((message: string) => {
     void clearDriveState();
@@ -164,6 +175,22 @@ export function useLiveCloudSync({
   }, []);
 
   useEffect(() => {
+    if (!firebaseUser || !localEntriesReady) {
+      return;
+    }
+
+    if (cloudDriveFolderId === lastSavedDriveFolderIdRef.current) {
+      return;
+    }
+
+    lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
+
+    void saveCloudEntries(firebaseUser, entries, {
+      driveFolderId: cloudDriveFolderId
+    }).catch(() => undefined);
+  }, [cloudDriveFolderId, entries, firebaseUser, localEntriesReady]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !localEntriesReady) {
       return;
     }
@@ -185,8 +212,64 @@ export function useLiveCloudSync({
       sampleEntries
     );
 
+    const unsyncedImageCount = countUnsyncedImages(entries.flatMap((entry) => entry.images));
+
+    if (unsyncedImageCount > 0) {
+      if (!hasDriveSession) {
+        setSyncStatus("Drive連携待ち");
+        return;
+      }
+
+      if (!driveFolderId) {
+        setSyncStatus("Drive保存先未設定");
+        return;
+      }
+
+      setSyncStatus("画像同期待ち");
+      return;
+    }
+
     setSyncStatus(hasPendingLocalChanges ? "未同期の変更あり" : "クラウド同期済み");
-  }, [entries, firebaseUser, localEntriesReady]);
+  }, [driveFolderId, entries, firebaseUser, hasDriveSession, localEntriesReady]);
+
+  useEffect(() => {
+    if (!firebaseUser || !localEntriesReady) {
+      return;
+    }
+
+    const unsyncedImageCount = countUnsyncedImages(entries.flatMap((entry) => entry.images));
+
+    if (unsyncedImageCount === 0) {
+      imageSyncWarningKeyRef.current = "";
+      return;
+    }
+
+    if (!hasDriveSession) {
+      const nextKey = `no-session:${unsyncedImageCount}`;
+      if (imageSyncWarningKeyRef.current !== nextKey) {
+        imageSyncWarningKeyRef.current = nextKey;
+        showAuthMessage(
+          `未同期画像が ${unsyncedImageCount} 件あります。新しいURLや別ブラウザでは Drive連携更新 が必要です。`,
+          7000
+        );
+      }
+      return;
+    }
+
+    if (!driveFolderId) {
+      const nextKey = `no-folder:${unsyncedImageCount}`;
+      if (imageSyncWarningKeyRef.current !== nextKey) {
+        imageSyncWarningKeyRef.current = nextKey;
+        showAuthMessage(
+          `未同期画像が ${unsyncedImageCount} 件あります。Drive保存先を設定すると同期を再開できます。`,
+          7000
+        );
+      }
+      return;
+    }
+
+    imageSyncWarningKeyRef.current = "";
+  }, [driveFolderId, entries, firebaseUser, hasDriveSession, localEntriesReady, showAuthMessage]);
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
@@ -215,11 +298,15 @@ export function useLiveCloudSync({
 
     async function autoHydrateFromCloud() {
       try {
-        const cloudEntries = await loadCloudEntries(user);
+        const cloudArchive = await loadCloudEntries(user);
+        const cloudEntries = cloudArchive.entries;
 
         if (cancelled) {
           return;
         }
+
+        setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
+        lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
 
         const hasPendingLocalChanges = hasUnsyncedLocalChanges(
           window.localStorage,
@@ -307,7 +394,10 @@ export function useLiveCloudSync({
 
     autoSaveTimeoutRef.current = window.setTimeout(async () => {
       try {
-        await saveCloudEntries(firebaseUser, entries);
+        await saveCloudEntries(firebaseUser, entries, {
+          driveFolderId: cloudDriveFolderId
+        });
+        lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
         lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, entries);
         updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
         setSyncStatus("クラウド同期済み");
@@ -321,7 +411,7 @@ export function useLiveCloudSync({
         window.clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [entries, firebaseUser, localEntriesReady]);
+  }, [cloudDriveFolderId, entries, firebaseUser, localEntriesReady]);
 
   const {
     pendingImageUploadRef,
@@ -369,7 +459,8 @@ export function useLiveCloudSync({
     }
 
     try {
-      const cloudEntries = await loadCloudEntries(firebaseUser);
+      const cloudArchive = await loadCloudEntries(firebaseUser);
+      const cloudEntries = cloudArchive.entries;
 
       if (!cloudEntries) {
         return;
@@ -387,6 +478,8 @@ export function useLiveCloudSync({
 
       suppressCloudSyncEffectRef.current = true;
       setEntries(cloudEntries);
+      setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
+      lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
@@ -403,7 +496,8 @@ export function useLiveCloudSync({
     }
 
     try {
-      const cloudEntries = await loadCloudEntries(firebaseUser);
+      const cloudArchive = await loadCloudEntries(firebaseUser);
+      const cloudEntries = cloudArchive.entries;
 
       if (!cloudEntries) {
         return;
@@ -421,6 +515,8 @@ export function useLiveCloudSync({
 
       suppressCloudSyncEffectRef.current = true;
       setEntries(cloudEntries);
+      setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
+      lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
@@ -437,6 +533,7 @@ export function useLiveCloudSync({
     lastSyncedAtLabel,
     imageService,
     driveFolderId,
+    cloudDriveFolderId,
     driveSessionSavedAtLabel,
     isDriveAccessStale,
     hasDriveAccessToken: hasDriveSession,

@@ -9,6 +9,10 @@ type CloudLiveEntry = Omit<LiveEntry, "images"> & {
   images: CloudLiveEntryImage[];
 };
 
+export type CloudDriveSettings = {
+  driveFolderId?: string;
+};
+
 function serializeImageForCloud(image: LiveEntryImage): CloudLiveEntryImage {
   const isCloudReady = !image.storageStatus || image.storageStatus === "cloud";
 
@@ -70,4 +74,42 @@ export function createCloudComparableEntries(entries: LiveEntry[]) {
       hasLocalPreview: Boolean(image.hasLocalPreview)
     }))
   }));
+}
+
+type ImageVisibilityInput = {
+  src?: string;
+  driveWebUrl?: string;
+  driveThumbnailUrl?: string;
+  storageStatus?: LiveEntryImage["storageStatus"];
+};
+
+export function isRenderableImage(image: ImageVisibilityInput) {
+  if (image.storageStatus === "cloud") {
+    return Boolean(image.src || image.driveThumbnailUrl || image.driveWebUrl);
+  }
+
+  return false;
+}
+
+export function countRenderableImages(images: ImageVisibilityInput[]) {
+  return images.filter(isRenderableImage).length;
+}
+
+export function countUnsyncedImages(images: Pick<LiveEntryImage, "storageStatus">[]) {
+  return images.filter(
+    (image) =>
+      image.storageStatus === "local_pending" ||
+      image.storageStatus === "syncing" ||
+      image.storageStatus === "error"
+  ).length;
+}
+
+export function hasUnsyncedImages(images: Pick<LiveEntryImage, "storageStatus">[]) {
+  return countUnsyncedImages(images) > 0;
+}
+
+export function normalizeCloudDriveSettings(settings: CloudDriveSettings | undefined) {
+  return {
+    driveFolderId: settings?.driveFolderId?.trim() || ""
+  };
 }

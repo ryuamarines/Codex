@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, RefObject, useEffect, useState } from "react";
+import { countRenderableImages, countUnsyncedImages, isRenderableImage } from "@/lib/live-image-state";
 import type { LiveEntry } from "@/lib/types";
 
 type RecordDetailPanelProps = {
@@ -35,6 +36,12 @@ export function RecordDetailPanel({
   onUpdateEntryField
 }: RecordDetailPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const renderableImages = selectedEntry ? selectedEntry.images.filter(isRenderableImage) : [];
+  const statusOnlyImages = selectedEntry
+    ? selectedEntry.images.filter((image) => !isRenderableImage(image))
+    : [];
+  const renderableImageCount = renderableImages.length;
+  const unsyncedImageCount = selectedEntry ? countUnsyncedImages(selectedEntry.images) : 0;
   const hasRetryableImages = Boolean(
     selectedEntry?.images.some(
       (image) => image.storageStatus === "local_pending" || image.storageStatus === "error"
@@ -162,7 +169,10 @@ export function RecordDetailPanel({
             <div className="panelHeader">
               <div>
                 <h2>写真</h2>
-                <p>{selectedEntry.images.length}件</p>
+                <p>
+                  {renderableImageCount}件
+                  {unsyncedImageCount > 0 ? ` / 未同期${unsyncedImageCount}` : ""}
+                </p>
               </div>
               {onRetryEntryImageSync && hasRetryableImages ? (
                 <button
@@ -174,9 +184,9 @@ export function RecordDetailPanel({
                 </button>
               ) : null}
             </div>
-            {selectedEntry.images.length > 0 ? (
+            {renderableImages.length > 0 ? (
               <div className="imageGrid">
-                {selectedEntry.images.map((image) => (
+                {renderableImages.map((image) => (
                   <figure key={image.id} className="imageCard">
                     <DriveAwareImage
                       src={image.src}
@@ -230,9 +240,49 @@ export function RecordDetailPanel({
                   </figure>
                 ))}
               </div>
-            ) : (
+            ) : statusOnlyImages.length === 0 ? (
               <p className="emptyInline">まだ写真はありません。</p>
-            )}
+            ) : null}
+            {statusOnlyImages.length > 0 ? (
+              <div className="detailStatusOnlyImages">
+                <h3>未同期・要確認</h3>
+                <div className="detailStatusOnlyList">
+                  {statusOnlyImages.map((image) => (
+                    <article key={image.id} className="detailStatusOnlyCard">
+                      <div>
+                        <strong>{formatImageType(image.type)}</strong>
+                        <span>{image.caption ?? "画像"}</span>
+                        <small className="imageSyncDescription">
+                          {describeImageSyncState(image.storageStatus)}
+                        </small>
+                        {image.uploadError ? <small>{image.uploadError}</small> : null}
+                      </div>
+                      <div className="detailStatusOnlyActions">
+                        {onDeleteImage ? (
+                          <button
+                            className="toolButton imageDeleteButton"
+                            type="button"
+                            onClick={() => onDeleteImage(selectedEntry.id, image.id)}
+                          >
+                            削除
+                          </button>
+                        ) : null}
+                        {onRetryImageSync &&
+                        (image.storageStatus === "local_pending" || image.storageStatus === "error") ? (
+                          <button
+                            className="toolButton imageRetryButton"
+                            type="button"
+                            onClick={() => onRetryImageSync(selectedEntry.id, image.id)}
+                          >
+                            再試行
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
         </>
       ) : (

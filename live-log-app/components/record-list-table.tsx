@@ -1,5 +1,7 @@
 "use client";
 
+import { formatPhotoSummary } from "@/lib/live-image-state";
+
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
 type TableColumn = "date" | "title" | ListColumn;
 
@@ -164,28 +166,4 @@ function ResizableHeader({
 
 function extractYear(date: string) {
   return date.slice(0, 4);
-}
-
-function formatPhotoSummary(
-  images: { id: string; storageStatus?: "cloud" | "local_pending" | "syncing" | "error"; driveWebUrl?: string }[]
-) {
-  const total = images.length;
-  const unsynced = images.filter(
-    (image) => image.storageStatus === "local_pending" || image.storageStatus === "error"
-  ).length;
-  const linked = images.filter((image) => image.driveWebUrl).length;
-
-  if (total === 0) {
-    return "0件";
-  }
-
-  if (unsynced > 0) {
-    return `${total}件 / 未同期${unsynced}`;
-  }
-
-  if (linked > 0) {
-    return `${total}件 / Drive`;
-  }
-
-  return `${total}件`;
 }
