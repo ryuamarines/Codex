@@ -203,6 +203,7 @@ export function LiveLogPage() {
   const analyticsTileRefs = useRef<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>({});
   const yearlySummaryRef = useRef<HTMLDivElement | null>(null);
   const yearlyAggregateRefs = useRef<Partial<Record<YearlyAggregateKey, HTMLDivElement | null>>>({});
+  const entriesRef = useRef<LiveEntry[]>(sampleEntries);
   const resizeStateRef = useRef<{ column: TableColumn; startX: number; startWidth: number } | null>(
     null
   );
@@ -277,6 +278,7 @@ export function LiveLogPage() {
 
   useEffect(() => {
     repositoryRef.current?.save(entries).catch(() => undefined);
+    entriesRef.current = entries;
   }, [entries]);
 
   useEffect(() => {
@@ -710,7 +712,8 @@ export function LiveLogPage() {
       return;
     }
 
-    const nextEntries = [nextEntry, ...entries];
+    const nextEntries = [nextEntry, ...entriesRef.current];
+    entriesRef.current = nextEntries;
     setEntries(nextEntries);
     void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
       setActionNotice("追加は反映しました。クラウド保存は自動で再確認します。");
@@ -782,8 +785,9 @@ export function LiveLogPage() {
         )
       );
 
-      const nextEntries = appendImagesToEntry(entries, entryId, nextImages);
+      const nextEntries = appendImagesToEntry(entriesRef.current, entryId, nextImages);
       const nextEntry = nextEntries.find((entry) => entry.id === entryId);
+      entriesRef.current = nextEntries;
       setEntries(nextEntries);
       if (nextEntry) {
         void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
@@ -822,8 +826,9 @@ export function LiveLogPage() {
         )
       );
 
-      const result = applyPhotoImportToEntries(entries, photoForm, nextImages);
+      const result = applyPhotoImportToEntries(entriesRef.current, photoForm, nextImages);
       const targetEntry = result.entries.find((entry) => entry.id === result.selectedEntryId);
+      entriesRef.current = result.entries;
       setEntries(result.entries);
       if (targetEntry) {
         void persistEntryToCloud(result.entries, targetEntry).catch(() => {
@@ -849,7 +854,9 @@ export function LiveLogPage() {
     key: keyof Omit<LiveEntry, "id" | "images">,
     value: string
   ) {
-    setEntries((current) => updateEntryFieldValue(current, entryId, key, value));
+    const nextEntries = updateEntryFieldValue(entriesRef.current, entryId, key, value);
+    entriesRef.current = nextEntries;
+    setEntries(nextEntries);
   }
 
   function handleEntryImageDelete(entryId: string, imageId: string) {
@@ -872,12 +879,13 @@ export function LiveLogPage() {
   }
 
   function applyBulkUpdate() {
-    const nextEntries = applyBulkEditToEntries(entries, selectedEntryIds, bulkEdit);
+    const nextEntries = applyBulkEditToEntries(entriesRef.current, selectedEntryIds, bulkEdit);
 
     if (nextEntries === entries) {
       return;
     }
 
+    entriesRef.current = nextEntries;
     setEntries(nextEntries);
 
     setBulkEdit({
@@ -892,7 +900,8 @@ export function LiveLogPage() {
       return;
     }
 
-    const nextEntries = deleteEntriesById(entries, selectedEntryIds);
+    const nextEntries = deleteEntriesById(entriesRef.current, selectedEntryIds);
+    entriesRef.current = nextEntries;
     setEntries(nextEntries);
     if (selectedEntryIds.length === 1) {
       void deleteEntryFromCloud(nextEntries, selectedEntryIds[0]).catch(() => {
