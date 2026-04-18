@@ -10,6 +10,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "firebase": "^12.11.0",
     "konva": "^9.3.20",
     "next": "^15.5.14",
     "react": "^19.1.1",

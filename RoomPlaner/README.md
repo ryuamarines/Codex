@@ -1,6 +1,6 @@
 # RoomPlaner
 
-間取り図画像を下敷きにして、自由形状の部屋、窓、扉、窓前制約ゾーン、家具を 2D 上で編集し、干渉を確認するためのローカル向け Web アプリです。
+間取り図画像を下敷きにして、自由形状の部屋、窓、扉、窓前制約ゾーン、家具を 2D 上で編集し、干渉を確認するための Web アプリです。運用の正本は GitHub、公開先は Vercel を前提にしています。
 
 ## 技術スタック
 
@@ -45,7 +45,7 @@
 ## 起動方法
 
 ```bash
-cd RoomPlaner
+cd /Users/Ryu/Documents/Codex/RoomPlaner
 npm install
 npm run dev
 ```
@@ -56,6 +56,31 @@ npm run dev
 
 ```bash
 npm run dev:reset
+```
+
+## GitHub / Vercel 前提の運用
+
+- GitHub リポジトリ: `ryuamarines/Codex`
+- アプリのディレクトリ: `RoomPlaner`
+- Vercel の Project Name: `roomplaner`
+- Vercel の Root Directory: `RoomPlaner`
+
+Vercel に接続したあとは、基本的に `main` への push を起点に deploy する想定です。
+
+## Firebase 連携
+
+公開URL側で `Googleでログイン`、`Firestore に保存`、`Firestore から読込` が使えます。  
+ローカルで昔書き出した `JSON` がある場合は、まず `旧JSONを読み込む` で取り込み、そのあと Firestore に保存してください。
+
+必要な環境変数は次です。
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
 ## 使い方の流れ

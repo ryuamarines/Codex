@@ -44,6 +44,7 @@ import {
 } from "@/lib/planner5d-migration";
 import { exportProjectCsv, importProjectCsv } from "@/lib/project-csv";
 import { usePlannerProject } from "@/lib/use-planner-project";
+import { useRoomPlanerCloud } from "@/lib/use-roomplaner-cloud";
 import { usePlannerUi } from "@/lib/use-planner-ui";
 import type {
   BackgroundImage,
@@ -91,6 +92,8 @@ export function PlannerShell() {
     updateProject,
     applyProjectUpdate,
     replaceProject,
+    importProjectJson,
+    exportProjectJson,
     undo,
     redo,
     clearPersistedProject
@@ -120,6 +123,7 @@ export function PlannerShell() {
     resetTransientUi
   } = usePlannerUi();
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const importJsonInputRef = useRef<HTMLInputElement | null>(null);
   const [migrationWallPath, setMigrationWallPath] = useState("right 4200\ndown 2600\nleft 1800\ndown 1200\nleft 2400\nup 3800");
   const [migrationFurnitureCsv, setMigrationFurnitureCsv] = useState(
     "name,width,depth,x,y,rotation\nBed,1400,2000,2900,2800,90\nDesk,1200,600,900,800,0"
@@ -156,6 +160,26 @@ export function PlannerShell() {
     ),
     [objectIndex, objectSearch]
   );
+
+  const loadProjectState = (nextProject: PlannerProject) => {
+    replaceProject(nextProject);
+    resetTransientUi();
+  };
+
+  const {
+    firebaseUser,
+    cloudMessage,
+    cloudBusy,
+    firebaseConfigured,
+    signIn,
+    signOut,
+    saveProjectToCloud,
+    loadProjectFromCloud
+  } = useRoomPlanerCloud({
+    project,
+    loadProjectState,
+    parseProject: importProjectJson
+  });
 
   const handleUndo = () => {
     undo();
@@ -368,11 +392,6 @@ export function PlannerShell() {
     URL.revokeObjectURL(url);
   };
 
-  const loadProjectState = (nextProject: PlannerProject) => {
-    replaceProject(nextProject);
-    resetTransientUi();
-  };
-
   const importProject = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -383,6 +402,22 @@ export function PlannerShell() {
         loadProjectState(parsed);
       } catch {
         window.alert("CSV の読み込みに失敗しました。RoomPlaner の書き出しCSVを選んでください。");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  const importLegacyJsonProject = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = importProjectJson(String(reader.result ?? ""));
+        loadProjectState(parsed);
+      } catch {
+        window.alert("JSON の読み込みに失敗しました。旧 RoomPlaner の書き出しJSONを選んでください。");
       }
     };
     reader.readAsText(file);
@@ -819,8 +854,18 @@ export function PlannerShell() {
           </div>
           <div className="flex flex-wrap gap-2">
             <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
+            <input
+              ref={importJsonInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={importLegacyJsonProject}
+            />
             <button className="button-soft" onClick={() => importInputRef.current?.click()}>
               CSV を読み込む
+            </button>
+            <button className="button-soft" onClick={() => importJsonInputRef.current?.click()}>
+              旧JSONを読み込む
             </button>
             <button className="button-soft" onClick={exportProject}>
               CSV を書き出す
@@ -862,12 +907,41 @@ export function PlannerShell() {
             >
               新規プロジェクト
             </button>
+            {firebaseUser ? (
+              <>
+                <button className="button-soft" onClick={loadProjectFromCloud} disabled={cloudBusy}>
+                  Firestore から読込
+                </button>
+                <button className="button-soft" onClick={saveProjectToCloud} disabled={cloudBusy}>
+                  Firestore に保存
+                </button>
+                <button className="button-soft" onClick={signOut} disabled={cloudBusy}>
+                  ログアウト
+                </button>
+              </>
+            ) : (
+              <button className="button-soft" onClick={signIn} disabled={!firebaseConfigured || cloudBusy}>
+                Googleでログイン
+              </button>
+            )}
           </div>
         </header>
 
         <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
           <aside className="panel h-fit p-4 xl:sticky xl:top-4">
             <div className="panel-title">Add / Setup</div>
+            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">アカウント / クラウド</div>
+              <div className="mt-2 text-sm text-slate-600">
+                {firebaseUser ? `ログイン中: ${firebaseUser.displayName || firebaseUser.email || firebaseUser.uid}` : "未ログイン"}
+              </div>
+              <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
+                旧JSONを読み込んでから Firestore に保存すると、公開URL側で自分のデータとして持てます。
+              </div>
+              {cloudMessage ? (
+                <div className="mt-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">{cloudMessage}</div>
+              ) : null}
+            </div>
             <div className="mt-4 grid gap-2">
               <label className="button-soft cursor-pointer text-center">
                 背景画像を読み込む
