@@ -83,6 +83,21 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
+Firestore Rules は最低限この形にしてください。
+
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /roomPlans/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
+
+`Missing or insufficient permissions.` が出る場合は、Firebase Console の `Firestore Database -> Rules` で上のルールを publish してください。
+
 ## 使い方の流れ
 
 1. 左パネルから背景画像を読み込みます。

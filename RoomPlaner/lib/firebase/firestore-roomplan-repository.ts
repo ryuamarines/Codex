@@ -4,6 +4,18 @@ import type { PlannerProject } from "@/lib/types";
 import { getFirebaseDb } from "@/lib/firebase/client";
 
 const ROOMPLAN_COLLECTION = "roomPlans";
+const FIRESTORE_DOC_SOFT_LIMIT_BYTES = 900_000;
+
+function buildCloudProject(project: PlannerProject) {
+  return {
+    ...project,
+    background: project.background ? null : project.background
+  } satisfies PlannerProject;
+}
+
+function estimateJsonBytes(value: unknown) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
 
 export class FirestoreRoomPlanRepository {
   async load(user: Pick<User, "uid">) {
@@ -27,10 +39,23 @@ export class FirestoreRoomPlanRepository {
       throw new Error("Firebase is not configured.");
     }
 
+    const cloudProject = buildCloudProject(project);
+    const payload = {
+      project: cloudProject,
+      owner: {
+        displayName: user.displayName ?? null,
+        email: user.email ?? null
+      }
+    };
+
+    if (estimateJsonBytes(payload) > FIRESTORE_DOC_SOFT_LIMIT_BYTES) {
+      throw new Error("プロジェクトが大きすぎて保存できません。背景画像を外してもサイズが大きいため、家具や画像を整理してから再保存してください。");
+    }
+
     await setDoc(
       doc(db, ROOMPLAN_COLLECTION, user.uid),
       {
-        project,
+        project: cloudProject,
         updatedAt: serverTimestamp(),
         owner: {
           displayName: user.displayName ?? null,
@@ -39,5 +64,9 @@ export class FirestoreRoomPlanRepository {
       },
       { merge: true }
     );
+
+    return {
+      backgroundOmitted: project.background !== null
+    };
   }
 }

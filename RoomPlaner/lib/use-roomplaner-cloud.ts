@@ -13,6 +13,20 @@ type UseRoomPlanerCloudParams = {
   parseProject: (raw: string) => PlannerProject;
 };
 
+function getCloudErrorMessage(error: unknown) {
+  if (typeof error === "object" && error && "code" in error) {
+    const code = String(error.code);
+    if (code === "permission-denied") {
+      return "Firestore の権限設定で保存が拒否されています。Firebase Console の Firestore Rules で roomPlans への read/write を許可してください。";
+    }
+    if (code === "unavailable") {
+      return "Firestore に接続できませんでした。ネットワークか Firebase 側の状態を確認してください。";
+    }
+  }
+
+  return error instanceof Error ? error.message : "クラウド操作に失敗しました。";
+}
+
 export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: UseRoomPlanerCloudParams) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [cloudMessage, setCloudMessage] = useState(
@@ -34,7 +48,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
       await signInWithGoogle();
       setMessage("Google ログインを開始しました。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Google ログインに失敗しました。");
+      setMessage(getCloudErrorMessage(error));
     } finally {
       setCloudBusy(false);
     }
@@ -46,7 +60,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
       await signOutFromFirebase();
       setMessage("ログアウトしました。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "ログアウトに失敗しました。");
+      setMessage(getCloudErrorMessage(error));
     } finally {
       setCloudBusy(false);
     }
@@ -61,10 +75,14 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
     try {
       setCloudBusy(true);
       const repository = new FirestoreRoomPlanRepository();
-      await repository.save(firebaseUser, project);
-      setMessage("現在のプロジェクトを Firestore に保存しました。");
+      const result = await repository.save(firebaseUser, project);
+      setMessage(
+        result.backgroundOmitted
+          ? "Firestore に保存しました。背景画像は容量制限のためクラウド保存から除外しています。"
+          : "現在のプロジェクトを Firestore に保存しました。"
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "クラウド保存に失敗しました。");
+      setMessage(getCloudErrorMessage(error));
     } finally {
       setCloudBusy(false);
     }
@@ -87,7 +105,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
       loadProjectState(parseProject(JSON.stringify(cloudProject)));
       setMessage("Firestore からプロジェクトを読み込みました。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "クラウド読込に失敗しました。");
+      setMessage(getCloudErrorMessage(error));
     } finally {
       setCloudBusy(false);
     }
