@@ -187,14 +187,34 @@ export function useLiveCloudSync({
         return;
       }
 
-      const saveResult = await saveCloudEntry(
-        firebaseUser,
-        nextEntry,
-        {
-          driveFolderId: cloudDriveFolderId
-        },
-        cloudRevisionRef.current
-      );
+      let saveResult;
+
+      try {
+        saveResult = await saveCloudEntry(
+          firebaseUser,
+          nextEntry,
+          {
+            driveFolderId: cloudDriveFolderId
+          },
+          cloudRevisionRef.current
+        );
+      } catch (error) {
+        if (!isCloudConflictError(error)) {
+          throw error;
+        }
+
+        const latestCloudArchive = await loadCloudEntries(firebaseUser);
+        cloudRevisionRef.current = latestCloudArchive.revision;
+        saveResult = await saveCloudEntry(
+          firebaseUser,
+          nextEntry,
+          {
+            driveFolderId: cloudDriveFolderId
+          },
+          cloudRevisionRef.current
+        );
+      }
+
       lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
       cloudRevisionRef.current = saveResult.revision;
     },
@@ -207,14 +227,34 @@ export function useLiveCloudSync({
         return;
       }
 
-      const saveResult = await deleteCloudEntry(
-        firebaseUser,
-        entryId,
-        {
-          driveFolderId: cloudDriveFolderId
-        },
-        cloudRevisionRef.current
-      );
+      let saveResult;
+
+      try {
+        saveResult = await deleteCloudEntry(
+          firebaseUser,
+          entryId,
+          {
+            driveFolderId: cloudDriveFolderId
+          },
+          cloudRevisionRef.current
+        );
+      } catch (error) {
+        if (!isCloudConflictError(error)) {
+          throw error;
+        }
+
+        const latestCloudArchive = await loadCloudEntries(firebaseUser);
+        cloudRevisionRef.current = latestCloudArchive.revision;
+        saveResult = await deleteCloudEntry(
+          firebaseUser,
+          entryId,
+          {
+            driveFolderId: cloudDriveFolderId
+          },
+          cloudRevisionRef.current
+        );
+      }
+
       lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
       cloudRevisionRef.current = saveResult.revision;
     },
