@@ -191,6 +191,11 @@ select {
   gap: 8px;
 }
 
+.cloudSyncBadgeRow,
+.cloudSyncActionsCompact {
+  justify-content: center;
+}
+
 .cloudSyncGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -205,11 +210,14 @@ select {
   border-radius: 18px;
   background: var(--surface-soft);
   align-content: center;
+  justify-items: center;
+  text-align: center;
 }
 
 .cloudSyncCardHeader {
   display: grid;
   gap: 6px;
+  justify-items: center;
 }
 
 .cloudSyncCard h3 {
