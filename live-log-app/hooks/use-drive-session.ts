@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { consumeGoogleRedirectAccessToken } from "@/lib/firebase/auth";
 import {
+  clearDriveFolderId,
   clearDriveSession,
   createDriveSession,
   isDriveAccessTokenStale,
@@ -102,11 +103,13 @@ export function useDriveSession({
       return;
     }
 
+    const storage = window.localStorage;
     if (!cloudDriveFolderId) {
+      clearDriveFolderId(storage);
+      setDriveFolderId("");
       return;
     }
 
-    const storage = window.localStorage;
     const currentLocalFolderId = readDriveFolderId(storage);
 
     if (currentLocalFolderId === cloudDriveFolderId) {
@@ -129,9 +132,14 @@ export function useDriveSession({
 
   const clearDriveState = useCallback(async () => {
     await clearDriveSession();
+    if (typeof window !== "undefined") {
+      clearDriveFolderId(window.localStorage);
+    }
     setHasDriveSession(false);
     setDriveSessionSavedAt("");
-  }, []);
+    setDriveFolderId("");
+    onDriveFolderIdChange?.("");
+  }, [onDriveFolderIdChange]);
 
   const handleConfigureDriveFolder = useCallback(() => {
     if (typeof window === "undefined") {

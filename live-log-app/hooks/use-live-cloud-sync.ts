@@ -363,6 +363,11 @@ export function useLiveCloudSync({
       autoHydratedUserIdRef.current = "";
       cloudHydrateRetryCountRef.current = 0;
       cloudRevisionRef.current = 0;
+      lastSavedDriveFolderIdRef.current = "";
+      imageSyncWarningKeyRef.current = "";
+      if (!firebaseUser) {
+        setCloudDriveFolderId("");
+      }
       return;
     }
 
@@ -491,6 +496,8 @@ export function useLiveCloudSync({
         setSyncStatus("クラウド保存失敗");
         if (error instanceof Error) {
           showAuthMessage(error.message, 7000);
+        } else {
+          showAuthMessage("クラウド保存に失敗しました。しばらくしてから再試行してください。", 7000);
         }
       }
     }, 1800);

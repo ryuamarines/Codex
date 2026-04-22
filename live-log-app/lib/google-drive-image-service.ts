@@ -81,6 +81,10 @@ export function saveDriveFolderId(storage: Storage, value: string) {
   return normalized;
 }
 
+export function clearDriveFolderId(storage: Storage) {
+  storage.removeItem(DRIVE_FOLDER_ID_KEY);
+}
+
 export function normalizeDriveFolderInput(value: string) {
   const input = value.trim();
 
