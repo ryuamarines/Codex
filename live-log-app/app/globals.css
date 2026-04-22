@@ -204,6 +204,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface-soft);
+  align-content: center;
 }
 
 .cloudSyncCardHeader {
