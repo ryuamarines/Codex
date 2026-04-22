@@ -194,6 +194,7 @@ select {
 .cloudSyncBadgeRow,
 .cloudSyncActionsCompact {
   justify-content: center;
+  width: fit-content;
 }
 
 .cloudSyncGrid {
@@ -210,14 +211,17 @@ select {
   border-radius: 18px;
   background: var(--surface-soft);
   align-content: center;
-  justify-items: center;
-  text-align: center;
+}
+
+.cloudSyncCard > * {
+  justify-self: center;
+  max-width: 100%;
 }
 
 .cloudSyncCardHeader {
   display: grid;
   gap: 6px;
-  justify-items: center;
+  width: fit-content;
 }
 
 .cloudSyncCard h3 {
@@ -231,6 +235,7 @@ select {
   color: var(--muted);
   line-height: 1.4;
   font-size: 0.85rem;
+  width: fit-content;
 }
 
 .cloudSyncBadge {
