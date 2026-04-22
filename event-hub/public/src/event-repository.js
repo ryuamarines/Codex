@@ -1,7 +1,7 @@
 import { normalizeEvent } from "./models.js";
-import { APP_RUNTIME, FIRESTORE_COLLECTIONS, FIRESTORE_DOCUMENTS } from "./firebase-config.js";
-import { getFirebaseClient } from "./firebase-client.js";
+import { resolveDataBackend } from "./app-config.js";
 import { parseEventsCsv, serializeEventsToCsv } from "./csv-transfer.js";
+import { db, eventHubDoc, getDoc, runTransaction, setDoc } from "./firebase-client.js";
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
@@ -35,20 +35,41 @@ function normalizeEvents(events) {
   return events.map((event) => normalizeEvent(event));
 }
 
-function sanitizeForFirestore(value) {
-  return JSON.parse(JSON.stringify(value));
+function toFirestoreRepositoryError(action, error) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "permission-denied"
+  ) {
+    return new Error(
+      action === "read"
+        ? "Firestore の読込権限がありません。eventHub/appState を読める Rules になっているか確認してください。"
+        : "Firestore の保存権限がありません。eventHub/appState を書ける Rules になっているか確認してください。"
+    );
+  }
+
+  return new Error(
+    action === "read"
+      ? "Firestore からの読込に失敗しました。接続設定かルールを確認してください。"
+      : "Firestore への保存に失敗しました。接続設定かルールを確認してください。"
+  );
 }
 
-export function createLocalApiEventRepository() {
+export function createApiEventRepository() {
   return {
-    key: "local-api",
+    key: resolveDataBackend(),
     async getSession() {
-      return {
-        authRequired: false,
-        backendLabel: "Local API / JSON",
-        user: null,
-        isAllowed: true
-      };
+      try {
+        return await requestJson("/api/session");
+      } catch {
+        return {
+          authRequired: false,
+          backendLabel: "Shared API",
+          user: null,
+          isAllowed: true
+        };
+      }
     },
     async load() {
       const events = await requestJson("/api/events");
@@ -87,190 +108,70 @@ export function createLocalApiEventRepository() {
   };
 }
 
-export async function createFirebaseEventRepository() {
-  const client = await getFirebaseClient();
-  const collectionName = FIRESTORE_COLLECTIONS.events;
-  const collectionRef = client.db.collection(collectionName);
-  const appCollectionRef = client.db.collection(FIRESTORE_COLLECTIONS.appState);
-  const eventsMetaRef = appCollectionRef.doc(FIRESTORE_DOCUMENTS.eventsMeta);
-  const legacyStateRef = appCollectionRef.doc(FIRESTORE_DOCUMENTS.legacyEventsState);
-  const authIsOptional = APP_RUNTIME.requireLogin === false;
-  let loadedRevision = 0;
-  let loadedEventIds = new Set();
+async function loadSeedEvents() {
+  const response = await fetch("/seed/default-events.json");
 
-  async function loadCollectionEvents() {
-    const snapshot = await collectionRef.get();
-    loadedEventIds = new Set(snapshot.docs.map((doc) => doc.id));
-    return normalizeEvents(snapshot.docs.map((doc) => doc.data()));
+  if (!response.ok) {
+    throw new Error("初期サンプルデータの取得に失敗しました。");
   }
 
-  async function loadLegacyEventsState() {
-    const doc = await legacyStateRef.get();
+  return normalizeEvents(await response.json());
+}
 
-    if (!doc.exists) {
-      return null;
-    }
-
-    const payload = doc.data() || {};
-    const hasEventsArray = Array.isArray(payload.events);
-    const looksLikeStateDocument =
-      hasEventsArray &&
-      (Object.prototype.hasOwnProperty.call(payload, "revision") || Object.prototype.hasOwnProperty.call(payload, "updatedAt"));
-
-    if (!looksLikeStateDocument) {
-      return null;
-    }
-
-    loadedRevision = Number(payload.revision || 0);
-    const events = normalizeEvents(payload.events);
-    loadedEventIds = new Set(events.map((event) => event.id));
-    return events;
-  }
-
-  async function loadEventsMeta() {
-    const doc = await eventsMetaRef.get();
-
-    if (!doc.exists) {
-      return null;
-    }
-
-    return doc.data() || {};
-  }
-
-  async function requireAllowedUser() {
-    if (authIsOptional) {
+export function createFirestoreEventRepository() {
+  return {
+    key: "firestore",
+    async getSession() {
       return {
         authRequired: false,
-        backendLabel: "Firebase / Firestore",
+        backendLabel: "Firestore / Vercel",
         user: null,
         isAllowed: true
       };
-    }
-
-    const session = await client.getSession();
-
-    if (!session.user) {
-      throw new Error("Firebase にログインしてください。");
-    }
-
-    if (!session.isAllowed) {
-      await client.signOut();
-      throw new Error("このアカウントは Event Hub の許可対象ではありません。");
-    }
-
-    return session;
-  }
-
-  return {
-    key: "firebase",
-    async getSession() {
-      const session = await client.getSession();
-
-      if (authIsOptional) {
-        return {
-          ...session,
-          authRequired: false,
-          isAllowed: true
-        };
-      }
-
-      return session;
-    },
-    async signInWithGoogle() {
-      const user = await client.signInWithGoogle();
-
-      if (!client.isAllowedUser({ email: user?.email })) {
-        await client.signOut();
-        throw new Error("このGoogleアカウントは Event Hub の許可対象ではありません。");
-      }
-
-      return user;
-    },
-    async signInWithEmailPassword(email, password) {
-      const user = await client.signInWithEmailPassword(email, password);
-
-      if (!client.isAllowedUser({ email: user?.email })) {
-        await client.signOut();
-        throw new Error("このメールアドレスは Event Hub の許可対象ではありません。");
-      }
-
-      return user;
-    },
-    async signOut() {
-      await client.signOut();
     },
     async load() {
-      await requireAllowedUser();
-      const [events, meta, legacyEvents] = await Promise.all([
-        loadCollectionEvents(),
-        loadEventsMeta(),
-        loadLegacyEventsState()
-      ]);
+      try {
+        const snapshot = await getDoc(eventHubDoc);
 
-      if (meta) {
-        loadedRevision = Number(meta?.revision || 0);
-        loadedEventIds = new Set(events.map((event) => event.id));
-        return events;
-      }
-
-      if (events.length) {
-        loadedRevision = 0;
-        loadedEventIds = new Set(events.map((event) => event.id));
-        return events;
-      }
-
-      if (legacyEvents) {
-        return legacyEvents;
-      }
-
-      loadedRevision = Number(meta?.revision || 0);
-      loadedEventIds = new Set();
-      return [];
-    },
-    async save(events) {
-      await requireAllowedUser();
-      const normalizedEvents = normalizeEvents(events);
-      const nextEventIds = new Set(normalizedEvents.map((event) => event.id));
-
-      await client.db.runTransaction(async (transaction) => {
-        const doc = await transaction.get(eventsMetaRef);
-        const remoteRevision = doc.exists ? Number(doc.data()?.revision || 0) : 0;
-
-        if (remoteRevision !== loadedRevision) {
-          throw new Error("他の端末の更新が先に保存されました。再読み込みして内容を確認してください。");
+        if (!snapshot.exists()) {
+          const seedEvents = await loadSeedEvents();
+          await setDoc(eventHubDoc, {
+            revision: 1,
+            updatedAt: new Date().toISOString(),
+            events: seedEvents
+          });
+          return normalizeEvents(seedEvents);
         }
 
-        normalizedEvents.forEach((event) => {
-          transaction.set(collectionRef.doc(event.id), sanitizeForFirestore(event));
-        });
+        const payload = snapshot.data();
+        return normalizeEvents(Array.isArray(payload?.events) ? payload.events : []);
+      } catch (error) {
+        throw toFirestoreRepositoryError("read", error);
+      }
+    },
+    async save(events) {
+      const normalizedEvents = normalizeEvents(events);
 
-        loadedEventIds.forEach((id) => {
-          if (!nextEventIds.has(id)) {
-            transaction.delete(collectionRef.doc(id));
-          }
-        });
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snapshot = await transaction.get(eventHubDoc);
+          const currentRevision = snapshot.exists() ? Number(snapshot.data()?.revision || 0) : 0;
 
-        transaction.set(eventsMetaRef, {
-          revision: remoteRevision + 1,
-          updatedAt: new Date().toISOString()
+          transaction.set(eventHubDoc, {
+            revision: currentRevision + 1,
+            updatedAt: new Date().toISOString(),
+            events: normalizedEvents
+          });
         });
-        transaction.delete(legacyStateRef);
-      });
+      } catch (error) {
+        throw toFirestoreRepositoryError("write", error);
+      }
 
-      loadedRevision += 1;
-      loadedEventIds = nextEventIds;
       return normalizedEvents;
     },
     async reset() {
-      await requireAllowedUser();
-      const response = await fetch("/seed/default-events.json");
-
-      if (!response.ok) {
-        throw new Error("サンプルデータの取得に失敗しました。");
-      }
-
-      const events = normalizeEvents(await response.json());
-      return this.save(events);
+      const seedEvents = await loadSeedEvents();
+      return this.save(seedEvents);
     },
     async importCsv(csvText) {
       const events = normalizeEvents(parseEventsCsv(csvText));
@@ -284,9 +185,9 @@ export async function createFirebaseEventRepository() {
 }
 
 export async function createEventRepository() {
-  if (APP_RUNTIME.dataBackend === "firebase") {
-    return createFirebaseEventRepository();
+  if (resolveDataBackend() === "firestore") {
+    return createFirestoreEventRepository();
   }
 
-  return createLocalApiEventRepository();
+  return createApiEventRepository();
 }

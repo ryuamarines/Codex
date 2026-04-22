@@ -2,11 +2,9 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /events/{eventId} {
-      allow read, write: if true;
-    }
-
-    match /_app/{docId} {
+    match /eventHub/appState {
+      // event-hub は現状 Firestore を未認証で直接利用しているため、
+      // いまは単一ドキュメント appState のみに権限を絞る。
       allow read, write: if true;
     }
   }

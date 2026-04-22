@@ -20,9 +20,41 @@ export function isCloudConflictError(error: unknown): error is CloudConflictErro
   return error instanceof CloudConflictError;
 }
 
+function normalizeCloudError(error: unknown, action: "read" | "write") {
+  if (isCloudConflictError(error)) {
+    return error;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "permission-denied"
+  ) {
+    return new Error(
+      action === "read"
+        ? "Firestore の読込権限がありません。Google ログイン中のユーザーに対応する liveLogArchives/{uid} の read ルールを確認してください。"
+        : "Firestore の保存権限がありません。Google ログイン中のユーザーに対応する liveLogArchives/{uid} の write ルールを確認してください。"
+    );
+  }
+
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error(
+    action === "read" ? "クラウド読込に失敗しました。" : "クラウド保存に失敗しました。"
+  );
+}
+
 export async function loadCloudEntries(user: Pick<User, "uid">) {
   const repository = new FirestoreLiveEntryRepository();
-  return repository.load(user) as Promise<CloudArchive>;
+
+  try {
+    return (await repository.load(user)) as CloudArchive;
+  } catch (error) {
+    throw normalizeCloudError(error, "read");
+  }
 }
 
 export async function saveCloudEntries(
@@ -32,7 +64,12 @@ export async function saveCloudEntries(
   expectedRevision?: number
 ) {
   const repository = new FirestoreLiveEntryRepository();
-  return repository.save(user, entries, settings, expectedRevision);
+
+  try {
+    return await repository.save(user, entries, settings, expectedRevision);
+  } catch (error) {
+    throw normalizeCloudError(error, "write");
+  }
 }
 
 export async function saveCloudEntry(
@@ -42,7 +79,12 @@ export async function saveCloudEntry(
   expectedRevision?: number
 ) {
   const repository = new FirestoreLiveEntryRepository();
-  return repository.upsertEntry(user, entry, settings, expectedRevision);
+
+  try {
+    return await repository.upsertEntry(user, entry, settings, expectedRevision);
+  } catch (error) {
+    throw normalizeCloudError(error, "write");
+  }
 }
 
 export async function deleteCloudEntry(
@@ -52,7 +94,12 @@ export async function deleteCloudEntry(
   expectedRevision?: number
 ) {
   const repository = new FirestoreLiveEntryRepository();
-  return repository.deleteEntry(user, entryId, settings, expectedRevision);
+
+  try {
+    return await repository.deleteEntry(user, entryId, settings, expectedRevision);
+  } catch (error) {
+    throw normalizeCloudError(error, "write");
+  }
 }
 
 export async function saveCloudSettings(
@@ -61,5 +108,10 @@ export async function saveCloudSettings(
   expectedRevision?: number
 ) {
   const repository = new FirestoreLiveEntryRepository();
-  return repository.saveSettings(user, settings, expectedRevision);
+
+  try {
+    return await repository.saveSettings(user, settings, expectedRevision);
+  } catch (error) {
+    throw normalizeCloudError(error, "write");
+  }
 }

@@ -489,6 +489,9 @@ export function useLiveCloudSync({
         }
 
         setSyncStatus("クラウド保存失敗");
+        if (error instanceof Error) {
+          showAuthMessage(error.message, 7000);
+        }
       }
     }, 1800);
 
@@ -571,8 +574,11 @@ export function useLiveCloudSync({
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
       showAuthMessage("クラウドと同期しました。");
-    } catch {
-      showAuthMessage("クラウド同期に失敗しました。Firebase 設定を確認してください。");
+    } catch (error) {
+      showAuthMessage(
+        error instanceof Error ? error.message : "クラウド同期に失敗しました。Firebase 設定を確認してください。",
+        7000
+      );
     }
   }
 
@@ -609,8 +615,13 @@ export function useLiveCloudSync({
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
       showAuthMessage("この端末をクラウド同期データで置き換えました。");
-    } catch {
-      showAuthMessage("クラウドでの置き換えに失敗しました。Firebase 設定を確認してください。");
+    } catch (error) {
+      showAuthMessage(
+        error instanceof Error
+          ? error.message
+          : "クラウドでの置き換えに失敗しました。Firebase 設定を確認してください。",
+        7000
+      );
     }
   }
 

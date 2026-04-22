@@ -247,7 +247,9 @@ npm run start
 ### Firestore
 
 - Firestore Database を作成
-- まずは開発用ルールで開始
+- [firebase/firestore.rules](/Users/Ryu/Documents/Codex/live-log-app/firebase/firestore.rules) をベースに Rules を設定
+- `liveLogArchives/{userId}` と `liveLogArchives/{userId}/entries/{entryId}` は、`request.auth.uid == userId` で read / write できるようにする
+- ルール反映後、Google ログインしたユーザーが自分の `uid` 配下だけ読める / 書ける状態を前提にする
 
 ### Google Drive API
 
