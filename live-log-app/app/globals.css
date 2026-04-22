@@ -134,6 +134,107 @@ select {
   margin-top: 4px;
 }
 
+.cloudSyncPanel {
+  display: grid;
+  gap: 18px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  border-radius: 20px;
+}
+
+.cloudSyncPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.cloudSyncPanelLead,
+.cloudSyncCardNote,
+.cloudSyncPanelMessage {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.cloudSyncPanelMessage {
+  margin-top: -2px;
+}
+
+.cloudSyncStatusRow,
+.cloudSyncBadgeRow,
+.cloudSyncActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cloudSyncGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cloudSyncCard {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.cloudSyncCardHeader {
+  display: grid;
+  gap: 8px;
+}
+
+.cloudSyncCard h3 {
+  margin: 0;
+}
+
+.cloudSyncChecklist {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cloudSyncChecklistItem {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-softer);
+}
+
+.cloudSyncChecklistItem strong {
+  font-size: 0.88rem;
+}
+
+.cloudSyncChecklistItem p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.cloudSyncBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.cloudSyncBadgeReady {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .statusBadge {
   display: inline-flex;
   align-items: center;
@@ -1175,107 +1276,6 @@ select {
   color: var(--muted);
 }
 
-.batchDrivePanel {
-  display: block;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--surface-softer);
-}
-
-.batchDrivePanel summary {
-  list-style: none;
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.batchDrivePanel summary::-webkit-details-marker {
-  display: none;
-}
-
-.batchDrivePanel[open] summary {
-  margin-bottom: 14px;
-}
-
-.batchDrivePanel[open] {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.batchDriveStatus {
-  display: grid;
-  gap: 8px;
-}
-
-.batchDriveStatus strong {
-  font-size: 0.95rem;
-}
-
-.batchDriveStatus p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.batchDriveBadges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.batchDriveChecklist {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.batchDriveChecklistItem {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-softer);
-}
-
-.batchDriveChecklistItem strong {
-  font-size: 0.88rem;
-}
-
-.batchDriveChecklistItem p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
-  font-size: 0.9rem;
-}
-
-.batchDriveBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.batchDriveBadgeReady {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.batchDriveActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: flex-end;
-}
-
 .batchSelectAll {
   display: inline-flex;
   align-items: center;
@@ -1549,7 +1549,8 @@ select {
   .workspaceGrid,
   .yearlyAggregateGrid,
   .batchWorkflowStrip,
-  .batchDriveChecklist {
+  .cloudSyncGrid,
+  .cloudSyncChecklist {
     grid-template-columns: 1fr;
   }
 
@@ -1563,14 +1564,6 @@ select {
 
   .imageGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .batchDrivePanel {
-    display: grid;
-  }
-
-  .batchDriveActions {
-    justify-content: flex-start;
   }
 
   .batchToolbarPrimary,
@@ -1603,7 +1596,8 @@ select {
   .pageHeader,
   .listHeader,
   .detailHeader,
-  .panelHeader {
+  .panelHeader,
+  .cloudSyncPanelHeader {
     flex-direction: column;
   }
 
@@ -1638,7 +1632,7 @@ select {
   }
 
   .batchWorkflowCard,
-  .batchDriveChecklistItem {
+  .cloudSyncChecklistItem {
     padding: 12px 14px;
   }
 

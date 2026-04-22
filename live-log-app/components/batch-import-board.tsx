@@ -23,14 +23,7 @@ import type {
 type BatchImportBoardProps = {
   entries: LiveEntry[];
   imageService: ArchiveImageService;
-  isLoggedIn: boolean;
-  hasDriveAccessToken: boolean;
-  driveSessionSavedAtLabel: string;
-  isDriveAccessStale: boolean;
-  driveFolderId: string;
   onApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
-  onGoogleSignIn(): void;
-  onConfigureDriveFolder(): void;
   onLinkedToEntry?(entryId: string): void;
 };
 
@@ -67,14 +60,7 @@ const TYPE_LABELS: Record<BatchImageType, string> = {
 export function BatchImportBoard({
   entries,
   imageService,
-  isLoggedIn,
-  hasDriveAccessToken,
-  driveSessionSavedAtLabel,
-  isDriveAccessStale,
-  driveFolderId,
   onApply,
-  onGoogleSignIn,
-  onConfigureDriveFolder,
   onLinkedToEntry
 }: BatchImportBoardProps) {
   const [items, setItems] = useState<BatchImportBoardItem[]>([]);
@@ -82,7 +68,7 @@ export function BatchImportBoard({
   const [itemActionStates, setItemActionStates] = useState<Record<string, ItemActionState>>({});
   const [bulkReviewState, setBulkReviewState] = useState<BatchReviewState>("existing_match");
   const [message, setMessage] = useState(
-    "複数画像を投入すると、仮分類・候補抽出・既存公演との照合を一覧で整理できます。"
+    "複数画像を投入すると、仮分類・候補抽出・既存公演との照合を一覧で整理できます。Google / Drive の設定は上の「ログインと同期」で行います。"
   );
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -499,65 +485,6 @@ export function BatchImportBoard({
           <p>既存へ追加するか、新規候補としてまとめて登録します。</p>
         </article>
       </div>
-
-      <details className="batchDrivePanel">
-        <summary>Google Drive 設定</summary>
-        <div className="batchDriveStatus">
-          <strong>画像保存先</strong>
-          <p>画像本体は Google Drive に保存します。同期しない画像は「未同期画像あり」で追えます。</p>
-          {!hasDriveAccessToken ? (
-            <p className="batchApprovedHint">
-              画像は先にローカル追加されます。新しいURLや別ブラウザでは、まず `Drive連携更新` が必要です。
-            </p>
-          ) : isDriveAccessStale ? (
-            <p className="batchApprovedHint">
-              Drive 連携が古くなっている可能性があります。失敗が出る前に `Drive連携更新` を押すと安全です。
-            </p>
-          ) : driveFolderId ? (
-            <p className="batchApprovedHint">
-              Drive 保存先が設定済みです。同期に成功した画像は、他の端末では最低 `Driveで開く` で追えます。
-            </p>
-          ) : (
-            <p className="batchApprovedHint">
-              ログイン済みでも保存先フォルダが空だと画像は上がりません。`Drive保存先設定` を一度だけ入れてください。
-            </p>
-          )}
-          <div className="batchDriveBadges">
-            <span className={`batchDriveBadge ${isLoggedIn ? "batchDriveBadgeReady" : ""}`}>
-              {isLoggedIn ? "Google ログイン済み" : "ログイン未接続"}
-            </span>
-            <span className={`batchDriveBadge ${hasDriveAccessToken ? "batchDriveBadgeReady" : ""}`}>
-              {hasDriveAccessToken ? "Drive 連携済み" : "Drive 未連携"}
-            </span>
-            {isDriveAccessStale ? <span className="batchDriveBadge">連携更新推奨</span> : null}
-            <span className={`batchDriveBadge ${driveFolderId ? "batchDriveBadgeReady" : ""}`}>
-              {driveFolderId ? "保存先設定済み" : "保存先未設定"}
-            </span>
-          </div>
-          <div className="batchDriveChecklist">
-            <article className="batchDriveChecklistItem">
-              <strong>Drive 連携</strong>
-              <p>{hasDriveAccessToken ? "利用できます" : "未接続です"}</p>
-            </article>
-            <article className="batchDriveChecklistItem">
-              <strong>保存先フォルダ</strong>
-              <p>{driveFolderId ? "設定済みです" : "未設定です"}</p>
-            </article>
-            <article className="batchDriveChecklistItem">
-              <strong>前回更新</strong>
-              <p>{driveSessionSavedAtLabel || "未確認"}</p>
-            </article>
-          </div>
-        </div>
-        <div className="batchDriveActions">
-          <button className="toolButton" type="button" onClick={onGoogleSignIn}>
-            {hasDriveAccessToken ? "Drive連携更新" : "Drive連携"}
-          </button>
-          <button className="toolButton" type="button" onClick={onConfigureDriveFolder}>
-            {driveFolderId ? "Drive保存先変更" : "Drive保存先設定"}
-          </button>
-        </div>
-      </details>
 
       <input
         ref={inputRef}

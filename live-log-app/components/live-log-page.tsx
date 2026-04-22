@@ -32,7 +32,7 @@ import {
   SummaryTile,
   YearTrendHeroCard
 } from "@/components/analytics-cards";
-import { CloudAuthControls } from "@/components/cloud-auth-controls";
+import { CloudSyncPanel } from "@/components/cloud-sync-panel";
 import { RecordDetailPanel } from "@/components/record-detail-panel";
 import { RecordListTable } from "@/components/record-list-table";
 import { RecordToolsPanel } from "@/components/record-tools-panel";
@@ -1035,11 +1035,7 @@ export function LiveLogPage() {
         <div className="headerIntro">
           <p className="eyebrow">Live Log</p>
           <h1>ライブ記録</h1>
-          {authMessage ? <p className="headerMessage">{authMessage}</p> : null}
           <div className="headerStatusRow">
-            <span className="statusBadge">{syncStatus}</span>
-            {lastSyncedAtLabel ? <span className="statusBadge statusBadgeSoft">最終同期 {lastSyncedAtLabel}</span> : null}
-            {firebaseUser ? <span className="statusBadge statusBadgeSoft">Google ログイン中</span> : null}
             {shareMessage ? <span className="statusBadge statusBadgeSoft">{shareMessage}</span> : null}
             {actionNotice ? <span className="statusBadge statusBadgeSuccess">{actionNotice}</span> : null}
           </div>
@@ -1082,19 +1078,28 @@ export function LiveLogPage() {
             <button className="toolButton" type="button" onClick={cycleThemeMode}>
               {getThemeModeLabel(themeMode)}
             </button>
-            <CloudAuthControls
-              isLoggedIn={Boolean(firebaseUser)}
-              onCloudLoad={handleCloudLoad}
-              onForceCloudReplace={handleForceCloudReplace}
-              onSaveCurrentToCloud={() => {
-                void handleSaveCurrentToCloud();
-              }}
-              onGoogleSignOut={handleGoogleSignOut}
-              onGoogleSignIn={handleGoogleSignIn}
-            />
           </div>
         </div>
       </header>
+
+      <CloudSyncPanel
+        isLoggedIn={Boolean(firebaseUser)}
+        syncStatus={syncStatus}
+        authMessage={authMessage}
+        lastSyncedAtLabel={lastSyncedAtLabel}
+        hasDriveAccessToken={hasDriveAccessToken}
+        driveFolderId={driveFolderId}
+        driveSessionSavedAtLabel={driveSessionSavedAtLabel}
+        isDriveAccessStale={isDriveAccessStale}
+        onGoogleSignIn={handleGoogleSignIn}
+        onGoogleSignOut={handleGoogleSignOut}
+        onConfigureDriveFolder={handleConfigureDriveFolder}
+        onSaveCurrentToCloud={() => {
+          void handleSaveCurrentToCloud();
+        }}
+        onCloudLoad={handleCloudLoad}
+        onForceCloudReplace={handleForceCloudReplace}
+      />
 
       {activeView === "records" ? (
         <section className="recordsLayout">
@@ -1242,14 +1247,7 @@ export function LiveLogPage() {
           <BatchImportBoard
             entries={entries}
             imageService={imageService}
-            isLoggedIn={Boolean(firebaseUser)}
-            hasDriveAccessToken={hasDriveAccessToken}
-            driveSessionSavedAtLabel={driveSessionSavedAtLabel}
-            isDriveAccessStale={isDriveAccessStale}
-            driveFolderId={driveFolderId}
             onApply={setEntries}
-            onGoogleSignIn={handleGoogleSignIn}
-            onConfigureDriveFolder={handleConfigureDriveFolder}
             onLinkedToEntry={(entryId) => {
               setQuery("");
               setActiveTool(null);
