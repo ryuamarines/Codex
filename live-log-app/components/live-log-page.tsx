@@ -1034,7 +1034,12 @@ export function LiveLogPage() {
       <header className="pageHeader">
         <div className="headerIntro">
           <p className="eyebrow">Live Log</p>
-          <h1>ライブ記録</h1>
+          <div className="titleRow">
+            <h1>ライブ記録</h1>
+            <button className="toolButton subtleToolButton" type="button" onClick={cycleThemeMode}>
+              {getThemeModeLabel(themeMode)}
+            </button>
+          </div>
           <div className="headerStatusRow">
             {shareMessage ? <span className="statusBadge statusBadgeSoft">{shareMessage}</span> : null}
             {actionNotice ? <span className="statusBadge statusBadgeSuccess">{actionNotice}</span> : null}
@@ -1072,11 +1077,6 @@ export function LiveLogPage() {
             </button>
             <button className="toolButton" type="button" onClick={handleCsvExport}>
               CSV書き出し
-            </button>
-          </div>
-          <div className="headerCluster">
-            <button className="toolButton" type="button" onClick={cycleThemeMode}>
-              {getThemeModeLabel(themeMode)}
             </button>
           </div>
         </div>

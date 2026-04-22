@@ -115,6 +115,13 @@ select {
   margin: 0;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .headerIntro {
   display: grid;
   gap: 4px;
@@ -136,10 +143,11 @@ select {
 
 .cloudSyncPanel {
   display: grid;
-  gap: 18px;
-  padding: 20px 22px;
+  gap: 14px;
+  padding: 16px 18px;
   margin-bottom: 20px;
   border-radius: 20px;
+  max-width: 1120px;
 }
 
 .cloudSyncPanelHeader {
@@ -149,16 +157,10 @@ select {
   align-items: flex-start;
 }
 
-.cloudSyncPanelLead,
-.cloudSyncCardNote,
 .cloudSyncPanelMessage {
-  margin: 6px 0 0;
+  margin: 0;
   color: var(--muted);
   line-height: 1.6;
-}
-
-.cloudSyncPanelMessage {
-  margin-top: -2px;
 }
 
 .cloudSyncStatusRow,
@@ -172,13 +174,13 @@ select {
 .cloudSyncGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .cloudSyncCard {
   display: grid;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 12px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface-soft);
@@ -196,13 +198,13 @@ select {
 .cloudSyncChecklist {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .cloudSyncChecklistItem {
   display: grid;
   gap: 4px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface-softer);
@@ -216,7 +218,7 @@ select {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .cloudSyncBadge {
@@ -233,6 +235,13 @@ select {
 .cloudSyncBadgeReady {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.subtleToolButton {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--surface-soft);
 }
 
 .statusBadge {

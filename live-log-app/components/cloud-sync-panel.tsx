@@ -41,9 +41,6 @@ export function CloudSyncPanel({
         <div>
           <p className="eyebrow">Cloud</p>
           <h2>ログインと同期</h2>
-          <p className="cloudSyncPanelLead">
-            Google / Drive の接続と、この端末のクラウド保存はここでまとめて扱います。
-          </p>
         </div>
         <div className="cloudSyncStatusRow">
           <span className="statusBadge">{syncStatus}</span>
@@ -75,19 +72,19 @@ export function CloudSyncPanel({
           <div className="cloudSyncChecklist">
             <article className="cloudSyncChecklistItem">
               <strong>Google ログイン</strong>
-              <p>{isLoggedIn ? "この端末でログイン済みです" : "まずここから始めます"}</p>
+              <p>{isLoggedIn ? "ログイン済み" : "未ログイン"}</p>
             </article>
             <article className="cloudSyncChecklistItem">
               <strong>Drive 連携</strong>
               <p>
                 {hasDriveAccessToken
-                  ? `利用できます${driveSessionSavedAtLabel ? ` / 前回更新 ${driveSessionSavedAtLabel}` : ""}`
-                  : "未接続です"}
+                  ? `${driveSessionSavedAtLabel ? `前回更新 ${driveSessionSavedAtLabel}` : "連携済み"}`
+                  : "未連携"}
               </p>
             </article>
             <article className="cloudSyncChecklistItem">
               <strong>Drive 保存先</strong>
-              <p>{driveFolderId ? "設定済みです" : "未設定です"}</p>
+              <p>{driveFolderId ? "設定済み" : "未設定"}</p>
             </article>
           </div>
           <div className="cloudSyncActions">
@@ -118,22 +115,19 @@ export function CloudSyncPanel({
         <article className="cloudSyncCard">
           <div className="cloudSyncCardHeader">
             <h3>クラウド同期</h3>
-            <p className="cloudSyncCardNote">
-              この端末の変更を保存するか、クラウドの内容を読み込むかをここで選びます。
-            </p>
           </div>
           <div className="cloudSyncChecklist">
             <article className="cloudSyncChecklistItem">
               <strong>この端末を保存</strong>
-              <p>いま見えている内容をクラウドへ反映します。</p>
+              <p>今の内容を反映</p>
             </article>
             <article className="cloudSyncChecklistItem">
               <strong>クラウド同期</strong>
-              <p>クラウド側の内容を読み込みます。</p>
+              <p>クラウドを読込</p>
             </article>
             <article className="cloudSyncChecklistItem">
               <strong>クラウドで置き換え</strong>
-              <p>この端末の表示をクラウド内容で上書きします。</p>
+              <p>この端末を上書き</p>
             </article>
           </div>
           <div className="cloudSyncActions">
