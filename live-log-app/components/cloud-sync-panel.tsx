@@ -38,8 +38,8 @@ export function CloudSyncPanel({
   return (
     <section className="panel cloudSyncPanel">
       <div className="cloudSyncPanelHeader">
-        <div>
-          <p className="eyebrow">Cloud</p>
+        <div className="cloudSyncTitleRow">
+          <span className="cloudSyncSectionLabel">Cloud</span>
           <h2>ログインと同期</h2>
         </div>
         <div className="cloudSyncStatusRow">
@@ -55,7 +55,7 @@ export function CloudSyncPanel({
       <div className="cloudSyncGrid">
         <article className="cloudSyncCard">
           <div className="cloudSyncCardHeader">
-            <h3>Google / Drive</h3>
+            <h3>Google / Drive 設定</h3>
             <div className="cloudSyncBadgeRow">
               <span className={`cloudSyncBadge ${isLoggedIn ? "cloudSyncBadgeReady" : ""}`}>
                 {isLoggedIn ? "Google ログイン済み" : "Google 未ログイン"}
@@ -105,7 +105,7 @@ export function CloudSyncPanel({
 
         <article className="cloudSyncCard">
           <div className="cloudSyncCardHeader">
-            <h3>クラウド同期</h3>
+            <h3>クラウド反映</h3>
           </div>
           <p className="cloudSyncCompactNote">保存・読込・置き換えをここで切り替えます。</p>
           <div className="cloudSyncActions cloudSyncActionsCompact">
