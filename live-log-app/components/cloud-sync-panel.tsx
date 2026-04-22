@@ -69,27 +69,18 @@ export function CloudSyncPanel({
               {isDriveAccessStale ? <span className="cloudSyncBadge">連携更新推奨</span> : null}
             </div>
           </div>
-          <div className="cloudSyncChecklist">
-            <article className="cloudSyncChecklistItem">
-              <strong>Google ログイン</strong>
-              <p>{isLoggedIn ? "ログイン済み" : "未ログイン"}</p>
-            </article>
-            <article className="cloudSyncChecklistItem">
-              <strong>Drive 連携</strong>
-              <p>
-                {hasDriveAccessToken
-                  ? `${driveSessionSavedAtLabel ? `前回更新 ${driveSessionSavedAtLabel}` : "連携済み"}`
-                  : "未連携"}
-              </p>
-            </article>
-            <article className="cloudSyncChecklistItem">
-              <strong>Drive 保存先</strong>
-              <p>{driveFolderId ? "設定済み" : "未設定"}</p>
-            </article>
-          </div>
-          <div className="cloudSyncActions">
+          <p className="cloudSyncCompactNote">
+            {hasDriveAccessToken
+              ? driveSessionSavedAtLabel
+                ? `Drive 前回更新 ${driveSessionSavedAtLabel}`
+                : "Drive 連携済み"
+              : "Drive 未連携"}
+            {" / "}
+            {driveFolderId ? "保存先設定済み" : "保存先未設定"}
+          </p>
+          <div className="cloudSyncActions cloudSyncActionsCompact">
             <button
-              className="toolButton"
+              className="toolButton compactToolButton"
               type="button"
               onClick={onGoogleSignIn}
               disabled={!isFirebaseConfigured()}
@@ -97,7 +88,7 @@ export function CloudSyncPanel({
               {isLoggedIn ? "Google / Drive 連携更新" : "Googleでログイン"}
             </button>
             <button
-              className="toolButton"
+              className="toolButton compactToolButton"
               type="button"
               onClick={onConfigureDriveFolder}
               disabled={!isLoggedIn}
@@ -105,7 +96,7 @@ export function CloudSyncPanel({
               {driveFolderId ? "Drive保存先変更" : "Drive保存先設定"}
             </button>
             {isLoggedIn ? (
-              <button className="toolButton" type="button" onClick={onGoogleSignOut}>
+              <button className="toolButton compactToolButton" type="button" onClick={onGoogleSignOut}>
                 ログアウト
               </button>
             ) : null}
@@ -116,28 +107,15 @@ export function CloudSyncPanel({
           <div className="cloudSyncCardHeader">
             <h3>クラウド同期</h3>
           </div>
-          <div className="cloudSyncChecklist">
-            <article className="cloudSyncChecklistItem">
-              <strong>この端末を保存</strong>
-              <p>今の内容を反映</p>
-            </article>
-            <article className="cloudSyncChecklistItem">
-              <strong>クラウド同期</strong>
-              <p>クラウドを読込</p>
-            </article>
-            <article className="cloudSyncChecklistItem">
-              <strong>クラウドで置き換え</strong>
-              <p>この端末を上書き</p>
-            </article>
-          </div>
-          <div className="cloudSyncActions">
-            <button className="toolButton" type="button" onClick={onSaveCurrentToCloud} disabled={!isLoggedIn}>
+          <p className="cloudSyncCompactNote">保存・読込・置き換えをここで切り替えます。</p>
+          <div className="cloudSyncActions cloudSyncActionsCompact">
+            <button className="toolButton compactToolButton" type="button" onClick={onSaveCurrentToCloud} disabled={!isLoggedIn}>
               この端末をクラウドへ保存
             </button>
-            <button className="toolButton" type="button" onClick={onCloudLoad} disabled={!isLoggedIn}>
+            <button className="toolButton compactToolButton" type="button" onClick={onCloudLoad} disabled={!isLoggedIn}>
               クラウド同期
             </button>
-            <button className="toolButton" type="button" onClick={onForceCloudReplace} disabled={!isLoggedIn}>
+            <button className="toolButton compactToolButton" type="button" onClick={onForceCloudReplace} disabled={!isLoggedIn}>
               この端末をクラウドで置き換え
             </button>
           </div>
