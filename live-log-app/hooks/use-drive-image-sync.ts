@@ -94,20 +94,20 @@ export function useDriveImageSync({
       throw new Error("この画像は再同期できません。元画像データが見つかりませんでした。");
     }
 
-    pendingImageUploadRef.current = true;
-    uploadingImageKeyRef.current = uploadKey;
-    const syncingEntries = replaceImageSyncState(currentEntries, entryId, imageId, (image) => ({
-      ...image,
-      storageStatus: "syncing",
-      uploadError: undefined
-    }));
-    entriesRef.current = syncingEntries;
-    setEntries(syncingEntries);
-    if (onPersistEntries) {
-      await onPersistEntries(syncingEntries);
-    }
-
     try {
+      pendingImageUploadRef.current = true;
+      uploadingImageKeyRef.current = uploadKey;
+      const syncingEntries = replaceImageSyncState(currentEntries, entryId, imageId, (image) => ({
+        ...image,
+        storageStatus: "syncing",
+        uploadError: undefined
+      }));
+      entriesRef.current = syncingEntries;
+      setEntries(syncingEntries);
+      if (onPersistEntries) {
+        await onPersistEntries(syncingEntries);
+      }
+
       const uploadedImage = await uploadLocalImageToDrive({
         folderId: driveFolderId,
         image: {

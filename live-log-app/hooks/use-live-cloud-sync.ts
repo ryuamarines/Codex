@@ -40,6 +40,7 @@ export function useLiveCloudSync({
   setEntries,
   localEntriesReady
 }: UseLiveCloudSyncParams) {
+  const [driveFolderSaveRetryNonce, setDriveFolderSaveRetryNonce] = useState(0);
   const [cloudHydrateRetryNonce, setCloudHydrateRetryNonce] = useState(0);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authMessage, setAuthMessage] = useState(
@@ -56,6 +57,8 @@ export function useLiveCloudSync({
   const autoHydratedUserIdRef = useRef<string>("");
   const cloudHydrateRetryTimeoutRef = useRef<number | null>(null);
   const cloudHydrateRetryCountRef = useRef(0);
+  const driveFolderSaveRetryTimeoutRef = useRef<number | null>(null);
+  const driveFolderSaveRetryCountRef = useRef(0);
   const authMessageTimeoutRef = useRef<number | null>(null);
   const imageSyncWarningKeyRef = useRef("");
   const lastSavedDriveFolderIdRef = useRef("");
@@ -160,8 +163,6 @@ export function useLiveCloudSync({
       );
       lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
       cloudRevisionRef.current = saveResult.revision;
-      lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
-      updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
     },
     [cloudDriveFolderId, firebaseUser]
   );
@@ -182,8 +183,6 @@ export function useLiveCloudSync({
       );
       lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
       cloudRevisionRef.current = saveResult.revision;
-      lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
-      updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
     },
     [cloudDriveFolderId, firebaseUser]
   );
@@ -221,6 +220,9 @@ export function useLiveCloudSync({
       if (cloudHydrateRetryTimeoutRef.current) {
         window.clearTimeout(cloudHydrateRetryTimeoutRef.current);
       }
+      if (driveFolderSaveRetryTimeoutRef.current) {
+        window.clearTimeout(driveFolderSaveRetryTimeoutRef.current);
+      }
       if (authMessageTimeoutRef.current) {
         window.clearTimeout(authMessageTimeoutRef.current);
       }
@@ -236,8 +238,6 @@ export function useLiveCloudSync({
       return;
     }
 
-    lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
-
     void saveCloudSettings(
       firebaseUser,
       {
@@ -246,10 +246,26 @@ export function useLiveCloudSync({
       cloudRevisionRef.current
     )
       .then((saveResult) => {
+        lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
         cloudRevisionRef.current = saveResult.revision;
+        driveFolderSaveRetryCountRef.current = 0;
       })
-      .catch(() => undefined);
-  }, [cloudDriveFolderId, firebaseUser, localEntriesReady]);
+      .catch(() => {
+        if (driveFolderSaveRetryCountRef.current >= 3) {
+          showAuthMessage("Drive 保存先のクラウド保存に失敗しました。しばらくしてからもう一度試してください。", 7000);
+          return;
+        }
+
+        driveFolderSaveRetryCountRef.current += 1;
+        if (driveFolderSaveRetryTimeoutRef.current) {
+          window.clearTimeout(driveFolderSaveRetryTimeoutRef.current);
+        }
+        driveFolderSaveRetryTimeoutRef.current = window.setTimeout(() => {
+          driveFolderSaveRetryTimeoutRef.current = null;
+          setDriveFolderSaveRetryNonce((current) => current + 1);
+        }, 2000);
+      });
+  }, [cloudDriveFolderId, driveFolderSaveRetryNonce, firebaseUser, localEntriesReady, showAuthMessage]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !localEntriesReady) {
