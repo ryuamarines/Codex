@@ -208,6 +208,7 @@ export function LiveLogPage() {
     null
   );
   const repositoryRef = useRef<LiveEntryRepository | null>(null);
+  const pendingEntryPersistTimeoutsRef = useRef<Record<string, number>>({});
   const [shareMessage, setShareMessage] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [highlightedEntryId, setHighlightedEntryId] = useState("");
@@ -225,11 +226,13 @@ export function LiveLogPage() {
     handleGoogleSignOut,
     handleCloudLoad,
     handleForceCloudReplace,
+    handleSaveCurrentToCloud,
     handleDeleteImage,
     handleRetryImageSync,
     handleRetryEntryImageSync,
     handleConfigureDriveFolder,
     persistEntryToCloud,
+    persistEntriesToCloud,
     deleteEntryFromCloud
   } = useLiveCloudSync({
     entries,
@@ -427,6 +430,15 @@ export function LiveLogPage() {
 
     return () => window.clearTimeout(timeoutId);
   }, [actionNotice, highlightedEntryId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(pendingEntryPersistTimeoutsRef.current).forEach((timeoutId) =>
+        window.clearTimeout(timeoutId)
+      );
+      pendingEntryPersistTimeoutsRef.current = {};
+    };
+  }, []);
 
   function updateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]) {
     setManualForm((current) => ({ ...current, [key]: value }));
@@ -751,7 +763,9 @@ export function LiveLogPage() {
         return;
       }
 
-      setEntries((current) => [...result.entries, ...current]);
+      const nextEntries = [...result.entries, ...entriesRef.current];
+      entriesRef.current = nextEntries;
+      setEntries(nextEntries);
       setSelectedEntryId(result.entries[0]?.id ?? "");
       if (result.entries[0]) {
         setHighlightedEntryId(result.entries[0].id);
@@ -761,6 +775,7 @@ export function LiveLogPage() {
       setIsDetailDrawerOpen(true);
       setCsvMessage(result.message);
       setActiveTool(null);
+      void handleSaveCurrentToCloud(nextEntries);
       event.target.value = "";
     } catch {
       setCsvMessage("CSV の読み込みに失敗しました。UTF-8 の CSV を確認してください。");
@@ -855,8 +870,29 @@ export function LiveLogPage() {
     value: string
   ) {
     const nextEntries = updateEntryFieldValue(entriesRef.current, entryId, key, value);
+    const nextEntry = nextEntries.find((entry) => entry.id === entryId);
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
+
+    const currentTimeoutId = pendingEntryPersistTimeoutsRef.current[entryId];
+    if (currentTimeoutId) {
+      window.clearTimeout(currentTimeoutId);
+    }
+
+    if (!nextEntry) {
+      return;
+    }
+
+    pendingEntryPersistTimeoutsRef.current[entryId] = window.setTimeout(() => {
+      delete pendingEntryPersistTimeoutsRef.current[entryId];
+      void persistEntryToCloud(nextEntries, nextEntry).catch((error) => {
+        setActionNotice(
+          error instanceof Error
+            ? error.message
+            : "修正は反映しました。クラウド保存は自動で再確認します。"
+        );
+      });
+    }, 700);
   }
 
   function handleEntryImageDelete(entryId: string, imageId: string) {
@@ -887,6 +923,9 @@ export function LiveLogPage() {
 
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
+    void persistEntriesToCloud(nextEntries).catch(() => {
+      setActionNotice("一括修正は反映しました。クラウド保存は自動で再確認します。");
+    });
 
     setBulkEdit({
       place: "",
@@ -905,6 +944,10 @@ export function LiveLogPage() {
     setEntries(nextEntries);
     if (selectedEntryIds.length === 1) {
       void deleteEntryFromCloud(nextEntries, selectedEntryIds[0]).catch(() => {
+        setActionNotice("削除は反映しました。クラウド保存は自動で再確認します。");
+      });
+    } else {
+      void persistEntriesToCloud(nextEntries).catch(() => {
         setActionNotice("削除は反映しました。クラウド保存は自動で再確認します。");
       });
     }
@@ -1043,6 +1086,9 @@ export function LiveLogPage() {
               isLoggedIn={Boolean(firebaseUser)}
               onCloudLoad={handleCloudLoad}
               onForceCloudReplace={handleForceCloudReplace}
+              onSaveCurrentToCloud={() => {
+                void handleSaveCurrentToCloud();
+              }}
               onGoogleSignOut={handleGoogleSignOut}
               onGoogleSignIn={handleGoogleSignIn}
             />

@@ -147,6 +147,40 @@ export function useLiveCloudSync({
     [cloudDriveFolderId, firebaseUser]
   );
 
+  const handleSaveCurrentToCloud = useCallback(
+    async (overrideEntries?: LiveEntry[]) => {
+      if (!firebaseUser) {
+        showAuthMessage("この端末の変更を保存するには Google ログインが必要です。");
+        return false;
+      }
+
+      const nextEntries = overrideEntries ?? entries;
+
+      try {
+        await persistEntriesToCloud(nextEntries);
+        setSyncStatus("クラウド同期済み");
+        showAuthMessage("この端末の変更をクラウドへ保存しました。");
+        return true;
+      } catch (error) {
+        if (isCloudConflictError(error)) {
+          setSyncStatus("クラウド競合");
+          showAuthMessage(error.message, 7000);
+          return false;
+        }
+
+        setSyncStatus("クラウド保存失敗");
+        showAuthMessage(
+          error instanceof Error
+            ? error.message
+            : "この端末の変更をクラウドへ保存できませんでした。",
+          7000
+        );
+        return false;
+      }
+    },
+    [entries, firebaseUser, persistEntriesToCloud, showAuthMessage]
+  );
+
   const persistEntryToCloud = useCallback(
     async (nextEntries: LiveEntry[], nextEntry: LiveEntry) => {
       if (!firebaseUser || typeof window === "undefined") {
@@ -650,11 +684,13 @@ export function useLiveCloudSync({
     handleGoogleSignOut,
     handleCloudLoad,
     handleForceCloudReplace,
+    handleSaveCurrentToCloud,
     handleRetryImageSync,
     handleRetryEntryImageSync,
     handleConfigureDriveFolder,
     handleDeleteImage,
     persistEntryToCloud,
+    persistEntriesToCloud,
     deleteEntryFromCloud
   };
 }
