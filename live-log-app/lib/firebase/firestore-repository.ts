@@ -17,7 +17,8 @@ import {
   deserializeEntryFromCloud,
   deserializeEntriesFromCloud,
   normalizeCloudDriveSettings,
-  serializeEntryForCloud
+  serializeEntryForCloud,
+  toCloudEntryDocumentId
 } from "@/lib/live-image-cloud-metadata";
 import { CloudConflictError } from "@/lib/live-cloud-service";
 
@@ -50,7 +51,7 @@ export class FirestoreLiveEntryRepository {
           entrySnapshots.docs.map((entrySnapshot) =>
             deserializeEntryFromCloud({
               ...(entrySnapshot.data() as ReturnType<typeof serializeEntryForCloud>),
-              id: entrySnapshot.id
+              id: (entrySnapshot.data() as { id?: string })?.id ?? decodeURIComponent(entrySnapshot.id)
             })
           )
         ),
@@ -63,7 +64,7 @@ export class FirestoreLiveEntryRepository {
     const collectionEntries = entrySnapshots.docs.map((entrySnapshot) =>
       deserializeEntryFromCloud({
         ...(entrySnapshot.data() as ReturnType<typeof serializeEntryForCloud>),
-        id: entrySnapshot.id
+        id: (entrySnapshot.data() as { id?: string })?.id ?? decodeURIComponent(entrySnapshot.id)
       })
     );
 
@@ -130,7 +131,7 @@ export class FirestoreLiveEntryRepository {
 
       for (const entry of sanitizedEntries) {
         transaction.set(
-          doc(entriesCollectionRef, entry.id),
+          doc(entriesCollectionRef, toCloudEntryDocumentId(entry.id)),
           {
             ...serializeEntryForCloud(entry),
             updatedAt: serverTimestamp()
@@ -141,7 +142,7 @@ export class FirestoreLiveEntryRepository {
 
       for (const previousEntryId of previousEntryIds) {
         if (!nextEntryIds.includes(previousEntryId)) {
-          transaction.delete(doc(entriesCollectionRef, previousEntryId));
+          transaction.delete(doc(entriesCollectionRef, toCloudEntryDocumentId(previousEntryId)));
         }
       }
 
@@ -205,7 +206,7 @@ export class FirestoreLiveEntryRepository {
       }
 
       transaction.set(
-        doc(entriesCollectionRef, sanitizedEntry.id),
+        doc(entriesCollectionRef, toCloudEntryDocumentId(sanitizedEntry.id)),
         {
           ...serializeEntryForCloud(sanitizedEntry),
           updatedAt: serverTimestamp()
@@ -269,7 +270,7 @@ export class FirestoreLiveEntryRepository {
         });
       }
 
-      transaction.delete(doc(entriesCollectionRef, entryId));
+      transaction.delete(doc(entriesCollectionRef, toCloudEntryDocumentId(entryId)));
 
       return {
         revision: currentRevision + 1

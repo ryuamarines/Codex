@@ -13,10 +13,20 @@ export type CloudDriveSettings = {
   driveFolderId?: string;
 };
 
+function removeUndefinedFields<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined)
+  ) as T;
+}
+
+export function toCloudEntryDocumentId(entryId: string) {
+  return encodeURIComponent(entryId);
+}
+
 function serializeImageForCloud(image: LiveEntryImage): CloudLiveEntryImage {
   const isCloudReady = !image.storageStatus || image.storageStatus === "cloud";
 
-  return {
+  return removeUndefinedFields({
     id: image.id,
     type: image.type,
     caption: image.caption,
@@ -27,7 +37,7 @@ function serializeImageForCloud(image: LiveEntryImage): CloudLiveEntryImage {
     driveThumbnailUrl: image.driveThumbnailUrl,
     src: isCloudReady ? image.driveThumbnailUrl ?? image.src : undefined,
     hasLocalPreview: image.src.startsWith("data:")
-  };
+  });
 }
 
 function deserializeCloudImage(image: CloudLiveEntryImage): LiveEntryImage {
@@ -45,10 +55,10 @@ function deserializeCloudImage(image: CloudLiveEntryImage): LiveEntryImage {
 }
 
 export function serializeEntryForCloud(entry: LiveEntry): CloudLiveEntry {
-  return {
+  return removeUndefinedFields({
     ...entry,
     images: entry.images.map(serializeImageForCloud)
-  };
+  });
 }
 
 export function deserializeEntryFromCloud(entry: CloudLiveEntry): LiveEntry {

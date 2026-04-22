@@ -93,11 +93,12 @@ export function createImageId() {
 
 export function createEntry(input: ManualEntryInput): LiveEntry {
   const artists = parseArtists(input.artistsText);
+  const normalizedDate = normalizeDateValue(input.date);
 
   return {
-    id: createEntryId(input.title, input.date),
+    id: createEntryId(input.title, normalizedDate),
     title: input.title.trim(),
-    date: normalizeDateValue(input.date),
+    date: normalizedDate,
     place: input.place.trim(),
     venue: input.venue.trim(),
     artists,
