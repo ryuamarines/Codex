@@ -7,6 +7,7 @@
     - owner
     - updatedAt
     - settings.driveFolderId
+    - revision
   - `liveLogArchives/{uid}/entries/{entryId}`
     - 公演テキスト
     - 画像メタ情報
@@ -46,6 +47,12 @@
 - `src`
   - `cloud` のときだけ保存
   - 非 `cloud` 状態では端末ローカル原本を保存しない
+
+## Firestore 保存時の補足
+
+- entry document id には Firestore path と衝突しないように安全化した値を使う
+- 元の entry id は document 本文にも保持する
+- optional 項目は `undefined` のまま Firestore に送らず、serializer 側で落とす
 
 ## 現時点の実装判断
 

@@ -530,8 +530,11 @@ export function useLiveCloudSync({
       }
 
       showAuthMessage("Google ログインを開始しました。");
-    } catch {
-      showAuthMessage("Google ログインに失敗しました。Firebase 設定を確認してください。");
+    } catch (error) {
+      showAuthMessage(
+        error instanceof Error ? error.message : "Google ログインに失敗しました。Firebase 設定を確認してください。",
+        7000
+      );
     }
   }
 

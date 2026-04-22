@@ -18,6 +18,14 @@ type UseDriveImageSyncParams = {
   onPersistEntries?(entries: LiveEntry[]): Promise<void>;
 };
 
+function isDriveSessionExpiredError(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message.includes("Drive 連携が切れています") ||
+      error.message.includes("invalid authentication credentials"))
+  );
+}
+
 function updateImageInEntries(
   entries: LiveEntry[],
   entryId: string,
@@ -129,11 +137,7 @@ export function useDriveImageSync({
         throw error;
       }
 
-      if (
-        error instanceof Error &&
-        (error.message.includes("Drive 連携が切れています") ||
-          error.message.includes("invalid authentication credentials"))
-      ) {
+      if (isDriveSessionExpiredError(error)) {
         onAuthExpired("Google Drive 連携が切れています。画像整理で Drive連携更新 を押してください。");
         throw error;
       }
@@ -178,11 +182,7 @@ export function useDriveImageSync({
     }
 
     void syncEntryImageToDrive(firebaseUser, localTarget.id, localImage.id).catch((error) => {
-      if (
-        error instanceof Error &&
-        (error.message.includes("Drive 連携が切れています") ||
-          error.message.includes("invalid authentication credentials"))
-      ) {
+      if (isDriveSessionExpiredError(error)) {
         onAuthExpired("Google Drive 連携が切れています。画像整理で Drive連携更新 を押してください。");
         return;
       }
@@ -216,11 +216,7 @@ export function useDriveImageSync({
     try {
       await syncEntryImageToDrive(firebaseUser, entryId, imageId);
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("Drive 連携が切れています") ||
-          error.message.includes("invalid authentication credentials"))
-      ) {
+      if (isDriveSessionExpiredError(error)) {
         onAuthExpired("Google Drive 連携が切れています。画像整理で Drive連携更新 を押してください。");
         return;
       }

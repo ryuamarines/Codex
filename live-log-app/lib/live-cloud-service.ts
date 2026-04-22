@@ -33,8 +33,8 @@ function normalizeCloudError(error: unknown, action: "read" | "write") {
   ) {
     return new Error(
       action === "read"
-        ? "Firestore の読込権限がありません。Google ログイン中のユーザーに対応する liveLogArchives/{uid} の read ルールを確認してください。"
-        : "Firestore の保存権限がありません。Google ログイン中のユーザーに対応する liveLogArchives/{uid} の write ルールを確認してください。"
+        ? "Firestore の読込権限がありません。Google ログイン中のユーザーに対応する liveLogArchives/{uid} と liveLogArchives/{uid}/entries/{entryId} の read ルールを確認してください。"
+        : "Firestore の保存権限がありません。Google ログイン中のユーザーに対応する liveLogArchives/{uid} と liveLogArchives/{uid}/entries/{entryId} の write ルールを確認してください。"
     );
   }
 
