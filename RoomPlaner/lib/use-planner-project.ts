@@ -10,7 +10,6 @@ const STORAGE_KEY = "roomplaner.mpp.v1";
 export function usePlannerProject() {
   const [project, setProject] = useState<PlannerProject>(sampleProject);
   const [mounted, setMounted] = useState(false);
-  const [hasPersistedProject, setHasPersistedProject] = useState(false);
   const [undoStack, setUndoStack] = useState<PlannerProject[]>([]);
   const [redoStack, setRedoStack] = useState<PlannerProject[]>([]);
   const projectRef = useRef(project);
@@ -22,14 +21,12 @@ export function usePlannerProject() {
   useEffect(() => {
     setMounted(true);
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    setHasPersistedProject(Boolean(raw));
     if (!raw) return;
 
     try {
       setProject(normalizeProject(JSON.parse(raw) as PlannerProject));
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
-      setHasPersistedProject(false);
     }
   }, []);
 
@@ -98,12 +95,10 @@ export function usePlannerProject() {
 
   const clearPersistedProject = () => {
     window.localStorage.removeItem(STORAGE_KEY);
-    setHasPersistedProject(false);
   };
 
   return {
     project,
-    hasPersistedProject,
     issues,
     undoStack,
     redoStack,

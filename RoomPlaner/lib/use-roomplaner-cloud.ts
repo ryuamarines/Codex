@@ -11,7 +11,6 @@ type UseRoomPlanerCloudParams = {
   project: PlannerProject;
   loadProjectState: (project: PlannerProject) => void;
   parseProject: (raw: string) => PlannerProject;
-  hasPersistedProject: boolean;
 };
 
 function getCloudErrorMessage(error: unknown) {
@@ -28,7 +27,7 @@ function getCloudErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "クラウド操作に失敗しました。";
 }
 
-export function useRoomPlanerCloud({ project, loadProjectState, parseProject, hasPersistedProject }: UseRoomPlanerCloudParams) {
+export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: UseRoomPlanerCloudParams) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [cloudMessage, setCloudMessage] = useState(
     isFirebaseConfigured() ? "" : "Firebase 環境変数を入れると、Googleログインとクラウド保存を使えます。"
@@ -41,7 +40,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject, ha
   }, []);
 
   useEffect(() => {
-    if (!firebaseUser || hasPersistedProject || cloudBusy) {
+    if (!firebaseUser || cloudBusy) {
       return;
     }
 
@@ -82,7 +81,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject, ha
     return () => {
       active = false;
     };
-  }, [cloudBusy, firebaseUser, hasPersistedProject, loadProjectState, parseProject]);
+  }, [cloudBusy, firebaseUser, loadProjectState, parseProject]);
 
   const setMessage = (message: string) => {
     setCloudMessage(message);
