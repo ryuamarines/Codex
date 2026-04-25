@@ -28,7 +28,6 @@ import { BatchImportBoard } from "@/components/batch-import-board";
 import {
   AggregateCard,
   ArtistYearStackedChartCard,
-  ArtistYearTrendCard,
   SummaryTile,
   YearTrendHeroCard
 } from "@/components/analytics-cards";
@@ -837,7 +836,7 @@ export function LiveLogPage() {
       };
     }
 
-    if (tileId === "artistYearStackedChart" || tileId === "artistYears") {
+    if (tileId === "artistYearStackedChart") {
       return {
         version: 1,
         kind: "artistYears",
@@ -1397,14 +1396,6 @@ export function LiveLogPage() {
         items={aggregates.places}
         height={resolvedAnalyticsTileHeights.places}
         actions={createTileActions("places", "地域 TOP10")}
-      />
-    ),
-    artistYears: (
-      <ArtistYearTrendCard
-        years={trends.artistYears.years}
-        items={trends.artistYears.items}
-        height={resolvedAnalyticsTileHeights.artistYears}
-        actions={createTileActions("artistYears", "アーティスト別 年別推移")}
       />
     )
   } satisfies Record<AnalyticsTileId, ReactNode>;

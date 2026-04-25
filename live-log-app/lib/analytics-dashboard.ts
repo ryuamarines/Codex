@@ -5,8 +5,7 @@ export type AnalyticsTileId =
   | "artistYearStackedChart"
   | "venues"
   | "places"
-  | "genres"
-  | "artistYears";
+  | "genres";
 
 export type TileSize = "standard" | "wide";
 export type TileHeight = "compact" | "standard" | "tall";
@@ -26,8 +25,7 @@ export const DEFAULT_ANALYTICS_TILE_ORDER: AnalyticsTileId[] = [
   "artists",
   "artistYearStackedChart",
   "venues",
-  "places",
-  "artistYears"
+  "places"
 ];
 
 export const DEFAULT_ANALYTICS_TILE_SIZES: Record<AnalyticsTileId, TileSize> = {
@@ -37,8 +35,7 @@ export const DEFAULT_ANALYTICS_TILE_SIZES: Record<AnalyticsTileId, TileSize> = {
   artists: "standard",
   artistYearStackedChart: "standard",
   venues: "standard",
-  places: "standard",
-  artistYears: "wide"
+  places: "standard"
 };
 
 export const DEFAULT_ANALYTICS_TILE_HEIGHTS: Record<AnalyticsTileId, TileHeight> = {
@@ -48,8 +45,7 @@ export const DEFAULT_ANALYTICS_TILE_HEIGHTS: Record<AnalyticsTileId, TileHeight>
   artists: "standard",
   artistYearStackedChart: "standard",
   venues: "standard",
-  places: "standard",
-  artistYears: "tall"
+  places: "standard"
 };
 
 export function createDashboardLayout(
