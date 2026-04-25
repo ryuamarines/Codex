@@ -825,7 +825,7 @@ export function PlannerShell() {
 
   return (
     <main className="min-h-screen p-5 text-slate-900 md:p-6">
-      <div className="mx-auto flex max-w-[1880px] flex-col gap-4">
+      <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
         <header className="panel flex flex-col gap-4 p-5">
           <div>
             <div className="panel-title">RoomPlaner</div>
@@ -852,7 +852,7 @@ export function PlannerShell() {
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Zoom: {Math.round(viewport.scale * 100)}%</span>
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
             <input
               ref={importJsonInputRef}
@@ -910,8 +910,8 @@ export function PlannerShell() {
           </div>
         </header>
 
-        <div className="grid gap-4 min-[1480px]:grid-cols-[300px_minmax(0,1fr)] min-[2100px]:grid-cols-[300px_minmax(0,1fr)_330px]">
-          <aside className="panel h-fit p-4 min-[1480px]:sticky min-[1480px]:top-4">
+        <div className="grid gap-4 min-[1700px]:grid-cols-[280px_minmax(0,1fr)] min-[2450px]:grid-cols-[280px_minmax(0,1fr)_330px]">
+          <aside className="panel h-fit p-4 min-[1700px]:sticky min-[1700px]:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -1296,7 +1296,7 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 min-[1480px]:col-span-2 min-[2100px]:col-span-1 min-[2100px]:sticky min-[2100px]:top-4">
+          <aside className="panel h-fit p-4 min-[1700px]:col-span-2 min-[2450px]:col-span-1 min-[2450px]:sticky min-[2450px]:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (

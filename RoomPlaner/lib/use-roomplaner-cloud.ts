@@ -36,7 +36,14 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
   const hydratedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    return observeFirebaseUser(setFirebaseUser);
+    return observeFirebaseUser((user) => {
+      setFirebaseUser(user);
+
+      if (!user) {
+        hydratedUserIdRef.current = null;
+        setCloudBusy(false);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -104,6 +111,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
       setCloudBusy(true);
       await signOutFromFirebase();
       hydratedUserIdRef.current = null;
+      setFirebaseUser(null);
       setMessage("ログアウトしました。");
     } catch (error) {
       setMessage(getCloudErrorMessage(error));
