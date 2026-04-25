@@ -1,24 +1,24 @@
 :root {
   color-scheme: light;
-  --panel: #fffdfa;
-  --panel-soft: #faf5ee;
+  --panel: #ffffff;
+  --panel-soft: #fbfbf9;
   --panel-strong: #ffffff;
-  --surface-soft: rgba(255, 255, 255, 0.72);
-  --surface-softer: rgba(255, 255, 255, 0.55);
-  --surface-subtle: rgba(31, 26, 23, 0.04);
-  --surface-subtle-strong: rgba(31, 26, 23, 0.06);
-  --button-surface: #efe7dc;
-  --button-on-accent: #fff9f4;
-  --danger: #7c2d21;
-  --text: #1f1a17;
-  --muted: #6d625a;
-  --accent: #a34d2d;
-  --accent-strong: #8f3f25;
-  --accent-soft-fill: #c26a41;
-  --accent-soft: rgba(163, 77, 45, 0.12);
-  --line: rgba(31, 26, 23, 0.1);
-  --shadow: 0 12px 32px rgba(75, 50, 34, 0.08);
-  --radius: 22px;
+  --surface-soft: rgba(15, 15, 15, 0.03);
+  --surface-softer: rgba(15, 15, 15, 0.018);
+  --surface-subtle: rgba(15, 15, 15, 0.026);
+  --surface-subtle-strong: rgba(15, 15, 15, 0.05);
+  --button-surface: #ffffff;
+  --button-on-accent: #ffffff;
+  --danger: #7a2626;
+  --text: #101010;
+  --muted: #7b7b76;
+  --accent: #121212;
+  --accent-strong: #000000;
+  --accent-soft-fill: #5a5a5a;
+  --accent-soft: rgba(16, 16, 16, 0.06);
+  --line: rgba(16, 16, 16, 0.08);
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.035);
+  --radius: 20px;
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
@@ -52,9 +52,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(255, 223, 187, 0.38), transparent 26%),
-    linear-gradient(180deg, #f8f3eb 0%, #f4eee6 100%);
+  background: #f6f6f2;
   color: var(--text);
 }
 
@@ -144,9 +142,10 @@ select {
 .cloudSyncPanel {
   display: grid;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   margin-bottom: 20px;
-  border-radius: 20px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
 }
 
 .cloudSyncPanelHeader {
@@ -172,7 +171,7 @@ select {
 }
 
 .cloudSyncPanel h2 {
-  font-size: 1.05rem;
+  font-size: 1rem;
   line-height: 1.2;
 }
 
@@ -206,10 +205,10 @@ select {
 .cloudSyncCard {
   display: grid;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--surface-soft);
+  border-radius: 20px;
+  background: var(--panel-soft);
   align-content: center;
 }
 
@@ -243,7 +242,7 @@ select {
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
-  background: var(--surface-soft);
+  background: var(--surface-subtle);
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
@@ -350,7 +349,7 @@ select {
 }
 
 .secondaryButton {
-  background: rgba(31, 26, 23, 0.88);
+  background: #2a2a2a;
 }
 
 .dangerButton {
@@ -1579,6 +1578,107 @@ select {
   display: none;
 }
 
+.archiveAppShell {
+  width: min(1520px, calc(100% - 28px));
+  margin: 0 auto;
+  padding: 18px 0 40px;
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.archiveSidebar {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 18px 12px;
+}
+
+.archiveSidebarBrand {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.archiveSidebarBrand strong {
+  font-size: 1.9rem;
+  letter-spacing: -0.03em;
+}
+
+.archiveSidebarBrand span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.archiveSidebarNav,
+.archiveSidebarFooter {
+  display: grid;
+  gap: 8px;
+}
+
+.archiveSidebarLink,
+.archiveSidebarGhostButton {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 12px 14px;
+}
+
+.archiveSidebarLinkActive {
+  background: #111111;
+  color: #ffffff;
+}
+
+.archiveSidebarGhostButton {
+  color: var(--muted);
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.archiveMainCanvas {
+  display: grid;
+  gap: 18px;
+}
+
+.archiveMainHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 28px 30px 18px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.archiveMainHeading {
+  display: grid;
+  gap: 6px;
+}
+
+.archiveMainHeading h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3rem);
+  letter-spacing: -0.04em;
+}
+
+.archiveMainHeading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+}
+
+.archiveMainMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .archiveHomeLayout,
 .archiveTimelineLayout,
 .archiveEntityLayout,
@@ -1866,6 +1966,14 @@ select {
 }
 
 @media (max-width: 1100px) {
+  .archiveAppShell {
+    grid-template-columns: 1fr;
+  }
+
+  .archiveSidebar {
+    display: none;
+  }
+
   .archiveHeroCard,
   .archiveOverviewGrid,
   .archiveEntityLayout,
@@ -1917,7 +2025,8 @@ select {
 }
 
 @media (max-width: 720px) {
-  .page {
+  .page,
+  .archiveAppShell {
     width: min(100% - 18px, 1480px);
     padding: 18px 0 98px;
   }
@@ -1935,7 +2044,8 @@ select {
   .archiveSectionCard,
   .archiveTimelinePanel,
   .archiveEntityListPanel,
-  .archiveEntityDetailPanel {
+  .archiveEntityDetailPanel,
+  .archiveMainHeader {
     padding: 18px;
     border-radius: 24px;
   }

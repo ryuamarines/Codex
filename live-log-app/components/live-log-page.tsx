@@ -1180,83 +1180,99 @@ export function LiveLogPage() {
   } satisfies Record<AnalyticsTileId, ReactNode>;
 
   return (
-    <main className="page">
-      <header className="pageHeader">
-        <div className="headerIntro">
-          <p className="eyebrow">Live Log</p>
-          <div className="titleRow">
-            <h1>ライブ記録</h1>
-            <button className="toolButton subtleToolButton" type="button" onClick={cycleThemeMode}>
-              {getThemeModeLabel(themeMode)}
-            </button>
+    <main className="archiveAppShell">
+      <aside className="archiveSidebar">
+        <div className="archiveSidebarBrand">
+          <strong>LIVELOG</strong>
+          <span>Your Live Archive</span>
+        </div>
+        <nav className="archiveSidebarNav" aria-label="メインナビゲーション">
+          <button
+            className={activeView === "home" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("home")}
+          >
+            ホーム
+          </button>
+          <button
+            className={activeView === "timeline" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("timeline")}
+          >
+            タイムライン
+          </button>
+          <button
+            className={activeView === "add" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("add")}
+          >
+            イベント
+          </button>
+          <button
+            className={activeView === "artists" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("artists")}
+          >
+            アーティスト
+          </button>
+          <button
+            className={activeView === "venues" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("venues")}
+          >
+            会場
+          </button>
+        </nav>
+        <div className="archiveSidebarFooter">
+          <button className="archiveSidebarGhostButton" type="button" onClick={handleCsvExport}>
+            CSV書き出し
+          </button>
+          <button className="archiveSidebarGhostButton" type="button" onClick={cycleThemeMode}>
+            {getThemeModeLabel(themeMode)}
+          </button>
+        </div>
+      </aside>
+
+      <section className="archiveMainCanvas">
+        <header className="archiveMainHeader">
+          <div className="archiveMainHeading">
+            <h1>{activeView === "home" ? "ホーム" : activeView === "timeline" ? "タイムライン" : activeView === "artists" ? "アーティスト" : activeView === "venues" ? "会場" : "イベント追加"}</h1>
+            <p>
+              {activeView === "home"
+                ? "積み重ねたライブ記録を静かに辿るホーム"
+                : activeView === "timeline"
+                  ? "年と月ごとにライブの軌跡を見返す"
+                  : activeView === "artists"
+                    ? "アーティストとの関係性を見返す"
+                    : activeView === "venues"
+                      ? "会場との関係性を見返す"
+                      : "記録を追加・整理する"}
+            </p>
           </div>
-          <div className="headerStatusRow">
+          <div className="archiveMainMeta">
             {shareMessage ? <span className="statusBadge statusBadgeSoft">{shareMessage}</span> : null}
             {actionNotice ? <span className="statusBadge statusBadgeSuccess">{actionNotice}</span> : null}
           </div>
-        </div>
-        <div className="headerActions">
-          <div className="headerCluster">
-            <button
-              className={activeView === "home" ? "tabButton activeTab" : "tabButton"}
-              type="button"
-              onClick={() => setActiveView("home")}
-            >
-              ホーム
-            </button>
-            <button
-              className={activeView === "timeline" ? "tabButton activeTab" : "tabButton"}
-              type="button"
-              onClick={() => setActiveView("timeline")}
-            >
-              タイムライン
-            </button>
-            <button
-              className={activeView === "add" ? "tabButton activeTab" : "tabButton"}
-              type="button"
-              onClick={() => setActiveView("add")}
-            >
-              追加
-            </button>
-            <button
-              className={activeView === "artists" ? "tabButton activeTab" : "tabButton"}
-              type="button"
-              onClick={() => setActiveView("artists")}
-            >
-              アーティスト
-            </button>
-            <button
-              className={activeView === "venues" ? "tabButton activeTab" : "tabButton"}
-              type="button"
-              onClick={() => setActiveView("venues")}
-            >
-              会場
-            </button>
-            <button className="toolButton" type="button" onClick={handleCsvExport}>
-              CSV書き出し
-            </button>
-          </div>
-        </div>
-      </header>
+        </header>
 
-      <CloudSyncPanel
-        isLoggedIn={Boolean(firebaseUser)}
-        syncStatus={syncStatus}
-        authMessage={authMessage}
-        lastSyncedAtLabel={lastSyncedAtLabel}
-        hasDriveAccessToken={hasDriveAccessToken}
-        driveFolderId={driveFolderId}
-        driveSessionSavedAtLabel={driveSessionSavedAtLabel}
-        isDriveAccessStale={isDriveAccessStale}
-        onGoogleSignIn={handleGoogleSignIn}
-        onGoogleSignOut={handleGoogleSignOut}
-        onConfigureDriveFolder={handleConfigureDriveFolder}
-        onSaveCurrentToCloud={() => {
-          void handleSaveCurrentToCloud();
-        }}
-        onCloudLoad={handleCloudLoad}
-        onForceCloudReplace={handleForceCloudReplace}
-      />
+        <CloudSyncPanel
+          isLoggedIn={Boolean(firebaseUser)}
+          syncStatus={syncStatus}
+          authMessage={authMessage}
+          lastSyncedAtLabel={lastSyncedAtLabel}
+          hasDriveAccessToken={hasDriveAccessToken}
+          driveFolderId={driveFolderId}
+          driveSessionSavedAtLabel={driveSessionSavedAtLabel}
+          isDriveAccessStale={isDriveAccessStale}
+          onGoogleSignIn={handleGoogleSignIn}
+          onGoogleSignOut={handleGoogleSignOut}
+          onConfigureDriveFolder={handleConfigureDriveFolder}
+          onSaveCurrentToCloud={() => {
+            void handleSaveCurrentToCloud();
+          }}
+          onCloudLoad={handleCloudLoad}
+          onForceCloudReplace={handleForceCloudReplace}
+        />
 
       {activeView === "home" ? (
         <section className="archiveHomeLayout">
@@ -1597,6 +1613,8 @@ export function LiveLogPage() {
           onUpdateEntryField={updateEntryField}
         />
       ) : null}
+
+      </section>
 
       <nav className="mobileBottomNav" aria-label="モバイルナビゲーション">
         <button
