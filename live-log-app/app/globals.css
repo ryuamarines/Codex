@@ -1831,11 +1831,24 @@ select {
   padding-right: 4px;
 }
 
-.archiveEntityListHint {
+.archiveEntityList {
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.archiveEntityListHintButton {
   margin: 10px 0 0;
-  color: var(--muted);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
   font-size: 0.84rem;
   line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .archiveRecentItem,

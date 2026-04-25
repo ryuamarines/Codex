@@ -1,5 +1,6 @@
 import {
   browserLocalPersistence,
+  browserSessionPersistence,
   GoogleAuthProvider,
   getRedirectResult,
   onAuthStateChanged,
@@ -51,7 +52,15 @@ export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/drive.file");
   provider.setCustomParameters({ prompt: "select_account" });
-  await setPersistence(auth, browserLocalPersistence);
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+  } catch {
+    try {
+      await setPersistence(auth, browserSessionPersistence);
+    } catch {
+      // Continue with Firebase default persistence when storage is restricted.
+    }
+  }
 
   if (shouldUseRedirectForGoogleSignIn()) {
     await signInWithRedirect(auth, provider);

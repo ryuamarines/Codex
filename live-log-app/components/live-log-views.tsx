@@ -486,6 +486,7 @@ type ArtistsViewProps = {
   selectedArtistLabel: string;
   onSelectArtist(artist: string): void;
   onSelectEntry(entryId: string): void;
+  onBrowseArtistHistory(artist: string): void;
   getLeadArtist(entry: LiveEntry): string;
   artistTiles: PositionedDashboardTile[];
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
@@ -499,6 +500,7 @@ export function LiveLogArtistsView({
   selectedArtistLabel,
   onSelectArtist,
   onSelectEntry,
+  onBrowseArtistHistory,
   getLeadArtist,
   artistTiles,
   analyticsTileRefs,
@@ -611,9 +613,13 @@ export function LiveLogArtistsView({
               ))}
             </div>
             {selectedArtist.entries.length > selectedArtistEntries.length ? (
-              <p className="archiveEntityListHint">
-                最新10件を表示中です。詳細はタイムラインから辿れます。
-              </p>
+              <button
+                className="archiveEntityListHintButton"
+                type="button"
+                onClick={() => onBrowseArtistHistory(selectedArtist.label)}
+              >
+                最新10件を表示中です。タイムラインで続きを見る
+              </button>
             ) : null}
           </>
         ) : null}

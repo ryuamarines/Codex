@@ -119,6 +119,7 @@ const DEFAULT_COLUMN_WIDTHS: Record<TableColumn, number> = {
 const FIXED_TILE_HEIGHTS: Partial<Record<AnalyticsTileId, TileHeight>> = {};
 
 const FIXED_TILE_SIZES: Partial<Record<AnalyticsTileId, TileSize>> = {};
+const ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY = "live-log-artist-analytics-wide-v1";
 
 function matches(entry: LiveEntry, query: string) {
   const normalized = query.trim().toLowerCase();
@@ -305,6 +306,23 @@ export function LiveLogPage() {
   useEffect(() => {
     saveAnalyticsSizes(window.localStorage, analyticsTileSizes);
   }, [analyticsTileSizes]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (window.localStorage.getItem(ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY) === "done") {
+      return;
+    }
+
+    setAnalyticsTileSizes((current) => ({
+      ...current,
+      artists: "wide",
+      artistYearStackedChart: "wide"
+    }));
+    window.localStorage.setItem(ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY, "done");
+  }, []);
 
   useEffect(() => {
     saveAnalyticsHeights(window.localStorage, analyticsTileHeights);
@@ -1574,6 +1592,10 @@ export function LiveLogPage() {
           selectedArtistLabel={selectedArtistArchive?.artist ?? ""}
           onSelectArtist={setSelectedArtistName}
           onSelectEntry={handleSelectEntry}
+          onBrowseArtistHistory={(artist) => {
+            setQuery(artist);
+            setActiveView("timeline");
+          }}
           getLeadArtist={getLeadArtist}
           artistTiles={artistTiles}
           analyticsTileRefs={analyticsTileRefs}
