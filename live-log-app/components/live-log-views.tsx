@@ -528,6 +528,7 @@ export function LiveLogArtistsView({
 
     return [selectedArtist, ...filteredArtists];
   }, [filteredArtists, selectedArtist]);
+  const selectedArtistEntries = selectedArtist?.entries.slice(0, 10) ?? [];
 
   return (
     <section className="archiveEntityLayout">
@@ -594,7 +595,7 @@ export function LiveLogArtistsView({
               ))}
             </div>
             <div className="archiveLinkedList">
-              {selectedArtist.entries.map((entry) => (
+              {selectedArtistEntries.map((entry) => (
                 <button
                   key={entry.id}
                   className="archiveLinkedItem"
@@ -609,6 +610,11 @@ export function LiveLogArtistsView({
                 </button>
               ))}
             </div>
+            {selectedArtist.entries.length > selectedArtistEntries.length ? (
+              <p className="archiveEntityListHint">
+                最新10件を表示中です。詳細はタイムラインから辿れます。
+              </p>
+            ) : null}
           </>
         ) : null}
       </section>

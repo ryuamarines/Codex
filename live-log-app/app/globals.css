@@ -1825,6 +1825,19 @@ select {
   gap: 10px;
 }
 
+.archiveLinkedList {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.archiveEntityListHint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .archiveRecentItem,
 .archiveLinkedItem,
 .archiveRankItem,
