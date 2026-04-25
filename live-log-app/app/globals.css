@@ -917,6 +917,14 @@ select {
   align-content: start;
 }
 
+.summaryTileCard.summaryTileCard-compact {
+  min-height: 0;
+}
+
+.summaryTileCard.summaryTileCard-compact .panelHeader {
+  margin-bottom: 10px;
+}
+
 .artistYearStackedChartCard {
   grid-template-rows: auto auto minmax(0, 1fr);
   align-content: stretch;
@@ -1062,8 +1070,41 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
   color: var(--muted);
   font-size: 0.82rem;
+  text-align: left;
+}
+
+.stackedBarLegendItemActive {
+  background: color-mix(in srgb, var(--panel-strong) 94%, transparent);
+  color: var(--text);
+}
+
+.stackedBarLegendText {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stackedBarLegendCount {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.stackedBarLegendSwatchNeutral {
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+.stackedBarHint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .stackedBarLegendSwatch {
@@ -1764,6 +1805,7 @@ select {
 .archiveOverviewGrid,
 .archiveEntityLayout {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 
 .archiveEntityAnalyticsPanel {
@@ -1830,15 +1872,41 @@ select {
 }
 
 .archiveLinkedList {
-  max-height: 520px;
+  max-height: 420px;
   overflow-y: auto;
   padding-right: 4px;
 }
 
 .archiveEntityList {
-  max-height: 560px;
+  max-height: 420px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.archiveEntityFilterBadge {
+  justify-self: start;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.archiveMiniTrendBar {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.archiveMiniTrendBarActive {
+  background: color-mix(in srgb, var(--panel-strong) 94%, transparent);
+  border-color: var(--accent);
 }
 
 .archiveEntityListHintButton {

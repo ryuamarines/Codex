@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
 import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordListTable } from "@/components/record-list-table";
@@ -438,35 +438,6 @@ export function LiveLogTimelineView({
           />
         )}
       </section>
-      <section className="panel archiveSectionCard">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Timeline Analytics</p>
-            <h2>タイムライン分析</h2>
-            <p>年ごとの推移と全体サマリをここで見ます。</p>
-          </div>
-        </div>
-        <div
-          className="analyticsBoardGrid"
-          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
-        >
-          {timelineTiles.map((tile) => (
-            <div
-              key={tile.id}
-              ref={(element) => {
-                analyticsTileRefs.current[tile.id] = element;
-              }}
-              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
-              style={{
-                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
-                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
-              }}
-            >
-              {tileMap[tile.id]}
-            </div>
-          ))}
-        </div>
-      </section>
     </section>
   );
 }
@@ -486,7 +457,7 @@ type ArtistsViewProps = {
   selectedArtistLabel: string;
   onSelectArtist(artist: string): void;
   onSelectEntry(entryId: string): void;
-  onBrowseArtistHistory(artist: string): void;
+  onBrowseArtistHistory(artist: string, year?: string): void;
   getLeadArtist(entry: LiveEntry): string;
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
   resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
@@ -505,6 +476,7 @@ export function LiveLogArtistsView({
   tileMap
 }: ArtistsViewProps) {
   const [artistQuery, setArtistQuery] = useState("");
+  const [selectedArtistYear, setSelectedArtistYear] = useState<string>("");
   const normalizedArtistQuery = artistQuery.trim().toLowerCase();
   const topArtists = artists.slice(0, 10);
   const filteredArtists = useMemo(() => {
@@ -515,6 +487,17 @@ export function LiveLogArtistsView({
     return artists.filter((artist) => artist.label.toLowerCase().includes(normalizedArtistQuery));
   }, [artists, normalizedArtistQuery, topArtists]);
   const selectedArtist = artists.find((item) => item.label === selectedArtistLabel) ?? artists[0] ?? null;
+  const selectedArtistYearEntries = useMemo(() => {
+    if (!selectedArtist) {
+      return [];
+    }
+
+    if (!selectedArtistYear) {
+      return selectedArtist.entries;
+    }
+
+    return selectedArtist.entries.filter((entry) => entry.date.startsWith(selectedArtistYear));
+  }, [selectedArtist, selectedArtistYear]);
   const visibleArtists = useMemo(() => {
     if (!selectedArtist) {
       return filteredArtists;
@@ -526,7 +509,21 @@ export function LiveLogArtistsView({
 
     return [selectedArtist, ...filteredArtists];
   }, [filteredArtists, selectedArtist]);
-  const selectedArtistEntries = selectedArtist?.entries.slice(0, 10) ?? [];
+  const selectedArtistEntries = selectedArtistYearEntries.slice(0, 10);
+
+  useEffect(() => {
+    if (!selectedArtistYear) {
+      return;
+    }
+
+    const selectedYearMatches = (selectedArtist?.years ?? []).some(
+      (item) => item.label === selectedArtistYear && item.count > 0
+    );
+
+    if (!selectedYearMatches) {
+      setSelectedArtistYear("");
+    }
+  }, [selectedArtist, selectedArtistYear]);
 
   return (
     <section className="archiveEntityLayout">
@@ -586,12 +583,30 @@ export function LiveLogArtistsView({
             </div>
             <div className="archiveMiniTrend">
               {(selectedArtist.years ?? []).map((item) => (
-                <div key={item.label} className="archiveMiniTrendBar">
+                <button
+                  key={item.label}
+                  className={
+                    selectedArtistYear === item.label
+                      ? "archiveMiniTrendBar archiveMiniTrendBarActive"
+                      : "archiveMiniTrendBar"
+                  }
+                  type="button"
+                  onClick={() => setSelectedArtistYear((current) => (current === item.label ? "" : item.label))}
+                >
                   <span>{item.label}</span>
                   <strong>{item.count}</strong>
-                </div>
+                </button>
               ))}
             </div>
+            {selectedArtistYear ? (
+              <button
+                className="archiveEntityFilterBadge"
+                type="button"
+                onClick={() => setSelectedArtistYear("")}
+              >
+                {selectedArtistYear}年で絞り込み中
+              </button>
+            ) : null}
             <div className="archiveLinkedList">
               {selectedArtistEntries.map((entry) => (
                 <button
@@ -608,11 +623,11 @@ export function LiveLogArtistsView({
                 </button>
               ))}
             </div>
-            {selectedArtist.entries.length > selectedArtistEntries.length ? (
+            {selectedArtistYearEntries.length > selectedArtistEntries.length ? (
               <button
                 className="archiveEntityListHintButton"
                 type="button"
-                onClick={() => onBrowseArtistHistory(selectedArtist.label)}
+                onClick={() => onBrowseArtistHistory(selectedArtist.label, selectedArtistYear || undefined)}
               >
                 最新10件を表示中です。タイムラインで続きを見る
               </button>
@@ -863,35 +878,6 @@ export function LiveLogAddView({
         onApply={onBatchApply}
         onLinkedToEntry={onLinkedToEntry}
       />
-      <section className="panel archiveSectionCard">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Event Analytics</p>
-            <h2>イベント追加まわりの分析</h2>
-            <p>形式や入力の偏りを見ながら追加できます。</p>
-          </div>
-        </div>
-        <div
-          className="analyticsBoardGrid"
-          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
-        >
-          {addTiles.map((tile) => (
-            <div
-              key={tile.id}
-              ref={(element) => {
-                analyticsTileRefs.current[tile.id] = element;
-              }}
-              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
-              style={{
-                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
-                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
-              }}
-            >
-              {tileMap[tile.id]}
-            </div>
-          ))}
-        </div>
-      </section>
     </section>
   );
 }
