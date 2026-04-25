@@ -52,11 +52,6 @@ type HomeViewProps = {
   recentEntries: LiveEntry[];
   topArtists: AggregateBucket[];
   yearlyArchiveCards: Array<{ year: string; count: number; topArtist: string }>;
-  positionedTiles: PositionedDashboardTile[];
-  dashboardRowCount: number;
-  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
-  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
-  tileMap: Record<AnalyticsTileId, ReactNode>;
   yearlySummaryRef: RefObject<HTMLDivElement | null>;
   selectedYear: string;
   availableYears: string[];
@@ -85,11 +80,6 @@ export function LiveLogHomeView({
   recentEntries,
   topArtists,
   yearlyArchiveCards,
-  positionedTiles,
-  dashboardRowCount,
-  analyticsTileRefs,
-  resolvedAnalyticsTileHeights,
-  tileMap,
   yearlySummaryRef,
   selectedYear,
   availableYears,
@@ -210,36 +200,6 @@ export function LiveLogHomeView({
           ))}
         </div>
       </section>
-      <section className="panel archiveSectionCard">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Analytics</p>
-            <h2>分析を並べ替える</h2>
-            <p>サイズ、位置、共有をここで調整できます。</p>
-          </div>
-        </div>
-        <div
-          className="analyticsBoardGrid"
-          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
-        >
-          {positionedTiles.map((tile) => (
-            <div
-              key={tile.id}
-              ref={(element) => {
-                analyticsTileRefs.current[tile.id] = element;
-              }}
-              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
-              style={{
-                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
-                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
-              }}
-            >
-              {tileMap[tile.id]}
-            </div>
-          ))}
-        </div>
-      </section>
-
       <div ref={yearlySummaryRef}>
         <YearlySummaryPanel
           selectedYear={selectedYear}
@@ -290,6 +250,11 @@ type TimelineViewProps = {
   formatDay(value: string): string;
   formatWeekday(value: string): string;
   getLeadArtist(entry: LiveEntry): string;
+  timelineTiles: PositionedDashboardTile[];
+  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
+  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
+  tileMap: Record<AnalyticsTileId, ReactNode>;
+  dashboardRowCount: number;
 };
 
 export function LiveLogTimelineView({
@@ -319,7 +284,12 @@ export function LiveLogTimelineView({
   onResizeStart,
   formatDay,
   formatWeekday,
-  getLeadArtist
+  getLeadArtist,
+  timelineTiles,
+  analyticsTileRefs,
+  resolvedAnalyticsTileHeights,
+  tileMap,
+  dashboardRowCount
 }: TimelineViewProps) {
   return (
     <section className="archiveTimelineLayout">
@@ -467,6 +437,35 @@ export function LiveLogTimelineView({
           />
         )}
       </section>
+      <section className="panel archiveSectionCard">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Timeline Analytics</p>
+            <h2>タイムライン分析</h2>
+            <p>年ごとの推移と全体サマリをここで見ます。</p>
+          </div>
+        </div>
+        <div
+          className="analyticsBoardGrid"
+          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+        >
+          {timelineTiles.map((tile) => (
+            <div
+              key={tile.id}
+              ref={(element) => {
+                analyticsTileRefs.current[tile.id] = element;
+              }}
+              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+              style={{
+                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+              }}
+            >
+              {tileMap[tile.id]}
+            </div>
+          ))}
+        </div>
+      </section>
     </section>
   );
 }
@@ -487,6 +486,11 @@ type ArtistsViewProps = {
   onSelectArtist(artist: string): void;
   onSelectEntry(entryId: string): void;
   getLeadArtist(entry: LiveEntry): string;
+  artistTiles: PositionedDashboardTile[];
+  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
+  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
+  tileMap: Record<AnalyticsTileId, ReactNode>;
+  dashboardRowCount: number;
 };
 
 export function LiveLogArtistsView({
@@ -494,7 +498,12 @@ export function LiveLogArtistsView({
   selectedArtistLabel,
   onSelectArtist,
   onSelectEntry,
-  getLeadArtist
+  getLeadArtist,
+  artistTiles,
+  analyticsTileRefs,
+  resolvedAnalyticsTileHeights,
+  tileMap,
+  dashboardRowCount
 }: ArtistsViewProps) {
   const selectedArtist = artists.find((item) => item.label === selectedArtistLabel) ?? artists[0] ?? null;
 
@@ -572,6 +581,35 @@ export function LiveLogArtistsView({
           </>
         ) : null}
       </section>
+      <section className="panel archiveSectionCard">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Artist Analytics</p>
+            <h2>アーティスト分析</h2>
+            <p>上位アーティストと年別推移をここで見ます。</p>
+          </div>
+        </div>
+        <div
+          className="analyticsBoardGrid"
+          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+        >
+          {artistTiles.map((tile) => (
+            <div
+              key={tile.id}
+              ref={(element) => {
+                analyticsTileRefs.current[tile.id] = element;
+              }}
+              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+              style={{
+                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+              }}
+            >
+              {tileMap[tile.id]}
+            </div>
+          ))}
+        </div>
+      </section>
     </section>
   );
 }
@@ -582,6 +620,11 @@ type VenuesViewProps = {
   onSelectVenue(venue: string): void;
   onSelectEntry(entryId: string): void;
   getLeadArtist(entry: LiveEntry): string;
+  venueTiles: PositionedDashboardTile[];
+  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
+  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
+  tileMap: Record<AnalyticsTileId, ReactNode>;
+  dashboardRowCount: number;
 };
 
 export function LiveLogVenuesView({
@@ -589,7 +632,12 @@ export function LiveLogVenuesView({
   selectedVenueLabel,
   onSelectVenue,
   onSelectEntry,
-  getLeadArtist
+  getLeadArtist,
+  venueTiles,
+  analyticsTileRefs,
+  resolvedAnalyticsTileHeights,
+  tileMap,
+  dashboardRowCount
 }: VenuesViewProps) {
   const selectedVenue = venues.find((item) => item.label === selectedVenueLabel) ?? venues[0] ?? null;
 
@@ -659,6 +707,35 @@ export function LiveLogVenuesView({
           </>
         ) : null}
       </section>
+      <section className="panel archiveSectionCard">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Venue Analytics</p>
+            <h2>会場分析</h2>
+            <p>会場と地域の集計をここで見ます。</p>
+          </div>
+        </div>
+        <div
+          className="analyticsBoardGrid"
+          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+        >
+          {venueTiles.map((tile) => (
+            <div
+              key={tile.id}
+              ref={(element) => {
+                analyticsTileRefs.current[tile.id] = element;
+              }}
+              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+              style={{
+                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+              }}
+            >
+              {tileMap[tile.id]}
+            </div>
+          ))}
+        </div>
+      </section>
     </section>
   );
 }
@@ -694,6 +771,11 @@ type AddViewProps = {
   onDeleteSelectedEntries(): void;
   onBatchApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
   onLinkedToEntry(entryId: string): void;
+  addTiles: PositionedDashboardTile[];
+  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
+  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
+  tileMap: Record<AnalyticsTileId, ReactNode>;
+  dashboardRowCount: number;
 };
 
 export function LiveLogAddView({
@@ -723,7 +805,12 @@ export function LiveLogAddView({
   onApplyBulkUpdate,
   onDeleteSelectedEntries,
   onBatchApply,
-  onLinkedToEntry
+  onLinkedToEntry,
+  addTiles,
+  analyticsTileRefs,
+  resolvedAnalyticsTileHeights,
+  tileMap,
+  dashboardRowCount
 }: AddViewProps) {
   return (
     <section className="archiveAddLayout">
@@ -758,6 +845,35 @@ export function LiveLogAddView({
         onApply={onBatchApply}
         onLinkedToEntry={onLinkedToEntry}
       />
+      <section className="panel archiveSectionCard">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Event Analytics</p>
+            <h2>イベント追加まわりの分析</h2>
+            <p>形式や入力の偏りを見ながら追加できます。</p>
+          </div>
+        </div>
+        <div
+          className="analyticsBoardGrid"
+          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+        >
+          {addTiles.map((tile) => (
+            <div
+              key={tile.id}
+              ref={(element) => {
+                analyticsTileRefs.current[tile.id] = element;
+              }}
+              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+              style={{
+                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+              }}
+            >
+              {tileMap[tile.id]}
+            </div>
+          ))}
+        </div>
+      </section>
     </section>
   );
 }

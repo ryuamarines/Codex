@@ -1339,6 +1339,14 @@ export function LiveLogPage() {
     resolvedAnalyticsTileHeights
   );
   const dashboardRowCount = Math.max(...positionedTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
+  const timelineTileIds = new Set<AnalyticsTileId>(["yearTrend", "summary"]);
+  const artistTileIds = new Set<AnalyticsTileId>(["artists", "artistYearStackedChart"]);
+  const venueTileIds = new Set<AnalyticsTileId>(["venues", "places"]);
+  const addTileIds = new Set<AnalyticsTileId>(["genres"]);
+  const timelineTiles = positionedTiles.filter((tile) => timelineTileIds.has(tile.id));
+  const artistTiles = positionedTiles.filter((tile) => artistTileIds.has(tile.id));
+  const venueTiles = positionedTiles.filter((tile) => venueTileIds.has(tile.id));
+  const addTiles = positionedTiles.filter((tile) => addTileIds.has(tile.id));
 
   const tileMap = {
     yearTrend: (
@@ -1427,7 +1435,7 @@ export function LiveLogPage() {
             type="button"
             onClick={() => setActiveView("add")}
           >
-            イベント
+            イベント追加
           </button>
           <button
             className={activeView === "artists" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
@@ -1462,12 +1470,12 @@ export function LiveLogPage() {
               {activeView === "home"
                 ? "積み重ねたライブ記録を静かに辿るホーム"
                 : activeView === "timeline"
-                  ? "年と月ごとにライブの軌跡を見返す"
+                  ? "年と月ごとの履歴と、時間軸の分析を見返す"
                   : activeView === "artists"
-                    ? "アーティストとの関係性を見返す"
+                    ? "アーティストとの関係性と推移を見返す"
                     : activeView === "venues"
-                      ? "会場との関係性を見返す"
-                      : "記録を追加・整理する"}
+                      ? "会場との関係性と地域傾向を見返す"
+                      : "イベントを追加しながら、画像整理と形式の傾向も見ます"}
             </p>
           </div>
           <div className="archiveMainMeta">
@@ -1504,11 +1512,6 @@ export function LiveLogPage() {
           recentEntries={recentEntries}
           topArtists={aggregates.focusArtists}
           yearlyArchiveCards={yearlyArchiveCards}
-          positionedTiles={positionedTiles}
-          dashboardRowCount={dashboardRowCount}
-          analyticsTileRefs={analyticsTileRefs}
-          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
-          tileMap={tileMap}
           yearlySummaryRef={yearlySummaryRef}
           selectedYear={selectedYear}
           availableYears={availableYears}
@@ -1560,6 +1563,11 @@ export function LiveLogPage() {
           formatDay={formatDay}
           formatWeekday={formatWeekday}
           getLeadArtist={getLeadArtist}
+          timelineTiles={timelineTiles}
+          analyticsTileRefs={analyticsTileRefs}
+          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
+          tileMap={tileMap}
+          dashboardRowCount={dashboardRowCount}
         />
       ) : activeView === "artists" ? (
         <LiveLogArtistsView
@@ -1568,6 +1576,11 @@ export function LiveLogPage() {
           onSelectArtist={setSelectedArtistName}
           onSelectEntry={handleSelectEntry}
           getLeadArtist={getLeadArtist}
+          artistTiles={artistTiles}
+          analyticsTileRefs={analyticsTileRefs}
+          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
+          tileMap={tileMap}
+          dashboardRowCount={dashboardRowCount}
         />
       ) : activeView === "venues" ? (
         <LiveLogVenuesView
@@ -1576,6 +1589,11 @@ export function LiveLogPage() {
           onSelectVenue={setSelectedVenueName}
           onSelectEntry={handleSelectEntry}
           getLeadArtist={getLeadArtist}
+          venueTiles={venueTiles}
+          analyticsTileRefs={analyticsTileRefs}
+          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
+          tileMap={tileMap}
+          dashboardRowCount={dashboardRowCount}
         />
       ) : (
         <LiveLogAddView
@@ -1611,6 +1629,11 @@ export function LiveLogPage() {
             setSelectedEntryIds([]);
             setSelectedEntryId(entryId);
           }}
+          addTiles={addTiles}
+          analyticsTileRefs={analyticsTileRefs}
+          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
+          tileMap={tileMap}
+          dashboardRowCount={dashboardRowCount}
         />
       )}
 
@@ -1647,13 +1670,13 @@ export function LiveLogPage() {
         >
           タイムライン
         </button>
-        <button
-          className={activeView === "add" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
-          type="button"
-          onClick={() => setActiveView("add")}
-        >
-          追加
-        </button>
+          <button
+            className={activeView === "add" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
+            type="button"
+            onClick={() => setActiveView("add")}
+          >
+            イベント追加
+          </button>
         <button
           className={activeView === "artists" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
           type="button"
