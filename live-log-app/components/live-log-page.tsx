@@ -83,6 +83,7 @@ type BulkEditInput = {
 
 type ActiveView = "home" | "timeline" | "add" | "artists" | "venues";
 type ActiveTool = "create" | "csv" | "photo" | "bulk" | null;
+type TimelinePresentation = "cards" | "table";
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
 type TableColumn = "date" | "title" | ListColumn;
 type RecordVisibilityFilter = "all" | "withPhotos" | "withUnsyncedImages";
@@ -146,6 +147,7 @@ export function LiveLogPage() {
   const [entries, setEntries] = useState<LiveEntry[]>(sampleEntries);
   const [query, setQuery] = useState("");
   const [activeView, setActiveView] = useState<ActiveView>("home");
+  const [timelinePresentation, setTimelinePresentation] = useState<TimelinePresentation>("cards");
   const [selectedYear, setSelectedYear] = useState("");
   const [dateSortOrder, setDateSortOrder] = useState<"desc" | "asc">("desc");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
@@ -449,6 +451,10 @@ export function LiveLogPage() {
         items: items.sort((left, right) => parseDateValue(right.date) - parseDateValue(left.date))
       }));
   }, [filteredEntries, selectedYear]);
+  const timelineEntries = useMemo(
+    () => filteredEntries.filter((entry) => extractYear(entry.date) === selectedYear),
+    [filteredEntries, selectedYear]
+  );
   const artistArchive = useMemo(() => {
     const countsByArtist = new Map<string, LiveEntry[]>();
 
@@ -1502,41 +1508,122 @@ export function LiveLogPage() {
               <span>検索</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="公演名 / 会場 / アーティスト" />
             </div>
-            <div className="archiveMonthStack">
-              {timelineGroups.map((group) => (
-                <section key={group.monthKey} className="archiveMonthGroup">
-                  <div className="archiveMonthHeading">
-                    <strong>{group.monthLabel}</strong>
-                    <span>{group.items.length}件</span>
-                  </div>
-                  <div className="archiveTimelineCards">
-                    {group.items.map((entry) => (
+            <div className="columnChooser">
+              <div className="columnChooserHeader">
+                <span>表示形式</span>
+                <div className="densityToggle">
+                  <button
+                    className={timelinePresentation === "cards" ? "toolButton activeToolButton" : "toolButton"}
+                    type="button"
+                    onClick={() => setTimelinePresentation("cards")}
+                  >
+                    カード
+                  </button>
+                  <button
+                    className={timelinePresentation === "table" ? "toolButton activeToolButton" : "toolButton"}
+                    type="button"
+                    onClick={() => setTimelinePresentation("table")}
+                  >
+                    一覧
+                  </button>
+                </div>
+              </div>
+              {timelinePresentation === "table" ? (
+                <>
+                  <div className="columnChooserHeader">
+                    <span>表示項目</span>
+                    <div className="densityToggle">
                       <button
-                        key={entry.id}
-                        className={`archiveTimelineCard ${selectedEntryId === entry.id ? "archiveTimelineCardActive" : ""}`}
+                        className={listDensity === "comfortable" ? "toolButton activeToolButton" : "toolButton"}
                         type="button"
-                        onClick={() => handleSelectEntry(entry.id)}
+                        onClick={() => setListDensity("comfortable")}
                       >
-                        <div className="archiveTimelineDate">
-                          <strong>{formatDay(entry.date)}</strong>
-                          <span>{formatWeekday(entry.date)}</span>
-                        </div>
-                        <div className="archiveTimelineBody">
-                          <strong>{getLeadArtist(entry)}</strong>
-                          <span>{entry.title}</span>
-                          <small>{entry.venue}</small>
-                        </div>
-                        {entry.images[0]?.src ? (
-                          <div className="archiveTimelineThumb">
-                            <img src={entry.images[0].src} alt={entry.title} />
-                          </div>
-                        ) : null}
+                        ゆったり
+                      </button>
+                      <button
+                        className={listDensity === "compact" ? "toolButton activeToolButton" : "toolButton"}
+                        type="button"
+                        onClick={() => setListDensity("compact")}
+                      >
+                        コンパクト
+                      </button>
+                    </div>
+                  </div>
+                  <div className="columnButtons">
+                    {LIST_COLUMN_OPTIONS.map((column) => (
+                      <button
+                        key={column.key}
+                        className={
+                          visibleListColumns.includes(column.key)
+                            ? "toolButton activeToolButton"
+                            : "toolButton"
+                        }
+                        type="button"
+                        onClick={() => toggleListColumn(column.key)}
+                      >
+                        {column.label}
                       </button>
                     ))}
                   </div>
-                </section>
-              ))}
+                </>
+              ) : null}
             </div>
+            {timelinePresentation === "cards" ? (
+              <div className="archiveMonthStack">
+                {timelineGroups.map((group) => (
+                  <section key={group.monthKey} className="archiveMonthGroup">
+                    <div className="archiveMonthHeading">
+                      <strong>{group.monthLabel}</strong>
+                      <span>{group.items.length}件</span>
+                    </div>
+                    <div className="archiveTimelineCards">
+                      {group.items.map((entry) => (
+                        <button
+                          key={entry.id}
+                          className={`archiveTimelineCard ${selectedEntryId === entry.id ? "archiveTimelineCardActive" : ""}`}
+                          type="button"
+                          onClick={() => handleSelectEntry(entry.id)}
+                        >
+                          <div className="archiveTimelineDate">
+                            <strong>{formatDay(entry.date)}</strong>
+                            <span>{formatWeekday(entry.date)}</span>
+                          </div>
+                          <div className="archiveTimelineBody">
+                            <strong>{getLeadArtist(entry)}</strong>
+                            <span>{entry.title}</span>
+                            <small>{entry.venue}</small>
+                          </div>
+                          {entry.images[0]?.src ? (
+                            <div className="archiveTimelineThumb">
+                              <img src={entry.images[0].src} alt={entry.title} />
+                            </div>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <RecordListTable
+                entries={timelineEntries}
+                selectedEntryId={selectedEntryId}
+                highlightedEntryId={highlightedEntryId}
+                selectedEntryIds={selectedEntryIds}
+                visibleSelectedCount={visibleSelectedCount}
+                visibleListColumns={visibleListColumns}
+                columnWidths={columnWidths}
+                density={listDensity}
+                dateSortOrder={dateSortOrder}
+                onToggleVisibleEntries={toggleVisibleEntries}
+                onToggleEntrySelection={toggleEntrySelection}
+                onSelectEntry={handleSelectEntry}
+                onToggleDateSort={() =>
+                  setDateSortOrder((current) => (current === "desc" ? "asc" : "desc"))
+                }
+                onResizeStart={startColumnResize}
+              />
+            )}
           </section>
         </section>
       ) : activeView === "artists" ? (
