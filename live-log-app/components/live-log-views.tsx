@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
 import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordListTable } from "@/components/record-list-table";
@@ -505,7 +506,28 @@ export function LiveLogArtistsView({
   tileMap,
   dashboardRowCount
 }: ArtistsViewProps) {
+  const [artistQuery, setArtistQuery] = useState("");
+  const normalizedArtistQuery = artistQuery.trim().toLowerCase();
+  const topArtists = artists.slice(0, 10);
+  const filteredArtists = useMemo(() => {
+    if (!normalizedArtistQuery) {
+      return topArtists;
+    }
+
+    return artists.filter((artist) => artist.label.toLowerCase().includes(normalizedArtistQuery));
+  }, [artists, normalizedArtistQuery, topArtists]);
   const selectedArtist = artists.find((item) => item.label === selectedArtistLabel) ?? artists[0] ?? null;
+  const visibleArtists = useMemo(() => {
+    if (!selectedArtist) {
+      return filteredArtists;
+    }
+
+    if (filteredArtists.some((artist) => artist.label === selectedArtist.label)) {
+      return filteredArtists;
+    }
+
+    return [selectedArtist, ...filteredArtists];
+  }, [filteredArtists, selectedArtist]);
 
   return (
     <section className="archiveEntityLayout">
@@ -514,10 +536,19 @@ export function LiveLogArtistsView({
           <div>
             <p className="eyebrow">Artists</p>
             <h2>アーティスト</h2>
+            <p>{normalizedArtistQuery ? "検索結果" : "まずは参加回数の多い10組を表示しています。"}</p>
           </div>
         </div>
+        <div className="searchBox archiveEntitySearchBox">
+          <span>検索</span>
+          <input
+            value={artistQuery}
+            onChange={(event) => setArtistQuery(event.target.value)}
+            placeholder="アーティスト名で絞り込む"
+          />
+        </div>
         <div className="archiveEntityList">
-          {artists.map((artist) => (
+          {visibleArtists.map((artist) => (
             <button
               key={artist.label}
               className={selectedArtist?.label === artist.label ? "archiveEntityItem archiveEntityItemActive" : "archiveEntityItem"}
