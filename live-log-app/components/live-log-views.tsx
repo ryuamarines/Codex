@@ -1,18 +1,13 @@
 "use client";
 
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
-import { ArtistYearTrendCard } from "@/components/analytics-cards";
 import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordListTable } from "@/components/record-list-table";
 import { RecordToolsPanel } from "@/components/record-tools-panel";
 import { YearlySummaryPanel, type YearlyAggregateKey } from "@/components/yearly-summary-panel";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { PositionedDashboardTile, AnalyticsTileId, TileHeight } from "@/lib/analytics-dashboard";
-import type {
-  AggregateBucket,
-  ArtistYearTrend,
-  TrendBucket
-} from "@/lib/live-analytics";
+import type { AggregateBucket, TrendBucket } from "@/lib/live-analytics";
 import type { ManualEntryInput } from "@/lib/live-entry-utils";
 import type { LiveEntry } from "@/lib/types";
 
@@ -57,8 +52,6 @@ type HomeViewProps = {
   recentEntries: LiveEntry[];
   topArtists: AggregateBucket[];
   yearlyArchiveCards: Array<{ year: string; count: number; topArtist: string }>;
-  trendYears: string[];
-  trendItems: ArtistYearTrend[];
   positionedTiles: PositionedDashboardTile[];
   dashboardRowCount: number;
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
@@ -92,8 +85,6 @@ export function LiveLogHomeView({
   recentEntries,
   topArtists,
   yearlyArchiveCards,
-  trendYears,
-  trendItems,
   positionedTiles,
   dashboardRowCount,
   analyticsTileRefs,
@@ -219,11 +210,6 @@ export function LiveLogHomeView({
           ))}
         </div>
       </section>
-
-      <section className="archiveOverviewGrid">
-        <ArtistYearTrendCard years={trendYears} items={trendItems} height="standard" />
-      </section>
-
       <section className="panel archiveSectionCard">
         <div className="archiveSectionHeader">
           <div>

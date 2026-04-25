@@ -136,16 +136,16 @@ export function ArtistYearStackedChartCard({
   }));
   const max = Math.max(...yearTotals.map((item) => item.total), 1);
   const palette = [
-    "#86a8e7",
-    "#f3a6b8",
-    "#92d7c3",
-    "#f5c38b",
-    "#c3a6ff",
-    "#9cc6f0",
-    "#f0d78c",
-    "#efb3e6",
-    "#9ed0a8",
-    "#f2b2a2"
+    "var(--chart-stack-1)",
+    "var(--chart-stack-2)",
+    "var(--chart-stack-3)",
+    "var(--chart-stack-4)",
+    "var(--chart-stack-5)",
+    "var(--chart-stack-6)",
+    "var(--chart-stack-7)",
+    "var(--chart-stack-8)",
+    "var(--chart-stack-9)",
+    "var(--chart-stack-10)"
   ];
 
   return (

@@ -19,6 +19,16 @@
   --line: rgba(16, 16, 16, 0.08);
   --shadow: 0 12px 30px rgba(0, 0, 0, 0.035);
   --radius: 20px;
+  --chart-stack-1: #161616;
+  --chart-stack-2: #464646;
+  --chart-stack-3: #737373;
+  --chart-stack-4: #9a9a9a;
+  --chart-stack-5: #b9b9b9;
+  --chart-stack-6: #d0d0d0;
+  --chart-stack-7: #2b3e57;
+  --chart-stack-8: #56657b;
+  --chart-stack-9: #8791a0;
+  --chart-stack-10: #b2bac4;
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
@@ -42,6 +52,16 @@
   --accent-soft: rgba(255, 255, 255, 0.075);
   --line: rgba(255, 255, 255, 0.08);
   --shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
+  --chart-stack-1: #f3f1eb;
+  --chart-stack-2: #d9d5cd;
+  --chart-stack-3: #bbb6ac;
+  --chart-stack-4: #98958d;
+  --chart-stack-5: #797772;
+  --chart-stack-6: #5e5c58;
+  --chart-stack-7: #d8e0ea;
+  --chart-stack-8: #b6c3d2;
+  --chart-stack-9: #8f9fb0;
+  --chart-stack-10: #6d7b89;
 }
 
 * {

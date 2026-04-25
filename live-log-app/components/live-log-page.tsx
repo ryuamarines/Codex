@@ -1504,8 +1504,6 @@ export function LiveLogPage() {
           recentEntries={recentEntries}
           topArtists={aggregates.focusArtists}
           yearlyArchiveCards={yearlyArchiveCards}
-          trendYears={trends.artistYears.years}
-          trendItems={trends.artistYears.items}
           positionedTiles={positionedTiles}
           dashboardRowCount={dashboardRowCount}
           analyticsTileRefs={analyticsTileRefs}
