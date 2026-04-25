@@ -116,14 +116,9 @@ const DEFAULT_COLUMN_WIDTHS: Record<TableColumn, number> = {
   photos: 100
 };
 
-const FIXED_TILE_HEIGHTS: Partial<Record<AnalyticsTileId, TileHeight>> = {
-  summary: "compact",
-  genres: "compact"
-};
+const FIXED_TILE_HEIGHTS: Partial<Record<AnalyticsTileId, TileHeight>> = {};
 
-const FIXED_TILE_SIZES: Partial<Record<AnalyticsTileId, TileSize>> = {
-  summary: "wide"
-};
+const FIXED_TILE_SIZES: Partial<Record<AnalyticsTileId, TileSize>> = {};
 
 function matches(entry: LiveEntry, query: string) {
   const normalized = query.trim().toLowerCase();
@@ -1333,20 +1328,24 @@ export function LiveLogPage() {
     });
   }
 
-  const positionedTiles = createDashboardLayout(
-    analyticsTileOrder,
-    resolvedAnalyticsTileSizes,
-    resolvedAnalyticsTileHeights
-  );
-  const dashboardRowCount = Math.max(...positionedTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
   const timelineTileIds = new Set<AnalyticsTileId>(["yearTrend", "summary"]);
   const artistTileIds = new Set<AnalyticsTileId>(["artists", "artistYearStackedChart"]);
   const venueTileIds = new Set<AnalyticsTileId>(["venues", "places"]);
   const addTileIds = new Set<AnalyticsTileId>(["genres"]);
-  const timelineTiles = positionedTiles.filter((tile) => timelineTileIds.has(tile.id));
-  const artistTiles = positionedTiles.filter((tile) => artistTileIds.has(tile.id));
-  const venueTiles = positionedTiles.filter((tile) => venueTileIds.has(tile.id));
-  const addTiles = positionedTiles.filter((tile) => addTileIds.has(tile.id));
+  const createScopedTiles = (allowedIds: Set<AnalyticsTileId>) =>
+    createDashboardLayout(
+      analyticsTileOrder.filter((tileId) => allowedIds.has(tileId)),
+      resolvedAnalyticsTileSizes,
+      resolvedAnalyticsTileHeights
+    );
+  const timelineTiles = createScopedTiles(timelineTileIds);
+  const artistTiles = createScopedTiles(artistTileIds);
+  const venueTiles = createScopedTiles(venueTileIds);
+  const addTiles = createScopedTiles(addTileIds);
+  const timelineDashboardRowCount = Math.max(...timelineTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
+  const artistDashboardRowCount = Math.max(...artistTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
+  const venueDashboardRowCount = Math.max(...venueTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
+  const addDashboardRowCount = Math.max(...addTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
 
   const tileMap = {
     yearTrend: (
@@ -1567,7 +1566,7 @@ export function LiveLogPage() {
           analyticsTileRefs={analyticsTileRefs}
           resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
           tileMap={tileMap}
-          dashboardRowCount={dashboardRowCount}
+          dashboardRowCount={timelineDashboardRowCount}
         />
       ) : activeView === "artists" ? (
         <LiveLogArtistsView
@@ -1580,7 +1579,7 @@ export function LiveLogPage() {
           analyticsTileRefs={analyticsTileRefs}
           resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
           tileMap={tileMap}
-          dashboardRowCount={dashboardRowCount}
+          dashboardRowCount={artistDashboardRowCount}
         />
       ) : activeView === "venues" ? (
         <LiveLogVenuesView
@@ -1593,7 +1592,7 @@ export function LiveLogPage() {
           analyticsTileRefs={analyticsTileRefs}
           resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
           tileMap={tileMap}
-          dashboardRowCount={dashboardRowCount}
+          dashboardRowCount={venueDashboardRowCount}
         />
       ) : (
         <LiveLogAddView
@@ -1633,7 +1632,7 @@ export function LiveLogPage() {
           analyticsTileRefs={analyticsTileRefs}
           resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
           tileMap={tileMap}
-          dashboardRowCount={dashboardRowCount}
+          dashboardRowCount={addDashboardRowCount}
         />
       )}
 
