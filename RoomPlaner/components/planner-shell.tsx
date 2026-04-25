@@ -86,6 +86,7 @@ const FURNITURE_LIBRARY: Array<{
 export function PlannerShell() {
   const {
     project,
+    hasPersistedProject,
     issues,
     undoStack,
     redoStack,
@@ -178,7 +179,8 @@ export function PlannerShell() {
   } = useRoomPlanerCloud({
     project,
     loadProjectState,
-    parseProject: importProjectJson
+    parseProject: importProjectJson,
+    hasPersistedProject
   });
 
   const handleUndo = () => {
@@ -927,8 +929,8 @@ export function PlannerShell() {
           </div>
         </header>
 
-        <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
-          <aside className="panel h-fit p-4 xl:sticky xl:top-4">
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_340px]">
+          <aside className="panel h-fit p-4 2xl:sticky 2xl:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm font-semibold text-slate-900">アカウント / クラウド</div>
@@ -1208,7 +1210,7 @@ export function PlannerShell() {
             </div>
           </aside>
 
-          <section className="min-h-[780px] space-y-3">
+          <section className="min-h-[780px] min-w-0 space-y-3">
             <div className="panel flex flex-wrap items-center gap-2 p-3">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canvas Tools</span>
               <button className={mode === "select" ? "button-strong" : "button-soft"} onClick={() => setMode("select")}>
@@ -1281,7 +1283,7 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 xl:sticky xl:top-4">
+          <aside className="panel h-fit p-4 xl:col-span-2 2xl:col-span-1 2xl:sticky 2xl:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (

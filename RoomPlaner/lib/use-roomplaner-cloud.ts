@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import { observeFirebaseUser, signInWithGoogle, signOutFromFirebase } from "@/lib/firebase/auth";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -11,6 +11,7 @@ type UseRoomPlanerCloudParams = {
   project: PlannerProject;
   loadProjectState: (project: PlannerProject) => void;
   parseProject: (raw: string) => PlannerProject;
+  hasPersistedProject: boolean;
 };
 
 function getCloudErrorMessage(error: unknown) {
@@ -27,16 +28,61 @@ function getCloudErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "クラウド操作に失敗しました。";
 }
 
-export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: UseRoomPlanerCloudParams) {
+export function useRoomPlanerCloud({ project, loadProjectState, parseProject, hasPersistedProject }: UseRoomPlanerCloudParams) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [cloudMessage, setCloudMessage] = useState(
     isFirebaseConfigured() ? "" : "Firebase 環境変数を入れると、Googleログインとクラウド保存を使えます。"
   );
   const [cloudBusy, setCloudBusy] = useState(false);
+  const hydratedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     return observeFirebaseUser(setFirebaseUser);
   }, []);
+
+  useEffect(() => {
+    if (!firebaseUser || hasPersistedProject || cloudBusy) {
+      return;
+    }
+
+    if (hydratedUserIdRef.current === firebaseUser.uid) {
+      return;
+    }
+
+    let active = true;
+
+    const hydrate = async () => {
+      try {
+        setCloudBusy(true);
+        const repository = new FirestoreRoomPlanRepository();
+        const cloudProject = await repository.load(firebaseUser);
+        if (!active) return;
+
+        hydratedUserIdRef.current = firebaseUser.uid;
+
+        if (!cloudProject) {
+          setCloudMessage("このアカウントにはまだ保存済みプロジェクトがありません。");
+          return;
+        }
+
+        loadProjectState(parseProject(JSON.stringify(cloudProject)));
+        setCloudMessage("このアカウントの保存済みプロジェクトを自動で読み込みました。");
+      } catch (error) {
+        if (!active) return;
+        setCloudMessage(getCloudErrorMessage(error));
+      } finally {
+        if (active) {
+          setCloudBusy(false);
+        }
+      }
+    };
+
+    void hydrate();
+
+    return () => {
+      active = false;
+    };
+  }, [cloudBusy, firebaseUser, hasPersistedProject, loadProjectState, parseProject]);
 
   const setMessage = (message: string) => {
     setCloudMessage(message);
@@ -58,6 +104,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
     try {
       setCloudBusy(true);
       await signOutFromFirebase();
+      hydratedUserIdRef.current = null;
       setMessage("ログアウトしました。");
     } catch (error) {
       setMessage(getCloudErrorMessage(error));
