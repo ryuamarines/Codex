@@ -1,6 +1,14 @@
 import { getApps, initializeApp } from "firebase/app";
 import type { FirebaseApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  type Auth
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 type FirebaseConfig = {
@@ -30,6 +38,7 @@ function readFirebaseConfig(): FirebaseConfig | null {
 }
 
 let cachedApp: FirebaseApp | null | undefined;
+let cachedAuth: Auth | null | undefined;
 
 export function getFirebaseApp() {
   if (cachedApp !== undefined) {
@@ -53,7 +62,26 @@ export function isFirebaseConfigured() {
 
 export function getFirebaseAuth() {
   const app = getFirebaseApp();
-  return app ? getAuth(app) : null;
+
+  if (!app) {
+    cachedAuth = null;
+    return null;
+  }
+
+  if (cachedAuth !== undefined) {
+    return cachedAuth;
+  }
+
+  try {
+    cachedAuth = initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver
+    });
+  } catch {
+    cachedAuth = getAuth(app);
+  }
+
+  return cachedAuth;
 }
 
 export function getFirebaseDb() {

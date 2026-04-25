@@ -488,11 +488,9 @@ type ArtistsViewProps = {
   onSelectEntry(entryId: string): void;
   onBrowseArtistHistory(artist: string): void;
   getLeadArtist(entry: LiveEntry): string;
-  artistTiles: PositionedDashboardTile[];
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
   resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
   tileMap: Record<AnalyticsTileId, ReactNode>;
-  dashboardRowCount: number;
 };
 
 export function LiveLogArtistsView({
@@ -502,11 +500,9 @@ export function LiveLogArtistsView({
   onSelectEntry,
   onBrowseArtistHistory,
   getLeadArtist,
-  artistTiles,
   analyticsTileRefs,
   resolvedAnalyticsTileHeights,
-  tileMap,
-  dashboardRowCount
+  tileMap
 }: ArtistsViewProps) {
   const [artistQuery, setArtistQuery] = useState("");
   const normalizedArtistQuery = artistQuery.trim().toLowerCase();
@@ -624,35 +620,14 @@ export function LiveLogArtistsView({
           </>
         ) : null}
       </section>
-      <section className="panel archiveSectionCard">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Artist Analytics</p>
-            <h2>アーティスト分析</h2>
-          <p>選択中アーティストの推移をここで見ます。</p>
-          </div>
-        </div>
-        <div
-          className="analyticsBoardGrid"
-          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
-        >
-          {artistTiles.map((tile) => (
-            <div
-              key={tile.id}
-              ref={(element) => {
-                analyticsTileRefs.current[tile.id] = element;
-              }}
-              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
-              style={{
-                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
-                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
-              }}
-            >
-              {tileMap[tile.id]}
-            </div>
-          ))}
-        </div>
-      </section>
+      <div
+        ref={(element) => {
+          analyticsTileRefs.current.artistYearStackedChart = element;
+        }}
+        className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights.artistYearStackedChart}`}
+      >
+        {tileMap.artistYearStackedChart}
+      </div>
     </section>
   );
 }
