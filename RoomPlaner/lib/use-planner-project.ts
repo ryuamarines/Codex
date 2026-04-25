@@ -2,14 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleProject } from "@/data/sample-project";
+import { observeFirebaseUser } from "@/lib/firebase/auth";
 import { detectCollisions } from "@/lib/geometry";
 import type { DoorObject, FurnitureKind, FurnitureObject, PlannerProject } from "@/lib/types";
 
-const STORAGE_KEY = "roomplaner.mpp.v1";
+const STORAGE_KEY_BASE = "roomplaner.mpp.v1";
+const GUEST_STORAGE_KEY = `${STORAGE_KEY_BASE}.guest`;
+
+function buildStorageKey(userId: string | null) {
+  return userId ? `${STORAGE_KEY_BASE}.user.${userId}` : GUEST_STORAGE_KEY;
+}
 
 export function usePlannerProject() {
   const [project, setProject] = useState<PlannerProject>(sampleProject);
-  const [mounted, setMounted] = useState(false);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [storageKey, setStorageKey] = useState(GUEST_STORAGE_KEY);
   const [undoStack, setUndoStack] = useState<PlannerProject[]>([]);
   const [redoStack, setRedoStack] = useState<PlannerProject[]>([]);
   const projectRef = useRef(project);
@@ -19,21 +26,35 @@ export function usePlannerProject() {
   }, [project]);
 
   useEffect(() => {
-    setMounted(true);
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    return observeFirebaseUser((user) => {
+      setStorageKey(buildStorageKey(user?.uid ?? null));
+      setAuthResolved(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!authResolved) return;
+    const raw = window.localStorage.getItem(storageKey);
+    setUndoStack([]);
+    setRedoStack([]);
+
+    if (!raw) {
+      setProject(sampleProject);
+      return;
+    }
 
     try {
       setProject(normalizeProject(JSON.parse(raw) as PlannerProject));
     } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(storageKey);
+      setProject(sampleProject);
     }
-  }, []);
+  }, [authResolved, storageKey]);
 
   useEffect(() => {
-    if (!mounted) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-  }, [mounted, project]);
+    if (!authResolved) return;
+    window.localStorage.setItem(storageKey, JSON.stringify(project));
+  }, [authResolved, project, storageKey]);
 
   const issues = useMemo(() => detectCollisions(project), [project]);
 
@@ -94,7 +115,7 @@ export function usePlannerProject() {
   };
 
   const clearPersistedProject = () => {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(storageKey);
   };
 
   return {

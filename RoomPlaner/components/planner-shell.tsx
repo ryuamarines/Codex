@@ -825,8 +825,8 @@ export function PlannerShell() {
 
   return (
     <main className="min-h-screen p-5 text-slate-900 md:p-6">
-      <div className="mx-auto flex max-w-[1700px] flex-col gap-4">
-        <header className="panel flex flex-col gap-4 p-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mx-auto flex max-w-[1880px] flex-col gap-4">
+        <header className="panel flex flex-col gap-4 p-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <div className="panel-title">RoomPlaner</div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">RoomPlaner</h1>
@@ -927,8 +927,8 @@ export function PlannerShell() {
           </div>
         </header>
 
-        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)] min-[1680px]:grid-cols-[280px_minmax(0,1fr)_340px]">
-          <aside className="panel h-fit p-4 min-[1680px]:sticky min-[1680px]:top-4">
+        <div className="grid gap-4 xl:grid-cols-[270px_minmax(0,1fr)] min-[1800px]:grid-cols-[270px_minmax(0,1fr)_330px]">
+          <aside className="panel h-fit p-4 min-[1800px]:sticky min-[1800px]:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm font-semibold text-slate-900">アカウント / クラウド</div>
@@ -1281,7 +1281,7 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 xl:col-span-2 min-[1680px]:col-span-1 min-[1680px]:sticky min-[1680px]:top-4">
+          <aside className="panel h-fit p-4 xl:col-span-2 min-[1800px]:col-span-1 min-[1800px]:sticky min-[1800px]:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (
