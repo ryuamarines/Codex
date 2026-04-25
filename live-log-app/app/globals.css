@@ -1579,7 +1579,310 @@ select {
   display: none;
 }
 
+.archiveHomeLayout,
+.archiveTimelineLayout,
+.archiveEntityLayout,
+.archiveAddLayout {
+  display: grid;
+  gap: 18px;
+}
+
+.archiveHeroCard,
+.archiveSectionCard,
+.archiveTimelinePanel,
+.archiveEntityListPanel,
+.archiveEntityDetailPanel {
+  padding: 24px;
+  border-radius: 28px;
+}
+
+.archiveHeroCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 20px;
+}
+
+.archiveHeroCopy {
+  display: grid;
+  gap: 10px;
+}
+
+.archiveHeroCopy h2,
+.archiveSectionCard h2,
+.archiveTimelinePanel h2,
+.archiveEntityDetailPanel h2,
+.archiveEntityListPanel h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.2vw, 2.4rem);
+  line-height: 1.1;
+}
+
+.archiveHeroCopy p,
+.archiveSectionCard p,
+.archiveTimelinePanel p,
+.archiveEntityDetailPanel p,
+.archiveEntityListPanel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.archiveHeroStats,
+.archiveEntityStats,
+.archiveOverviewGrid,
+.archiveYearGrid {
+  display: grid;
+  gap: 14px;
+}
+
+.archiveHeroStats,
+.archiveEntityStats,
+.archiveYearGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.archiveOverviewGrid,
+.archiveEntityLayout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archiveStat,
+.archiveYearCard,
+.archiveTimelineCard,
+.archiveEntityItem,
+.archiveRecentItem,
+.archiveLinkedItem,
+.archiveRankItem {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel-strong) 90%, transparent);
+}
+
+.archiveStat {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+}
+
+.archiveStat span,
+.archiveYearCard span,
+.archiveTimelineDate span,
+.archiveEntityItem span,
+.archiveRecentBody span,
+.archiveLinkedItem span,
+.archiveRankItem span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.archiveStat strong,
+.archiveYearCard strong,
+.archiveTimelineDate strong,
+.archiveEntityItem strong,
+.archiveRecentBody strong,
+.archiveLinkedItem strong,
+.archiveRankItem strong {
+  font-size: 1.3rem;
+  line-height: 1.15;
+}
+
+.archiveSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.archiveRecentList,
+.archiveRankList,
+.archiveEntityList,
+.archiveLinkedList,
+.archiveMonthStack,
+.archiveTimelineCards,
+.archiveMiniTrend {
+  display: grid;
+  gap: 12px;
+}
+
+.archiveRecentItem,
+.archiveLinkedItem,
+.archiveRankItem,
+.archiveEntityItem {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 18px;
+  color: inherit;
+  text-align: left;
+}
+
+.archiveRecentItem {
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+}
+
+.archiveRecentDate {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.archiveRecentDate strong {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.archiveRecentBody {
+  display: grid;
+  gap: 3px;
+}
+
+.archiveRecentBody small,
+.archiveTimelineBody small,
+.archiveYearCard small {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.archiveRankItem {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.archiveRankItem strong {
+  font-size: 1rem;
+}
+
+.archiveYearCard {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 18px;
+  color: inherit;
+  text-align: left;
+}
+
+.archiveTimelineControls,
+.archiveYearTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archiveMonthGroup {
+  display: grid;
+  gap: 12px;
+}
+
+.archiveMonthHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.archiveMonthHeading strong {
+  font-size: 1.1rem;
+}
+
+.archiveTimelineCard {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 88px;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  color: inherit;
+  text-align: left;
+  align-items: center;
+}
+
+.archiveTimelineCardActive,
+.archiveEntityItemActive {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 50%, var(--panel-strong));
+}
+
+.archiveTimelineDate {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+}
+
+.archiveTimelineDate strong {
+  font-size: 2rem;
+}
+
+.archiveTimelineBody {
+  display: grid;
+  gap: 4px;
+}
+
+.archiveTimelineThumb {
+  width: 88px;
+  height: 88px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.archiveTimelineThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.archiveEntityDetailPanel,
+.archiveEntityListPanel {
+  align-content: start;
+}
+
+.archiveMiniTrend {
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+}
+
+.archiveMiniTrendBar {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel-strong) 88%, transparent);
+}
+
+.archiveMiniTrendBar span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.archiveMiniTrendBar strong {
+  font-size: 1.1rem;
+}
+
+.archiveAddLayout {
+  align-items: start;
+}
+
 @media (max-width: 1100px) {
+  .archiveHeroCard,
+  .archiveOverviewGrid,
+  .archiveEntityLayout,
+  .archiveHeroStats,
+  .archiveEntityStats,
+  .archiveYearGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .archiveTimelineCard {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .archiveTimelineThumb {
+    display: none;
+  }
+
   .summaryStrip,
   .workspaceGrid,
   .yearlyAggregateGrid,
@@ -1628,6 +1931,15 @@ select {
     padding: 16px;
   }
 
+  .archiveHeroCard,
+  .archiveSectionCard,
+  .archiveTimelinePanel,
+  .archiveEntityListPanel,
+  .archiveEntityDetailPanel {
+    padding: 18px;
+    border-radius: 24px;
+  }
+
   .pageHeader,
   .listHeader,
   .detailHeader,
@@ -1651,8 +1963,33 @@ select {
   .compactGrid,
   .detailForm,
   .batchControls,
-  .batchCandidateEditor {
+  .batchCandidateEditor,
+  .archiveHeroStats,
+  .archiveEntityStats,
+  .archiveYearGrid {
     grid-template-columns: 1fr;
+  }
+
+  .archiveSectionHeader,
+  .archiveTimelineControls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .archiveTimelineCard,
+  .archiveRecentItem,
+  .archiveRankItem {
+    grid-template-columns: 1fr;
+  }
+
+  .archiveTimelineDate {
+    grid-auto-flow: column;
+    gap: 8px;
+    align-items: baseline;
+  }
+
+  .archiveTimelineDate strong {
+    font-size: 1.35rem;
   }
 
   .imageGrid {
