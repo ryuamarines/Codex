@@ -826,7 +826,7 @@ export function PlannerShell() {
   return (
     <main className="min-h-screen p-5 text-slate-900 md:p-6">
       <div className="mx-auto flex max-w-[1880px] flex-col gap-4">
-        <header className="panel flex flex-col gap-4 p-5 xl:flex-row xl:items-end xl:justify-between">
+        <header className="panel flex flex-col gap-4 p-5">
           <div>
             <div className="panel-title">RoomPlaner</div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">RoomPlaner</h1>
@@ -852,7 +852,7 @@ export function PlannerShell() {
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Zoom: {Math.round(viewport.scale * 100)}%</span>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
             <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
             <input
               ref={importJsonInputRef}
@@ -907,33 +907,29 @@ export function PlannerShell() {
             >
               新規プロジェクト
             </button>
-            {firebaseUser ? (
-              <>
-                <button className="button-soft" onClick={loadProjectFromCloud} disabled={cloudBusy}>
-                  Firestore から読込
-                </button>
-                <button className="button-soft" onClick={saveProjectToCloud} disabled={cloudBusy}>
-                  Firestore に保存
-                </button>
-                <button className="button-soft" onClick={signOut} disabled={cloudBusy}>
-                  ログアウト
-                </button>
-              </>
-            ) : (
-              <button className="button-soft" onClick={signIn} disabled={!firebaseConfigured || cloudBusy}>
-                Googleでログイン
-              </button>
-            )}
           </div>
         </header>
 
-        <div className="grid gap-4 xl:grid-cols-[270px_minmax(0,1fr)] min-[1800px]:grid-cols-[270px_minmax(0,1fr)_330px]">
-          <aside className="panel h-fit p-4 min-[1800px]:sticky min-[1800px]:top-4">
+        <div className="grid gap-4 min-[1480px]:grid-cols-[300px_minmax(0,1fr)] min-[2100px]:grid-cols-[300px_minmax(0,1fr)_330px]">
+          <aside className="panel h-fit p-4 min-[1480px]:sticky min-[1480px]:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">アカウント / クラウド</div>
-              <div className="mt-2 text-sm text-slate-600">
-                {firebaseUser ? `ログイン中: ${firebaseUser.displayName || firebaseUser.email || firebaseUser.uid}` : "未ログイン"}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">アカウント / クラウド</div>
+                  <div className="mt-2 text-sm text-slate-600">
+                    {firebaseUser ? `ログイン中: ${firebaseUser.displayName || firebaseUser.email || firebaseUser.uid}` : "未ログイン"}
+                  </div>
+                </div>
+                <div
+                  className={
+                    firebaseUser
+                      ? "rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                      : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500"
+                  }
+                >
+                  {firebaseUser ? "ONLINE" : "OFFLINE"}
+                </div>
               </div>
               <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
                 旧JSONを読み込んでから Firestore に保存すると、公開URL側で自分のデータとして持てます。
@@ -941,6 +937,25 @@ export function PlannerShell() {
               {cloudMessage ? (
                 <div className="mt-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">{cloudMessage}</div>
               ) : null}
+              <div className="mt-3 grid gap-2">
+                {firebaseUser ? (
+                  <>
+                    <button className="button-soft w-full" onClick={loadProjectFromCloud} disabled={cloudBusy}>
+                      Firestore から読込
+                    </button>
+                    <button className="button-soft w-full" onClick={saveProjectToCloud} disabled={cloudBusy}>
+                      Firestore に保存
+                    </button>
+                    <button className="button-danger w-full" onClick={signOut} disabled={cloudBusy}>
+                      ログアウト
+                    </button>
+                  </>
+                ) : (
+                  <button className="button-strong w-full" onClick={signIn} disabled={!firebaseConfigured || cloudBusy}>
+                    Googleでログイン
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-4 grid gap-2">
               <label className="button-soft cursor-pointer text-center">
@@ -1281,7 +1296,7 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 xl:col-span-2 min-[1800px]:col-span-1 min-[1800px]:sticky min-[1800px]:top-4">
+          <aside className="panel h-fit p-4 min-[1480px]:col-span-2 min-[2100px]:col-span-1 min-[2100px]:sticky min-[2100px]:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (
