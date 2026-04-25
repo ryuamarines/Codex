@@ -34,7 +34,25 @@ function readFirebaseConfig(): FirebaseConfig | null {
     return null;
   }
 
-  return config as FirebaseConfig;
+  return resolveFirebaseConfig(config as FirebaseConfig);
+}
+
+function resolveFirebaseConfig(config: FirebaseConfig): FirebaseConfig {
+  if (typeof window === "undefined") {
+    return config;
+  }
+
+  const hostname = window.location.hostname;
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+
+  if (isLocalHost) {
+    return config;
+  }
+
+  return {
+    ...config,
+    authDomain: window.location.host
+  };
 }
 
 let cachedApp: FirebaseApp | null | undefined;

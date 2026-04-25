@@ -624,7 +624,7 @@ export function LiveLogArtistsView({
         ref={(element) => {
           analyticsTileRefs.current.artistYearStackedChart = element;
         }}
-        className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights.artistYearStackedChart}`}
+        className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights.artistYearStackedChart} archiveEntityAnalyticsPanel`}
       >
         {tileMap.artistYearStackedChart}
       </div>
