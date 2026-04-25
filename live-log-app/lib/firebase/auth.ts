@@ -1,7 +1,9 @@
 import {
+  browserLocalPersistence,
   GoogleAuthProvider,
   getRedirectResult,
   onAuthStateChanged,
+  setPersistence,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -18,10 +20,14 @@ function shouldUseRedirectForGoogleSignIn() {
   const isIOS =
     /iPhone|iPad|iPod/.test(userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(userAgent);
   const isTouchDevice = navigator.maxTouchPoints > 1;
   const isCompactViewport = window.matchMedia("(max-width: 900px)").matches;
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (typeof navigator !== "undefined" && "standalone" in navigator && Boolean(navigator.standalone));
 
-  return isIOS || (isTouchDevice && isCompactViewport);
+  return isIOS || isAndroid || isStandalone || (isTouchDevice && isCompactViewport);
 }
 
 export function observeFirebaseUser(callback: (user: User | null) => void) {
@@ -45,6 +51,7 @@ export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/drive.file");
   provider.setCustomParameters({ prompt: "select_account" });
+  await setPersistence(auth, browserLocalPersistence);
 
   if (shouldUseRedirectForGoogleSignIn()) {
     await signInWithRedirect(auth, provider);

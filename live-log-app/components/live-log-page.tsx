@@ -1321,6 +1321,19 @@ export function LiveLogPage() {
     setSelectedEntryIds([]);
   }
 
+  function handleBatchApply(nextEntriesOrUpdater: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])) {
+    const nextEntries =
+      typeof nextEntriesOrUpdater === "function"
+        ? nextEntriesOrUpdater(entriesRef.current)
+        : nextEntriesOrUpdater;
+
+    entriesRef.current = nextEntries;
+    setEntries(nextEntries);
+    void persistEntriesToCloud(nextEntries).catch(() => {
+      setActionNotice("画像ロット取り込みは反映しました。クラウド保存は自動で再確認します。");
+    });
+  }
+
   const positionedTiles = createDashboardLayout(
     analyticsTileOrder,
     resolvedAnalyticsTileSizes,
@@ -1602,7 +1615,7 @@ export function LiveLogPage() {
           onUpdateBulkEdit={updateBulkEdit}
           onApplyBulkUpdate={applyBulkUpdate}
           onDeleteSelectedEntries={deleteSelectedEntries}
-          onBatchApply={setEntries}
+          onBatchApply={handleBatchApply}
           onLinkedToEntry={(entryId) => {
             setQuery("");
             setActiveTool(null);

@@ -1,10 +1,7 @@
 "use client";
 
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
-import {
-  ArtistYearStackedChartCard,
-  ArtistYearTrendCard
-} from "@/components/analytics-cards";
+import { ArtistYearTrendCard } from "@/components/analytics-cards";
 import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordListTable } from "@/components/record-list-table";
 import { RecordToolsPanel } from "@/components/record-tools-panel";
@@ -224,13 +221,6 @@ export function LiveLogHomeView({
       </section>
 
       <section className="archiveOverviewGrid">
-        <ArtistYearStackedChartCard
-          title="アーティスト推移"
-          years={trendYears}
-          items={trendItems}
-          height="standard"
-          size="wide"
-        />
         <ArtistYearTrendCard years={trendYears} items={trendItems} height="standard" />
       </section>
 

@@ -76,21 +76,25 @@ export function useDriveSession({
       void refreshSession();
     }, 60_000);
 
-    void consumeGoogleRedirectAccessToken().then((token) => {
-      if (!token) {
-        return;
-      }
+    void consumeGoogleRedirectAccessToken()
+      .then((token) => {
+        if (!token) {
+          return;
+        }
 
-      void createDriveSession(token)
-        .then((session) => {
-          setHasDriveSession(session.connected);
-          setDriveSessionSavedAt(session.savedAt);
-          showMessage("Google Drive 連携を更新しました。");
-        })
-        .catch(() => {
-          showMessage("Google Drive 連携の更新に失敗しました。");
-        });
-    });
+        void createDriveSession(token)
+          .then((session) => {
+            setHasDriveSession(session.connected);
+            setDriveSessionSavedAt(session.savedAt);
+            showMessage("Google Drive 連携を更新しました。");
+          })
+          .catch(() => {
+            showMessage("Google Drive 連携の更新に失敗しました。");
+          });
+      })
+      .catch(() => {
+        showMessage("Google ログインの復帰に失敗しました。もう一度ログインしてください。");
+      });
 
     return () => {
       cancelled = true;
