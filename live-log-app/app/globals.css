@@ -1965,6 +1965,215 @@ select {
   align-items: start;
 }
 
+.archiveAddComposer,
+.archiveAddUtilities,
+.shareSnapshotCard {
+  display: grid;
+  gap: 20px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+}
+
+.archiveAddSteps,
+.archiveAddUtilityGrid,
+.shareSnapshotSectionStack {
+  display: grid;
+  gap: 18px;
+}
+
+.archiveAddStep,
+.archiveUtilityCard,
+.shareSnapshotSectionCard {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel-strong) 92%, transparent);
+}
+
+.archiveAddStepHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.archiveAddStepHeader span:first-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.archiveAddStepHeader strong,
+.shareSnapshotSectionCard h2 {
+  font-size: 1.05rem;
+}
+
+.archiveAddStepHeader small {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.archiveAddGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.archiveAddGridPrimary {
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+}
+
+.archiveField {
+  display: grid;
+  gap: 8px;
+}
+
+.archiveField span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.archiveFieldWide {
+  grid-column: 1 / -1;
+}
+
+.archiveAddSubmitRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.archiveAddSubmitRowStack {
+  display: grid;
+  justify-items: start;
+}
+
+.shareSnapshotPage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--accent-soft) 65%, transparent), transparent 56%),
+    var(--background);
+}
+
+.shareSnapshotCard {
+  width: min(100%, 920px);
+}
+
+.shareSnapshotHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.shareSnapshotEyebrow {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.shareSnapshotGeneratedAt {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.shareSnapshotMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.shareSnapshotMetricCard {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel-strong) 88%, transparent);
+}
+
+.shareSnapshotMetricCard span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.shareSnapshotMetricCard strong {
+  font-size: clamp(1.4rem, 2vw, 2rem);
+}
+
+.shareSnapshotList,
+.shareSnapshotTrend,
+.shareSnapshotArtistYearList {
+  display: grid;
+  gap: 10px;
+}
+
+.shareSnapshotListItem,
+.shareSnapshotTrendRow,
+.shareSnapshotArtistYearRow {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel-strong) 86%, transparent);
+}
+
+.shareSnapshotListItem {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+}
+
+.shareSnapshotTrendRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.shareSnapshotArtistYearHeader,
+.shareSnapshotArtistYearValues {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  gap: 8px;
+}
+
+.shareSnapshotArtistYearHeader {
+  padding-left: min(42%, 240px);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.shareSnapshotArtistYearRow {
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.4fr);
+}
+
+.shareSnapshotArtistYearMeta {
+  display: grid;
+  gap: 4px;
+}
+
+.shareSnapshotArtistYearMeta span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 @media (max-width: 1100px) {
   .archiveAppShell {
     grid-template-columns: 1fr;
@@ -1979,7 +2188,9 @@ select {
   .archiveEntityLayout,
   .archiveHeroStats,
   .archiveEntityStats,
-  .archiveYearGrid {
+  .archiveYearGrid,
+  .archiveAddGrid,
+  .shareSnapshotMetricGrid {
     grid-template-columns: 1fr;
   }
 
@@ -2084,6 +2295,23 @@ select {
   .archiveTimelineControls {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .archiveAddComposer,
+  .archiveAddUtilities,
+  .shareSnapshotCard {
+    padding: 22px;
+    border-radius: 24px;
+  }
+
+  .archiveAddGridPrimary,
+  .archiveAddGrid,
+  .shareSnapshotArtistYearRow {
+    grid-template-columns: 1fr;
+  }
+
+  .shareSnapshotArtistYearHeader {
+    padding-left: 0;
   }
 
   .archiveTimelineCard,

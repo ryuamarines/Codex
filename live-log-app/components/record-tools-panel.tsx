@@ -75,138 +75,282 @@ export function RecordToolsPanel({
 }: RecordToolsPanelProps) {
   return (
     <>
-      <div className="listHeader">
-        <div>
-          <h2>一覧</h2>
-          <p>{filteredEntryCount}件を表示中</p>
+      <section className="panel archiveAddComposer">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Add Event</p>
+            <h2>ライブを追加する</h2>
+            <p>必要な情報から順に入れて、記録を軽く作れる入力画面です。</p>
+          </div>
         </div>
-        <div className="toolButtons">
-          <button
-            className={activeTool === "create" ? "toolButton activeToolButton" : "toolButton"}
-            type="button"
-            onClick={() => onToggleTool("create")}
-          >
-            新規登録
-          </button>
-          <button
-            className={activeTool === "csv" ? "toolButton activeToolButton" : "toolButton"}
-            type="button"
-            onClick={() => onToggleTool("csv")}
-          >
-            CSV取込み
-          </button>
-          <button
-            className={activeTool === "photo" ? "toolButton activeToolButton" : "toolButton"}
-            type="button"
-            onClick={() => onToggleTool("photo")}
-          >
-            写真取込み
-          </button>
-          <button
-            className={activeTool === "bulk" ? "toolButton activeToolButton" : "toolButton"}
-            type="button"
-            onClick={() => onToggleTool("bulk")}
-          >
-            まとめ編集
-          </button>
-        </div>
-      </div>
 
-      <label className="searchBox">
-        <span>検索</span>
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="公演名 / 会場 / 出演者 / メモ"
-        />
-      </label>
-
-      <div className="densityToggle">
-        <button
-          className={recordVisibilityFilter === "all" ? "toolButton activeToolButton" : "toolButton"}
-          type="button"
-          onClick={() => onRecordVisibilityFilterChange("all")}
-        >
-          全件
-        </button>
-        <button
-          className={recordVisibilityFilter === "withPhotos" ? "toolButton activeToolButton" : "toolButton"}
-          type="button"
-          onClick={() => onRecordVisibilityFilterChange("withPhotos")}
-        >
-          写真あり
-        </button>
-        <button
-          className={recordVisibilityFilter === "withUnsyncedImages" ? "toolButton activeToolButton" : "toolButton"}
-          type="button"
-          onClick={() => onRecordVisibilityFilterChange("withUnsyncedImages")}
-        >
-          未同期画像あり
-        </button>
-      </div>
-
-      {activeTool ? (
-        <div className="panel toolPanel">
-          {activeTool === "create" ? (
-            <form className="compactForm" onSubmit={onManualSubmit}>
-              <div className="panelHeader">
-                <h2>新規登録</h2>
-                <p>登録機能は補助的位置づけにしています。</p>
+        <form className="archiveAddSteps" onSubmit={onManualSubmit}>
+          <section className="archiveAddStep">
+            <div className="archiveAddStepHeader">
+              <span>1</span>
+              <div>
+                <strong>基本情報</strong>
+                <small>まずは日付・公演名・会場だけで始められます。</small>
               </div>
-              <div className="compactGrid">
-                <input
-                  required
-                  value={manualForm.title}
-                  onChange={(event) => onUpdateForm("title", event.target.value)}
-                  placeholder="公演名"
-                />
+            </div>
+            <div className="archiveAddGrid archiveAddGridPrimary">
+              <label className="archiveField">
+                <span>日付</span>
                 <input
                   required
                   type="date"
                   value={manualForm.date}
                   onChange={(event) => onUpdateForm("date", event.target.value)}
                 />
+              </label>
+              <label className="archiveField archiveFieldWide">
+                <span>公演名</span>
                 <input
-                  value={manualForm.place}
-                  onChange={(event) => onUpdateForm("place", event.target.value)}
-                  placeholder="場所"
+                  required
+                  value={manualForm.title}
+                  onChange={(event) => onUpdateForm("title", event.target.value)}
+                  placeholder="公演名"
                 />
+              </label>
+              <label className="archiveField">
+                <span>会場</span>
                 <input
                   required
                   value={manualForm.venue}
                   onChange={(event) => onUpdateForm("venue", event.target.value)}
                   placeholder="会場"
                 />
+              </label>
+              <label className="archiveField">
+                <span>地域</span>
+                <input
+                  value={manualForm.place}
+                  onChange={(event) => onUpdateForm("place", event.target.value)}
+                  placeholder="場所"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="archiveAddStep">
+            <div className="archiveAddStepHeader">
+              <span>2</span>
+              <div>
+                <strong>出演アーティストとメモ</strong>
+                <small>あとで追記しても大丈夫です。</small>
+              </div>
+            </div>
+            <div className="archiveAddGrid">
+              <label className="archiveField archiveFieldWide">
+                <span>出演アーティスト</span>
                 <input
                   required
                   value={manualForm.artistsText}
                   onChange={(event) => onUpdateForm("artistsText", event.target.value)}
                   placeholder="出演者"
                 />
+              </label>
+              <label className="archiveField">
+                <span>形式</span>
                 <input
                   value={manualForm.genre}
                   onChange={(event) => onUpdateForm("genre", event.target.value)}
-                  placeholder="ジャンル"
+                  placeholder="ワンマン / フェス"
                 />
+              </label>
+              <label className="archiveField archiveFieldWide">
+                <span>メモ</span>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={manualForm.memo}
                   onChange={(event) => onUpdateForm("memo", event.target.value)}
                   placeholder="メモ"
                 />
+              </label>
+            </div>
+          </section>
+
+          <div className="archiveAddSubmitRow">
+            <button className="actionButton" type="submit">
+              記録を追加
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel archiveAddComposer">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Add Photos</p>
+            <h2>写真から追加する</h2>
+            <p>既存記録に紐づけるか、そのまま新規候補を作れます。</p>
+          </div>
+        </div>
+        <div className="archiveAddSteps">
+          <section className="archiveAddStep">
+            <div className="archiveAddStepHeader">
+              <span>1</span>
+              <div>
+                <strong>候補情報</strong>
+                <small>公演名と日付があると結びつけやすくなります。</small>
               </div>
-              <button className="actionButton" type="submit">
-                追加する
-              </button>
-            </form>
-          ) : null}
+            </div>
+            <div className="archiveAddGrid">
+              <label className="archiveField archiveFieldWide">
+                <span>公演名</span>
+                <input
+                  value={photoForm.title}
+                  onChange={(event) => onUpdatePhotoForm("title", event.target.value)}
+                  placeholder="公演名"
+                />
+              </label>
+              <label className="archiveField">
+                <span>日付</span>
+                <input
+                  type="date"
+                  value={photoForm.date}
+                  onChange={(event) => onUpdatePhotoForm("date", event.target.value)}
+                />
+              </label>
+              <label className="archiveField">
+                <span>会場</span>
+                <input
+                  value={photoForm.venue}
+                  onChange={(event) => onUpdatePhotoForm("venue", event.target.value)}
+                  placeholder="会場"
+                />
+              </label>
+              <label className="archiveField">
+                <span>地域</span>
+                <input
+                  value={photoForm.place}
+                  onChange={(event) => onUpdatePhotoForm("place", event.target.value)}
+                  placeholder="場所"
+                />
+              </label>
+              <label className="archiveField archiveFieldWide">
+                <span>出演アーティスト</span>
+                <input
+                  value={photoForm.artistsText}
+                  onChange={(event) => onUpdatePhotoForm("artistsText", event.target.value)}
+                  placeholder="出演者"
+                />
+              </label>
+              <label className="archiveField">
+                <span>写真の種類</span>
+                <select
+                  value={photoForm.photoType}
+                  onChange={(event) =>
+                    onUpdatePhotoForm("photoType", event.target.value as PhotoUploadInput["photoType"])
+                  }
+                >
+                  <option value="signboard">立て看板</option>
+                  <option value="eticket">電子チケット</option>
+                  <option value="paperTicket">リアルチケット</option>
+                </select>
+              </label>
+              <label className="archiveField">
+                <span>形式</span>
+                <input
+                  value={photoForm.genre}
+                  onChange={(event) => onUpdatePhotoForm("genre", event.target.value)}
+                  placeholder="ジャンル"
+                />
+              </label>
+              <label className="archiveField archiveFieldWide">
+                <span>メモ</span>
+                <textarea
+                  rows={3}
+                  value={photoForm.memo}
+                  onChange={(event) => onUpdatePhotoForm("memo", event.target.value)}
+                  placeholder="メモ"
+                />
+              </label>
+            </div>
+          </section>
+
+          <div className="archiveAddSubmitRow archiveAddSubmitRowStack">
+            <button className="actionButton" type="button" onClick={() => photoInputRef.current?.click()}>
+              写真を選ぶ
+            </button>
+            <p className="importHint">{imageMessage}</p>
+            <input
+              ref={photoInputRef}
+              className="hiddenInput"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={onPhotoImport}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="panel archiveAddUtilities">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Utilities</p>
+            <h2>検索と補助操作</h2>
+            <p>既存記録を探したり、CSV と一括編集を使うときだけ開きます。</p>
+          </div>
+          <div className="toolButtons">
+            <button
+              className={activeTool === "csv" ? "toolButton activeToolButton" : "toolButton"}
+              type="button"
+              onClick={() => onToggleTool("csv")}
+            >
+              CSV取込み
+            </button>
+            <button
+              className={activeTool === "bulk" ? "toolButton activeToolButton" : "toolButton"}
+              type="button"
+              onClick={() => onToggleTool("bulk")}
+            >
+              まとめ編集
+            </button>
+          </div>
+        </div>
+
+        <div className="archiveAddUtilityGrid">
+          <label className="searchBox">
+            <span>既存記録を探す</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="公演名 / 会場 / 出演者 / メモ"
+            />
+          </label>
+
+          <div className="densityToggle">
+            <button
+              className={recordVisibilityFilter === "all" ? "toolButton activeToolButton" : "toolButton"}
+              type="button"
+              onClick={() => onRecordVisibilityFilterChange("all")}
+            >
+              全件 {filteredEntryCount}
+            </button>
+            <button
+              className={recordVisibilityFilter === "withPhotos" ? "toolButton activeToolButton" : "toolButton"}
+              type="button"
+              onClick={() => onRecordVisibilityFilterChange("withPhotos")}
+            >
+              写真あり
+            </button>
+            <button
+              className={recordVisibilityFilter === "withUnsyncedImages" ? "toolButton activeToolButton" : "toolButton"}
+              type="button"
+              onClick={() => onRecordVisibilityFilterChange("withUnsyncedImages")}
+            >
+              未同期画像あり
+            </button>
+          </div>
 
           {activeTool === "csv" ? (
-            <section className="compactForm">
+            <section className="archiveUtilityCard">
               <div className="panelHeader">
                 <h2>CSV取込み</h2>
-                <p>必要なときだけ使う補助機能です。</p>
+                <p>大量登録をしたいときだけ使う補助機能です。</p>
               </div>
               <p className="importHint">{csvMessage}</p>
               <button
@@ -223,83 +367,12 @@ export function RecordToolsPanel({
                 accept=".csv,text/csv"
                 onChange={onCsvImport}
               />
-              <code className="csvExample">
-                date,event_title,venue,venues_raw,area,artists,event_type,notes
-              </code>
-            </section>
-          ) : null}
-
-          {activeTool === "photo" ? (
-            <section className="compactForm">
-              <div className="panelHeader">
-                <h2>写真取込み</h2>
-                <p>既存レコードに紐づけ、なければ新規作成します。</p>
-              </div>
-              <div className="compactGrid">
-                <input
-                  value={photoForm.title}
-                  onChange={(event) => onUpdatePhotoForm("title", event.target.value)}
-                  placeholder="公演名"
-                />
-                <input
-                  type="date"
-                  value={photoForm.date}
-                  onChange={(event) => onUpdatePhotoForm("date", event.target.value)}
-                />
-                <input
-                  value={photoForm.place}
-                  onChange={(event) => onUpdatePhotoForm("place", event.target.value)}
-                  placeholder="場所"
-                />
-                <input
-                  value={photoForm.venue}
-                  onChange={(event) => onUpdatePhotoForm("venue", event.target.value)}
-                  placeholder="会場"
-                />
-                <input
-                  value={photoForm.artistsText}
-                  onChange={(event) => onUpdatePhotoForm("artistsText", event.target.value)}
-                  placeholder="出演者"
-                />
-                <input
-                  value={photoForm.genre}
-                  onChange={(event) => onUpdatePhotoForm("genre", event.target.value)}
-                  placeholder="ジャンル"
-                />
-                <select
-                  value={photoForm.photoType}
-                  onChange={(event) =>
-                    onUpdatePhotoForm("photoType", event.target.value as PhotoUploadInput["photoType"])
-                  }
-                >
-                  <option value="signboard">立て看板</option>
-                  <option value="eticket">電子チケット</option>
-                  <option value="paperTicket">リアルチケット</option>
-                </select>
-                <textarea
-                  rows={3}
-                  value={photoForm.memo}
-                  onChange={(event) => onUpdatePhotoForm("memo", event.target.value)}
-                  placeholder="メモ"
-                />
-              </div>
-              <button className="actionButton" type="button" onClick={() => photoInputRef.current?.click()}>
-                写真を選択
-              </button>
-              <input
-                ref={photoInputRef}
-                className="hiddenInput"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={onPhotoImport}
-              />
-              <p className="importHint">{imageMessage}</p>
+              <code className="csvExample">date,event_title,venue,venues_raw,area,artists,event_type,notes</code>
             </section>
           ) : null}
 
           {activeTool === "bulk" ? (
-            <section className="compactForm">
+            <section className="archiveUtilityCard">
               <div className="panelHeader">
                 <h2>まとめ編集</h2>
                 <p>{visibleSelectedCount}件選択中。空欄は変更しません。</p>
@@ -332,7 +405,7 @@ export function RecordToolsPanel({
             </section>
           ) : null}
         </div>
-      ) : null}
+      </section>
     </>
   );
 }

@@ -176,6 +176,7 @@ Google Drive API をサーバー側で呼ぶため、公開にはサーバー ru
 - 現在の共有対象
   - 集計タイルの PNG
   - 年別まとめの PNG
+  - 集計専用の共有スナップショット URL
 - 今後の計画
   - `docs/share-plan.md`
 
