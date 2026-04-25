@@ -775,6 +775,30 @@ export function LiveLogPage() {
     await captureAndShareElement(element, label);
   }
 
+  function renderYearlySummaryActions() {
+    return (
+      <div className="tileActions" data-share-exclude="true">
+        <button className="tileActionButton" type="button" onClick={() => void shareYearlySummary()}>
+          共有
+        </button>
+      </div>
+    );
+  }
+
+  function renderYearlyAggregateActions(key: YearlyAggregateKey, label: string) {
+    return (
+      <div className="tileActions" data-share-exclude="true">
+        <button
+          className="tileActionButton"
+          type="button"
+          onClick={() => void shareYearlyAggregate(key, label)}
+        >
+          共有
+        </button>
+      </div>
+    );
+  }
+
   function createTileActions(tileId: AnalyticsTileId, label: string) {
     const index = analyticsTileOrder.indexOf(tileId);
     const isFirst = index <= 0;
@@ -1405,6 +1429,51 @@ export function LiveLogPage() {
               height="standard"
             />
           </section>
+
+          <section className="panel archiveSectionCard">
+            <div className="archiveSectionHeader">
+              <div>
+                <p className="eyebrow">Analytics</p>
+                <h2>分析を並べ替える</h2>
+                <p>サイズ、位置、共有をここで調整できます。</p>
+              </div>
+            </div>
+            <div
+              className="analyticsBoardGrid"
+              style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+            >
+              {positionedTiles.map((tile) => (
+                <div
+                  key={tile.id}
+                  ref={(element) => {
+                    analyticsTileRefs.current[tile.id] = element;
+                  }}
+                  className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+                  style={{
+                    gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+                    gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+                  }}
+                >
+                  {tileMap[tile.id]}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div ref={yearlySummaryRef}>
+            <YearlySummaryPanel
+              selectedYear={selectedYear}
+              availableYears={availableYears}
+              yearOverview={yearOverview}
+              yearAggregates={yearAggregates}
+              onYearChange={setSelectedYear}
+              actions={renderYearlySummaryActions()}
+              registerAggregateRef={(key, element) => {
+                yearlyAggregateRefs.current[key] = element;
+              }}
+              renderAggregateActions={renderYearlyAggregateActions}
+            />
+          </div>
         </section>
       ) : activeView === "timeline" ? (
         <section className="archiveTimelineLayout">
