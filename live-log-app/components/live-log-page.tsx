@@ -16,12 +16,12 @@ import {
   type PhotoImportInput
 } from "@/lib/live-import-utils";
 import {
-  appendImagesToEntry,
   applyBulkEditToEntries,
   applyPhotoImportToEntries,
   createManualEntry,
   deleteEntriesById,
   importEntriesFromCsvContent,
+  mergeImagesWithDedup,
   updateEntryFieldValue
 } from "@/lib/live-entry-actions";
 import { BatchImportBoard } from "@/components/batch-import-board";
@@ -147,7 +147,6 @@ export function LiveLogPage() {
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [listDensity, setListDensity] = useState<ListDensity>("comfortable");
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
-  const [batchPreviewEntryId, setBatchPreviewEntryId] = useState("");
   const [localEntriesReady, setLocalEntriesReady] = useState(false);
   const [activeTool, setActiveTool] = useState<ActiveTool>(null);
   const [selectedEntryId, setSelectedEntryId] = useState<string>("");
@@ -365,10 +364,6 @@ export function LiveLogPage() {
     () => entries.find((entry) => entry.id === selectedEntryId) ?? null,
     [entries, selectedEntryId]
   );
-  const batchPreviewEntry = useMemo(
-    () => entries.find((entry) => entry.id === batchPreviewEntryId) ?? null,
-    [entries, batchPreviewEntryId]
-  );
   const visibleSelectedCount = selectedEntryIds.filter((id) =>
     filteredEntries.some((entry) => entry.id === id)
   ).length;
@@ -411,12 +406,6 @@ export function LiveLogPage() {
       setSelectedEntryId(filteredEntries[0].id);
     }
   }, [filteredEntries, selectedEntryId]);
-
-  useEffect(() => {
-    if (activeView !== "batchImport") {
-      setBatchPreviewEntryId("");
-    }
-  }, [activeView]);
 
   useEffect(() => {
     if (!actionNotice && !highlightedEntryId) {
@@ -800,17 +789,34 @@ export function LiveLogPage() {
         )
       );
 
-      const nextEntries = appendImagesToEntry(entriesRef.current, entryId, nextImages);
+      const currentEntry = entriesRef.current.find((entry) => entry.id === entryId);
+
+      if (!currentEntry) {
+        setImageMessage("画像の追加先が見つかりませんでした。");
+        event.target.value = "";
+        return;
+      }
+
+      const mergedImages = mergeImagesWithDedup(currentEntry.images, nextImages);
+      const nextEntries = entriesRef.current.map((entry) =>
+        entry.id === entryId ? { ...entry, images: mergedImages.images } : entry
+      );
       const nextEntry = nextEntries.find((entry) => entry.id === entryId);
       entriesRef.current = nextEntries;
       setEntries(nextEntries);
-      if (nextEntry) {
+      if (nextEntry && mergedImages.addedCount > 0) {
         void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
           setImageMessage("画像は追加しました。クラウド保存は自動で再確認します。");
         });
       }
-      setActionNotice(`${files.length} 件の画像を追加しました。`);
-      setImageMessage(`${files.length} 件の画像を追加しました。`);
+      const uploadMessage =
+        mergedImages.addedCount === 0
+          ? "同じ画像はすでに登録済みのため追加していません。"
+          : mergedImages.duplicateCount > 0
+            ? `${mergedImages.addedCount} 件の画像を追加し、重複 ${mergedImages.duplicateCount} 件はスキップしました。`
+            : `${mergedImages.addedCount} 件の画像を追加しました。`;
+      setActionNotice(uploadMessage);
+      setImageMessage(uploadMessage);
       event.target.value = "";
     } catch {
       setImageMessage("画像の読み込みに失敗しました。別の画像で試してください。");
@@ -845,7 +851,7 @@ export function LiveLogPage() {
       const targetEntry = result.entries.find((entry) => entry.id === result.selectedEntryId);
       entriesRef.current = result.entries;
       setEntries(result.entries);
-      if (targetEntry) {
+      if (targetEntry && result.addedCount > 0) {
         void persistEntryToCloud(result.entries, targetEntry).catch(() => {
           setImageMessage("写真は登録しました。クラウド保存は自動で再確認します。");
         });
@@ -853,10 +859,16 @@ export function LiveLogPage() {
       setSelectedEntryId(result.selectedEntryId);
       setHighlightedEntryId(result.selectedEntryId);
 
-      setActionNotice("写真を登録しました。対象の記録を開いています。");
-      setImageMessage("写真を登録しました。既存データがあれば紐づけ、なければ新規作成しています。");
+      const importMessage =
+        result.addedCount === 0
+          ? "同じ写真はすでに登録済みのため追加していません。"
+          : result.duplicateCount > 0
+            ? `写真を ${result.addedCount} 件追加し、重複 ${result.duplicateCount} 件はスキップしました。`
+            : "写真を登録しました。既存データがあれば紐づけ、なければ新規作成しています。";
+      setActionNotice(importMessage);
+      setImageMessage(importMessage);
       setActiveView("records");
-      setIsDetailDrawerOpen(true);
+      setIsDetailDrawerOpen(false);
       setActiveTool(null);
       event.target.value = "";
     } catch {
@@ -1253,27 +1265,10 @@ export function LiveLogPage() {
               setActiveTool(null);
               setSelectedEntryIds([]);
               setSelectedEntryId(entryId);
-              setBatchPreviewEntryId(entryId);
             }}
           />
         </section>
       )}
-
-      {activeView === "batchImport" && batchPreviewEntry ? (
-        <RecordDetailPanel
-          selectedEntry={batchPreviewEntry}
-          detailPhotoInputRef={detailPhotoInputRef}
-          variant="overlay"
-          isOpen={Boolean(batchPreviewEntryId)}
-          onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
-          onClose={() => setBatchPreviewEntryId("")}
-          onEntryImageUpload={handleEntryImageUpload}
-          onDeleteImage={handleEntryImageDelete}
-          onRetryImageSync={handleRetryImageSync}
-          onRetryEntryImageSync={handleRetryEntryImageSync}
-          onUpdateEntryField={updateEntryField}
-        />
-      ) : null}
 
       {activeView === "records" && selectedEntry ? (
         <RecordDetailPanel

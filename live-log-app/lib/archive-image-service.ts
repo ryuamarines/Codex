@@ -22,6 +22,7 @@ export class LocalArchiveImageService implements ArchiveImageService {
     caption?: string,
     options?: SaveFileOptions
   ) {
+    const sourceFingerprint = createLocalImageFingerprint(file, type);
     options?.onStatus?.("画像を準備しています...");
     const preparedFile = await withTimeout(
       prepareUploadFile(file),
@@ -31,8 +32,16 @@ export class LocalArchiveImageService implements ArchiveImageService {
     options?.onStatus?.("画像を端末に保存しています...");
     options?.onProgress?.(1);
     const src = await readFileAsDataUrl(preparedFile);
-    return createPendingImage(src, type, caption ?? file.name);
+    return createPendingImage(src, type, caption ?? file.name, {
+      sourceFingerprint,
+      sourceFileName: file.name,
+      sourceFileSize: file.size
+    });
   }
+}
+
+function createLocalImageFingerprint(file: File, type: LiveEntryImage["type"]) {
+  return [type, file.name.trim().toLowerCase(), file.size, file.lastModified].join(":");
 }
 
 function readFileAsDataUrl(file: File) {

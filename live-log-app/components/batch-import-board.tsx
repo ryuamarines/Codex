@@ -11,6 +11,7 @@ import {
   type ArchiveImageService
 } from "@/lib/archive-image-service";
 import { runImageOcr } from "@/lib/image-ocr-service";
+import { mergeImagesWithDedup } from "@/lib/live-entry-actions";
 import { createEntry, parseArtists } from "@/lib/live-entry-utils";
 import type {
   BatchImageType,
@@ -228,6 +229,7 @@ export function BatchImportBoard({
     let nextEntries = [...entries];
     let applied = 0;
     let skipped = 0;
+    let duplicateCount = 0;
 
     for (const item of targets) {
       if (item.reviewState === "excluded") {
@@ -247,10 +249,20 @@ export function BatchImportBoard({
             item.fileName
           );
 
-          nextEntries = nextEntries.map((entry) =>
-            entry.id === item.finalLinkedEntryId ? { ...entry, images: [image, ...entry.images] } : entry
-          );
-          applied += 1;
+          nextEntries = nextEntries.map((entry) => {
+            if (entry.id !== item.finalLinkedEntryId) {
+              return entry;
+            }
+
+            const merged = mergeImagesWithDedup(entry.images, [image]);
+            duplicateCount += merged.duplicateCount;
+
+            if (merged.addedCount > 0) {
+              applied += 1;
+            }
+
+            return { ...entry, images: merged.images };
+          });
         } catch {
           skipped += 1;
         }
@@ -305,8 +317,18 @@ export function BatchImportBoard({
       )
     );
 
-    if (skipped > 0) {
-      setMessage(`${applied} 件を確定し、${skipped} 件は紐づけ先不足などで保留にしました。`);
+    if (skipped > 0 || duplicateCount > 0) {
+      const parts = [`${applied} 件を確定しました。`];
+
+      if (duplicateCount > 0) {
+        parts.push(`重複 ${duplicateCount} 件は追加していません。`);
+      }
+
+      if (skipped > 0) {
+        parts.push(`${skipped} 件は紐づけ先不足などで保留にしました。`);
+      }
+
+      setMessage(parts.join(" "));
       return;
     }
 
@@ -372,11 +394,21 @@ export function BatchImportBoard({
         }
       );
 
+      const merged = mergeImagesWithDedup(matchedEntry?.images ?? [], [image]);
+
+      if (merged.addedCount === 0) {
+        setItems((current) => current.filter((item) => item.id !== itemId));
+        setItemActionState(itemId, null);
+        setMessage(`「${matchedEntry?.title ?? "既存公演"}」には同じ画像があるため追加していません。`);
+        onLinkedToEntry?.(entryId);
+        return;
+      }
+
       setItems((current) => current.filter((item) => item.id !== itemId));
       setItemActionState(itemId, null);
       onApply((current) =>
         current.map((entry) =>
-          entry.id === entryId ? { ...entry, images: [image, ...entry.images] } : entry
+          entry.id === entryId ? { ...entry, images: merged.images } : entry
         )
       );
       onLinkedToEntry?.(entryId);

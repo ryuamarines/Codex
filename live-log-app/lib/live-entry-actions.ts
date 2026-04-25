@@ -14,6 +14,62 @@ type BulkEditInput = {
   genre: string;
 };
 
+function getImageDuplicateKey(image: LiveEntryImage) {
+  const fingerprint = image.sourceFingerprint?.trim();
+
+  if (fingerprint) {
+    return `fingerprint:${fingerprint}`;
+  }
+
+  const fileName = image.sourceFileName?.trim().toLowerCase();
+  const fileSize =
+    typeof image.sourceFileSize === "number" && Number.isFinite(image.sourceFileSize)
+      ? image.sourceFileSize
+      : 0;
+
+  if (fileName && fileSize > 0) {
+    return `file:${fileName}:${fileSize}`;
+  }
+
+  const driveFileId = image.driveFileId?.trim();
+
+  if (driveFileId) {
+    return `drive:${driveFileId}`;
+  }
+
+  return "";
+}
+
+export function mergeImagesWithDedup(
+  existingImages: LiveEntryImage[],
+  incomingImages: LiveEntryImage[]
+) {
+  const seenKeys = new Set(existingImages.map(getImageDuplicateKey).filter(Boolean));
+  const accepted: LiveEntryImage[] = [];
+  let duplicateCount = 0;
+
+  for (const image of incomingImages) {
+    const duplicateKey = getImageDuplicateKey(image);
+
+    if (duplicateKey && seenKeys.has(duplicateKey)) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    if (duplicateKey) {
+      seenKeys.add(duplicateKey);
+    }
+
+    accepted.push(image);
+  }
+
+  return {
+    images: [...accepted, ...existingImages],
+    duplicateCount,
+    addedCount: accepted.length
+  };
+}
+
 export function createManualEntry(input: ManualEntryInput) {
   const nextEntry = createEntry(input);
 
@@ -68,9 +124,14 @@ export function appendImagesToEntry(
   entryId: string,
   images: LiveEntryImage[]
 ) {
-  return entries.map((entry) =>
-    entry.id === entryId ? { ...entry, images: [...images, ...entry.images] } : entry
-  );
+  return entries.map((entry) => {
+    if (entry.id !== entryId) {
+      return entry;
+    }
+
+    const merged = mergeImagesWithDedup(entry.images, images);
+    return { ...entry, images: merged.images };
+  });
 }
 
 export function removeImageFromEntry(
@@ -93,10 +154,13 @@ export function applyPhotoImportToEntries(
   const matchedIndex = findMatchingEntryIndex(entries, photoForm);
 
   if (matchedIndex >= 0) {
+    const merged = mergeImagesWithDedup(entries[matchedIndex].images, images);
     return {
       selectedEntryId: entries[matchedIndex].id,
+      duplicateCount: merged.duplicateCount,
+      addedCount: merged.addedCount,
       entries: entries.map((entry, index) =>
-        index === matchedIndex ? { ...entry, images: [...images, ...entry.images] } : entry
+        index === matchedIndex ? { ...entry, images: merged.images } : entry
       )
     };
   }
@@ -113,6 +177,8 @@ export function applyPhotoImportToEntries(
 
   return {
     selectedEntryId: nextEntry.id,
+    duplicateCount: 0,
+    addedCount: images.length,
     entries: [{ ...nextEntry, images }, ...entries]
   };
 }

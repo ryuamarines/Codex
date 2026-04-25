@@ -3,6 +3,9 @@ export type LiveEntryImage = {
   type: "signboard" | "eticket" | "paperTicket";
   src: string;
   caption?: string;
+  sourceFingerprint?: string;
+  sourceFileName?: string;
+  sourceFileSize?: number;
   storageStatus?: "cloud" | "local_pending" | "syncing" | "error";
   uploadError?: string;
   driveFileId?: string;

@@ -112,13 +112,26 @@ export function createImage(
   src: string,
   type: LiveEntryImage["type"],
   caption?: string,
-  meta?: Partial<Pick<LiveEntryImage, "driveFileId" | "driveWebUrl" | "driveThumbnailUrl">>
+  meta?: Partial<
+    Pick<
+      LiveEntryImage,
+      | "driveFileId"
+      | "driveWebUrl"
+      | "driveThumbnailUrl"
+      | "sourceFingerprint"
+      | "sourceFileName"
+      | "sourceFileSize"
+    >
+  >
 ): LiveEntryImage {
   return {
     id: createImageId(),
     type,
     src,
     caption: caption?.trim() || undefined,
+    sourceFingerprint: meta?.sourceFingerprint?.trim() || undefined,
+    sourceFileName: meta?.sourceFileName?.trim() || undefined,
+    sourceFileSize: meta?.sourceFileSize,
     storageStatus: "cloud",
     driveFileId: meta?.driveFileId,
     driveWebUrl: meta?.driveWebUrl,
@@ -129,13 +142,17 @@ export function createImage(
 export function createPendingImage(
   src: string,
   type: LiveEntryImage["type"],
-  caption?: string
+  caption?: string,
+  meta?: Partial<Pick<LiveEntryImage, "sourceFingerprint" | "sourceFileName" | "sourceFileSize">>
 ): LiveEntryImage {
   return {
     id: createImageId(),
     type,
     src,
     caption: caption?.trim() || undefined,
+    sourceFingerprint: meta?.sourceFingerprint?.trim() || undefined,
+    sourceFileName: meta?.sourceFileName?.trim() || undefined,
+    sourceFileSize: meta?.sourceFileSize,
     storageStatus: "local_pending"
   };
 }
@@ -154,6 +171,12 @@ export function sanitizeEntries(entries: LiveEntry[]) {
       ...image,
       type: normalizeImageType(image.type),
       caption: image.caption?.trim() || undefined,
+      sourceFingerprint: image.sourceFingerprint?.trim() || undefined,
+      sourceFileName: image.sourceFileName?.trim() || undefined,
+      sourceFileSize:
+        typeof image.sourceFileSize === "number" && Number.isFinite(image.sourceFileSize)
+          ? image.sourceFileSize
+          : undefined,
       storageStatus: normalizeStorageStatus(image.storageStatus),
       uploadError: image.uploadError?.trim() || undefined,
       driveFileId: image.driveFileId?.trim() || undefined,
