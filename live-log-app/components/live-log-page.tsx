@@ -138,6 +138,10 @@ function matches(entry: LiveEntry, query: string) {
     .includes(normalized);
 }
 
+function getLeadArtist(entry: LiveEntry) {
+  return entry.artists.find((artist) => artist.trim()) ?? "未設定";
+}
+
 export function LiveLogPage() {
   const [entries, setEntries] = useState<LiveEntry[]>(sampleEntries);
   const [query, setQuery] = useState("");
@@ -1322,9 +1326,9 @@ export function LiveLogPage() {
                       <span>{extractYear(entry.date)}</span>
                     </div>
                     <div className="archiveRecentBody">
-                      <strong>{entry.title}</strong>
-                      <span>{entry.venue}</span>
-                      <small>{entry.artists.join(" / ")}</small>
+                      <strong>{getLeadArtist(entry)}</strong>
+                      <span>{entry.title}</span>
+                      <small>{entry.venue}</small>
                     </div>
                   </button>
                 ))}
@@ -1386,6 +1390,21 @@ export function LiveLogPage() {
               ))}
             </div>
           </section>
+
+          <section className="archiveOverviewGrid">
+            <ArtistYearStackedChartCard
+              title="アーティスト推移"
+              years={trends.artistYears.years}
+              items={trends.artistYears.items}
+              height="standard"
+              size="wide"
+            />
+            <ArtistYearTrendCard
+              years={trends.artistYears.years}
+              items={trends.artistYears.items}
+              height="standard"
+            />
+          </section>
         </section>
       ) : activeView === "timeline" ? (
         <section className="archiveTimelineLayout">
@@ -1434,9 +1453,9 @@ export function LiveLogPage() {
                           <span>{formatWeekday(entry.date)}</span>
                         </div>
                         <div className="archiveTimelineBody">
-                          <strong>{entry.title}</strong>
-                          <span>{entry.venue}</span>
-                          <small>{entry.artists.join(" / ")}</small>
+                          <strong>{getLeadArtist(entry)}</strong>
+                          <span>{entry.title}</span>
+                          <small>{entry.venue}</small>
                         </div>
                         {entry.images[0]?.src ? (
                           <div className="archiveTimelineThumb">
@@ -1499,8 +1518,9 @@ export function LiveLogPage() {
                 <div className="archiveLinkedList">
                   {selectedArtistArchive.entries.map((entry) => (
                     <button key={entry.id} className="archiveLinkedItem" type="button" onClick={() => handleSelectEntry(entry.id)}>
-                      <strong>{entry.title}</strong>
-                      <span>{entry.date} / {entry.venue}</span>
+                      <strong>{getLeadArtist(entry)}</strong>
+                      <span>{entry.title}</span>
+                      <small>{entry.date} / {entry.venue}</small>
                     </button>
                   ))}
                 </div>
@@ -1548,8 +1568,9 @@ export function LiveLogPage() {
                 <div className="archiveLinkedList">
                   {selectedVenueArchive.entries.map((entry) => (
                     <button key={entry.id} className="archiveLinkedItem" type="button" onClick={() => handleSelectEntry(entry.id)}>
-                      <strong>{entry.title}</strong>
-                      <span>{entry.date} / {entry.artists.join(" / ")}</span>
+                      <strong>{getLeadArtist(entry)}</strong>
+                      <span>{entry.title}</span>
+                      <small>{entry.date} / {entry.venue}</small>
                     </button>
                   ))}
                 </div>

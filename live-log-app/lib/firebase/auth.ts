@@ -9,6 +9,21 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
+function shouldUseRedirectForGoogleSignIn() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent ?? "";
+  const isIOS =
+    /iPhone|iPad|iPod/.test(userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isTouchDevice = navigator.maxTouchPoints > 1;
+  const isCompactViewport = window.matchMedia("(max-width: 900px)").matches;
+
+  return isIOS || (isTouchDevice && isCompactViewport);
+}
+
 export function observeFirebaseUser(callback: (user: User | null) => void) {
   const auth = getFirebaseAuth();
 
@@ -31,7 +46,7 @@ export async function signInWithGoogle() {
   provider.addScope("https://www.googleapis.com/auth/drive.file");
   provider.setCustomParameters({ prompt: "select_account" });
 
-  if (typeof window !== "undefined" && window.innerWidth < 768) {
+  if (shouldUseRedirectForGoogleSignIn()) {
     await signInWithRedirect(auth, provider);
     return null;
   }
