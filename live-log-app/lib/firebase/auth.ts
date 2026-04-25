@@ -22,13 +22,14 @@ function shouldUseRedirectForGoogleSignIn() {
     /iPhone|iPad|iPod/.test(userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/i.test(userAgent);
+  const isAlternateMobileBrowser = /CriOS|FxiOS|EdgiOS|DuckDuckGo|YaBrowser/i.test(userAgent);
   const isTouchDevice = navigator.maxTouchPoints > 1;
   const isCompactViewport = window.matchMedia("(max-width: 900px)").matches;
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
     (typeof navigator !== "undefined" && "standalone" in navigator && Boolean(navigator.standalone));
 
-  return isIOS || isAndroid || isStandalone || (isTouchDevice && isCompactViewport);
+  return isIOS || isAndroid || isAlternateMobileBrowser || isStandalone || (isTouchDevice && isCompactViewport);
 }
 
 export function observeFirebaseUser(callback: (user: User | null) => void) {
@@ -67,9 +68,25 @@ export async function signInWithGoogle() {
     return null;
   }
 
-  const result = await signInWithPopup(auth, provider);
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  return credential?.accessToken ?? null;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    return credential?.accessToken ?? null;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/popup-closed-by-user" ||
+      code === "auth/cancelled-popup-request" ||
+      code === "auth/operation-not-supported-in-this-environment"
+    ) {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 export async function consumeGoogleRedirectAccessToken() {

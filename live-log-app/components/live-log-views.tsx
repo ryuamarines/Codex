@@ -629,7 +629,7 @@ export function LiveLogArtistsView({
           <div>
             <p className="eyebrow">Artist Analytics</p>
             <h2>アーティスト分析</h2>
-            <p>上位アーティストと年別推移をここで見ます。</p>
+          <p>選択中アーティストの推移をここで見ます。</p>
           </div>
         </div>
         <div

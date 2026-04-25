@@ -119,7 +119,7 @@ const DEFAULT_COLUMN_WIDTHS: Record<TableColumn, number> = {
 const FIXED_TILE_HEIGHTS: Partial<Record<AnalyticsTileId, TileHeight>> = {};
 
 const FIXED_TILE_SIZES: Partial<Record<AnalyticsTileId, TileSize>> = {};
-const ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY = "live-log-artist-analytics-wide-v1";
+const ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY = "live-log-artist-analytics-wide-v2";
 
 function matches(entry: LiveEntry, query: string) {
   const normalized = query.trim().toLowerCase();
@@ -318,7 +318,6 @@ export function LiveLogPage() {
 
     setAnalyticsTileSizes((current) => ({
       ...current,
-      artists: "wide",
       artistYearStackedChart: "wide"
     }));
     window.localStorage.setItem(ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY, "done");
@@ -1347,7 +1346,7 @@ export function LiveLogPage() {
   }
 
   const timelineTileIds = new Set<AnalyticsTileId>(["yearTrend", "summary"]);
-  const artistTileIds = new Set<AnalyticsTileId>(["artists", "artistYearStackedChart"]);
+  const artistTileIds = new Set<AnalyticsTileId>(["artistYearStackedChart"]);
   const venueTileIds = new Set<AnalyticsTileId>(["venues", "places"]);
   const addTileIds = new Set<AnalyticsTileId>(["genres"]);
   const createScopedTiles = (allowedIds: Set<AnalyticsTileId>) =>
