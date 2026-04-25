@@ -33,6 +33,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
     isFirebaseConfigured() ? "" : "Firebase 環境変数を入れると、Googleログインとクラウド保存を使えます。"
   );
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudHydrating, setCloudHydrating] = useState(false);
   const hydratedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -42,12 +43,13 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
       if (!user) {
         hydratedUserIdRef.current = null;
         setCloudBusy(false);
+        setCloudHydrating(false);
       }
     });
   }, []);
 
   useEffect(() => {
-    if (!firebaseUser || cloudBusy) {
+    if (!firebaseUser || cloudHydrating) {
       return;
     }
 
@@ -59,7 +61,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
 
     const hydrate = async () => {
       try {
-        setCloudBusy(true);
+        setCloudHydrating(true);
         const repository = new FirestoreRoomPlanRepository();
         const cloudProject = await repository.load(firebaseUser);
         if (!active) return;
@@ -78,7 +80,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
         setCloudMessage(getCloudErrorMessage(error));
       } finally {
         if (active) {
-          setCloudBusy(false);
+          setCloudHydrating(false);
         }
       }
     };
@@ -88,7 +90,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
     return () => {
       active = false;
     };
-  }, [cloudBusy, firebaseUser, loadProjectState, parseProject]);
+  }, [cloudHydrating, firebaseUser, loadProjectState, parseProject]);
 
   const setMessage = (message: string) => {
     setCloudMessage(message);
@@ -169,6 +171,7 @@ export function useRoomPlanerCloud({ project, loadProjectState, parseProject }: 
     firebaseUser,
     cloudMessage,
     cloudBusy,
+    cloudHydrating,
     firebaseConfigured: isFirebaseConfigured(),
     signIn,
     signOut,

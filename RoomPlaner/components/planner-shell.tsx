@@ -170,6 +170,7 @@ export function PlannerShell() {
     firebaseUser,
     cloudMessage,
     cloudBusy,
+    cloudHydrating,
     firebaseConfigured,
     signIn,
     signOut,
@@ -825,7 +826,7 @@ export function PlannerShell() {
 
   return (
     <main className="min-h-screen p-5 text-slate-900 md:p-6">
-      <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
         <header className="panel flex flex-col gap-4 p-5">
           <div>
             <div className="panel-title">RoomPlaner</div>
@@ -852,7 +853,7 @@ export function PlannerShell() {
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Zoom: {Math.round(viewport.scale * 100)}%</span>
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
             <input
               ref={importJsonInputRef}
@@ -910,8 +911,8 @@ export function PlannerShell() {
           </div>
         </header>
 
-        <div className="grid gap-4 min-[1700px]:grid-cols-[280px_minmax(0,1fr)] min-[2450px]:grid-cols-[280px_minmax(0,1fr)_330px]">
-          <aside className="panel h-fit p-4 min-[1700px]:sticky min-[1700px]:top-4">
+        <div className="grid gap-4 min-[1900px]:grid-cols-[280px_minmax(0,1fr)] min-[2600px]:grid-cols-[280px_minmax(0,1fr)_330px]">
+          <aside className="panel h-fit p-4 min-[1900px]:sticky min-[1900px]:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -936,6 +937,11 @@ export function PlannerShell() {
               </div>
               {cloudMessage ? (
                 <div className="mt-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">{cloudMessage}</div>
+              ) : null}
+              {cloudHydrating ? (
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600">
+                  Firestore の保存内容を確認しています。読込中でもログアウトはできます。
+                </div>
               ) : null}
               <div className="mt-3 grid gap-2">
                 {firebaseUser ? (
@@ -1296,7 +1302,7 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 min-[1700px]:col-span-2 min-[2450px]:col-span-1 min-[2450px]:sticky min-[2450px]:top-4">
+          <aside className="panel h-fit p-4 min-[1900px]:col-span-2 min-[2600px]:col-span-1 min-[2600px]:sticky min-[2600px]:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (
