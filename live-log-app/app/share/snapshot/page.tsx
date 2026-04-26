@@ -95,6 +95,31 @@ export default async function ShareSnapshotPage({ searchParams }: ShareSnapshotP
           </>
         ) : null}
 
+        {snapshot.kind === "artistStacked" ? (
+          <>
+            <div className="shareSnapshotArtistYearHeader">
+              {snapshot.years.map((year) => (
+                <span key={year}>{year}</span>
+              ))}
+            </div>
+            <section className="shareSnapshotArtistYearList">
+              {snapshot.items.map((item) => (
+                <div key={item.artist} className="shareSnapshotArtistYearRow">
+                  <div className="shareSnapshotArtistYearMeta">
+                    <strong>{item.artist}</strong>
+                    <span>{item.total}回</span>
+                  </div>
+                  <div className="shareSnapshotArtistYearValues">
+                    {snapshot.years.map((year) => (
+                      <span key={`${item.artist}-${year}`}>{item.countsByYear[year] ?? 0}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+          </>
+        ) : null}
+
         {snapshot.kind === "yearly" ? (
           <>
             <section className="shareSnapshotMetricGrid">

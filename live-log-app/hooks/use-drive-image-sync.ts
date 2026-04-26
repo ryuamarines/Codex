@@ -138,7 +138,7 @@ export function useDriveImageSync({
       }
 
       if (isDriveSessionExpiredError(error)) {
-        onAuthExpired("Google Drive 連携が切れています。画像整理で Drive連携更新 を押してください。");
+        onAuthExpired("Google Drive 連携が切れています。ホームで Drive連携更新 を押してください。");
         throw error;
       }
 
@@ -183,7 +183,7 @@ export function useDriveImageSync({
 
     void syncEntryImageToDrive(firebaseUser, localTarget.id, localImage.id).catch((error) => {
       if (isDriveSessionExpiredError(error)) {
-        onAuthExpired("Google Drive 連携が切れています。画像整理で Drive連携更新 を押してください。");
+        onAuthExpired("Google Drive 連携が切れています。ホームで Drive連携更新 を押してください。");
         return;
       }
 
@@ -217,7 +217,7 @@ export function useDriveImageSync({
       await syncEntryImageToDrive(firebaseUser, entryId, imageId);
     } catch (error) {
       if (isDriveSessionExpiredError(error)) {
-        onAuthExpired("Google Drive 連携が切れています。画像整理で Drive連携更新 を押してください。");
+        onAuthExpired("Google Drive 連携が切れています。ホームで Drive連携更新 を押してください。");
         return;
       }
 

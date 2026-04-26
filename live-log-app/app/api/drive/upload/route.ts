@@ -130,7 +130,7 @@ function sanitizeFileName(value: string, mimeType: string) {
 
 async function readDriveErrorMessage(response: Response) {
   if (response.status === 401) {
-    return "Google Drive 連携が切れています。Drive連携更新を押して、もう一度連携してください。";
+    return "Google Drive 連携が切れています。ホームで Drive連携更新 を押して、もう一度連携してください。";
   }
 
   if (response.status === 403) {

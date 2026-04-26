@@ -89,7 +89,7 @@ type BulkEditInput = {
 };
 
 type ActiveView = "home" | "timeline" | "add" | "artists" | "venues";
-type ActiveTool = "create" | "csv" | "photo" | "bulk" | null;
+type ActiveTool = "csv" | "bulk" | null;
 type TimelinePresentation = "cards" | "table";
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
 type TableColumn = "date" | "title" | ListColumn;
@@ -864,9 +864,9 @@ export function LiveLogPage() {
     if (tileId === "artistYearStackedChart") {
       return {
         version: 1,
-        kind: "artistYears",
+        kind: "artistStacked",
         title: label,
-        subtitle: "アーティスト別 年次推移",
+        subtitle: "アーティスト別 推移グラフ",
         generatedAt,
         years: trends.artistYears.years,
         items: trends.artistYears.items.slice(0, 10)
@@ -1379,7 +1379,6 @@ export function LiveLogPage() {
   }
 
   const venueTileIds = new Set<AnalyticsTileId>(["venues", "places"]);
-  const addTileIds = new Set<AnalyticsTileId>([]);
   const createScopedTiles = (allowedIds: Set<AnalyticsTileId>) =>
     createDashboardLayout(
       analyticsTileOrder.filter((tileId) => allowedIds.has(tileId)),
@@ -1387,9 +1386,7 @@ export function LiveLogPage() {
       resolvedAnalyticsTileHeights
     );
   const venueTiles = createScopedTiles(venueTileIds);
-  const addTiles = createScopedTiles(addTileIds);
   const venueDashboardRowCount = Math.max(...venueTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
-  const addDashboardRowCount = Math.max(...addTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
 
   const tileMap = {
     yearTrend: (
@@ -1403,7 +1400,7 @@ export function LiveLogPage() {
         overview={overview}
         backupMessage={backupMessage}
         height={resolvedAnalyticsTileHeights.summary}
-        actions={createTileActions("summary", "件数サマリ")}
+        actions={createTileActions("summary", "記録の概要")}
       />
     ),
     genres: (
@@ -1517,7 +1514,7 @@ export function LiveLogPage() {
                     ? "アーティストとの関係性と推移を見返す"
                     : activeView === "venues"
                       ? "会場との関係性と地域傾向を見返す"
-                      : "イベントを追加しながら、画像整理と形式の傾向も見ます"}
+                      : "新しいライブ記録を、必要な情報から落ち着いて追加します"}
             </p>
           </div>
           <div className="archiveMainMeta">
@@ -1736,11 +1733,6 @@ export function LiveLogPage() {
             setSelectedEntryIds([]);
             setSelectedEntryId(entryId);
           }}
-          addTiles={addTiles}
-          analyticsTileRefs={analyticsTileRefs}
-          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
-          tileMap={tileMap}
-          dashboardRowCount={addDashboardRowCount}
         />
       )}
 

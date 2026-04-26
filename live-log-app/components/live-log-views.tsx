@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
 import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordListTable } from "@/components/record-list-table";
-import { RecordToolsPanel } from "@/components/record-tools-panel";
+import { RecordToolsPanel, RecordUtilitiesPanel } from "@/components/record-tools-panel";
 import { YearlySummaryPanel, type YearlyAggregateKey } from "@/components/yearly-summary-panel";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { PositionedDashboardTile, AnalyticsTileId, TileHeight } from "@/lib/analytics-dashboard";
@@ -34,7 +34,7 @@ type TimelinePresentation = "cards" | "table";
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
 type TableColumn = "date" | "title" | ListColumn;
 type RecordVisibilityFilter = "all" | "withPhotos" | "withUnsyncedImages";
-type ActiveTool = "create" | "csv" | "photo" | "bulk" | null;
+type ActiveTool = "csv" | "bulk" | null;
 
 const LIST_COLUMN_OPTIONS: Array<{ key: ListColumn; label: string }> = [
   { key: "venue", label: "会場" },
@@ -800,11 +800,6 @@ type AddViewProps = {
   onConfigureDriveFolder(): void;
   onBatchApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
   onLinkedToEntry(entryId: string): void;
-  addTiles: PositionedDashboardTile[];
-  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
-  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
-  tileMap: Record<AnalyticsTileId, ReactNode>;
-  dashboardRowCount: number;
 };
 
 export function LiveLogAddView({
@@ -838,16 +833,25 @@ export function LiveLogAddView({
   onDeleteSelectedEntries,
   onConfigureDriveFolder,
   onBatchApply,
-  onLinkedToEntry,
-  addTiles,
-  analyticsTileRefs,
-  resolvedAnalyticsTileHeights,
-  tileMap,
-  dashboardRowCount
+  onLinkedToEntry
 }: AddViewProps) {
   return (
     <section className="archiveAddLayout">
       <RecordToolsPanel
+        imageMessage={imageMessage}
+        manualForm={manualForm}
+        photoForm={photoForm}
+        placeOptions={placeOptions}
+        genreOptions={genreOptions}
+        driveFolderLabel={driveFolderLabel}
+        photoInputRef={photoInputRef}
+        onManualSubmit={onManualSubmit}
+        onPhotoImport={onPhotoImport}
+        onUpdateForm={onUpdateForm}
+        onUpdatePhotoForm={onUpdatePhotoForm}
+        onConfigureDriveFolder={onConfigureDriveFolder}
+      />
+      <RecordUtilitiesPanel
         activeTool={activeTool}
         onToggleTool={onToggleTool}
         query={query}
@@ -857,24 +861,12 @@ export function LiveLogAddView({
         filteredEntryCount={filteredEntryCount}
         visibleSelectedCount={visibleSelectedCount}
         csvMessage={csvMessage}
-        imageMessage={imageMessage}
-        manualForm={manualForm}
-        photoForm={photoForm}
         bulkEdit={bulkEdit}
-        placeOptions={placeOptions}
-        genreOptions={genreOptions}
-        driveFolderLabel={driveFolderLabel}
         csvInputRef={csvInputRef}
-        photoInputRef={photoInputRef}
-        onManualSubmit={onManualSubmit}
         onCsvImport={onCsvImport}
-        onPhotoImport={onPhotoImport}
-        onUpdateForm={onUpdateForm}
-        onUpdatePhotoForm={onUpdatePhotoForm}
         onUpdateBulkEdit={onUpdateBulkEdit}
         onApplyBulkUpdate={onApplyBulkUpdate}
         onDeleteSelectedEntries={onDeleteSelectedEntries}
-        onConfigureDriveFolder={onConfigureDriveFolder}
       />
       <BatchImportBoard
         entries={entries}
@@ -882,28 +874,6 @@ export function LiveLogAddView({
         onApply={onBatchApply}
         onLinkedToEntry={onLinkedToEntry}
       />
-      {addTiles.length > 0 ? (
-        <div
-          className="analyticsBoardGrid archiveInlineAnalyticsGrid"
-          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
-        >
-          {addTiles.map((tile) => (
-            <div
-              key={tile.id}
-              ref={(element) => {
-                analyticsTileRefs.current[tile.id] = element;
-              }}
-              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
-              style={{
-                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
-                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
-              }}
-            >
-              {tileMap[tile.id]}
-            </div>
-          ))}
-        </div>
-      ) : null}
     </section>
   );
 }

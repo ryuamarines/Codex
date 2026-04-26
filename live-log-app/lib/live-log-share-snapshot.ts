@@ -46,6 +46,15 @@ export type LiveLogShareSnapshot =
     }
   | {
       version: 1;
+      kind: "artistStacked";
+      title: string;
+      subtitle?: string;
+      generatedAt: string;
+      years: string[];
+      items: ArtistYearTrend[];
+    }
+  | {
+      version: 1;
       kind: "yearly";
       title: string;
       subtitle?: string;

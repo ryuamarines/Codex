@@ -20,9 +20,24 @@ type BulkEditInput = {
   genre: string;
 };
 
-type ActiveTool = "create" | "csv" | "photo" | "bulk" | null;
+type ActiveTool = "csv" | "bulk" | null;
 
 type RecordToolsPanelProps = {
+  imageMessage: string;
+  manualForm: ManualEntryInput;
+  photoForm: PhotoUploadInput;
+  placeOptions: string[];
+  genreOptions: string[];
+  driveFolderLabel: string;
+  photoInputRef: RefObject<HTMLInputElement | null>;
+  onManualSubmit(event: FormEvent<HTMLFormElement>): void;
+  onPhotoImport(event: ChangeEvent<HTMLInputElement>): void;
+  onUpdateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]): void;
+  onUpdatePhotoForm<K extends keyof PhotoUploadInput>(key: K, value: PhotoUploadInput[K]): void;
+  onConfigureDriveFolder(): void;
+};
+
+type RecordUtilitiesPanelProps = {
   activeTool: ActiveTool;
   onToggleTool(tool: Exclude<ActiveTool, null>): void;
   query: string;
@@ -32,24 +47,12 @@ type RecordToolsPanelProps = {
   filteredEntryCount: number;
   visibleSelectedCount: number;
   csvMessage: string;
-  imageMessage: string;
-  manualForm: ManualEntryInput;
-  photoForm: PhotoUploadInput;
   bulkEdit: BulkEditInput;
-  placeOptions: string[];
-  genreOptions: string[];
-  driveFolderLabel: string;
   csvInputRef: RefObject<HTMLInputElement | null>;
-  photoInputRef: RefObject<HTMLInputElement | null>;
-  onManualSubmit(event: FormEvent<HTMLFormElement>): void;
   onCsvImport(event: ChangeEvent<HTMLInputElement>): void;
-  onPhotoImport(event: ChangeEvent<HTMLInputElement>): void;
-  onUpdateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]): void;
-  onUpdatePhotoForm<K extends keyof PhotoUploadInput>(key: K, value: PhotoUploadInput[K]): void;
   onUpdateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]): void;
   onApplyBulkUpdate(): void;
   onDeleteSelectedEntries(): void;
-  onConfigureDriveFolder(): void;
 };
 
 const REGION_GROUPS = [
@@ -75,32 +78,17 @@ const PLACE_EXCLUDE_SET = new Set([
 ]);
 
 export function RecordToolsPanel({
-  activeTool,
-  onToggleTool,
-  query,
-  onQueryChange,
-  recordVisibilityFilter,
-  onRecordVisibilityFilterChange,
-  filteredEntryCount,
-  visibleSelectedCount,
-  csvMessage,
   imageMessage,
   manualForm,
   photoForm,
-  bulkEdit,
   placeOptions,
   genreOptions,
   driveFolderLabel,
-  csvInputRef,
   photoInputRef,
   onManualSubmit,
-  onCsvImport,
   onPhotoImport,
   onUpdateForm,
   onUpdatePhotoForm,
-  onUpdateBulkEdit,
-  onApplyBulkUpdate,
-  onDeleteSelectedEntries,
   onConfigureDriveFolder
 }: RecordToolsPanelProps) {
   const normalizedPlaces = Array.from(
@@ -304,7 +292,28 @@ export function RecordToolsPanel({
           </div>
         </form>
       </section>
+    </>
+  );
+}
 
+export function RecordUtilitiesPanel({
+  activeTool,
+  onToggleTool,
+  query,
+  onQueryChange,
+  recordVisibilityFilter,
+  onRecordVisibilityFilterChange,
+  filteredEntryCount,
+  visibleSelectedCount,
+  csvMessage,
+  bulkEdit,
+  csvInputRef,
+  onCsvImport,
+  onUpdateBulkEdit,
+  onApplyBulkUpdate,
+  onDeleteSelectedEntries
+}: RecordUtilitiesPanelProps) {
+  return (
       <section className="panel archiveAddUtilities">
         <div className="archiveSectionHeader">
           <div>
@@ -425,6 +434,5 @@ export function RecordToolsPanel({
           ) : null}
         </div>
       </section>
-    </>
   );
 }
