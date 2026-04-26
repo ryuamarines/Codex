@@ -911,8 +911,81 @@ export function PlannerShell() {
           </div>
         </header>
 
-        <div className="grid gap-4 min-[1900px]:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="panel h-fit p-4 min-[1900px]:sticky min-[1900px]:top-4">
+        <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+          <section className="min-h-[780px] min-w-0 space-y-3 xl:col-start-2">
+            <div className="panel flex flex-wrap items-center gap-2 p-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canvas Tools</span>
+              <button className={mode === "select" ? "button-strong" : "button-soft"} onClick={() => setMode("select")}>
+                選択
+              </button>
+              {setupActions.map((action) => (
+                <button
+                  key={`canvas-${action.mode}`}
+                  className={mode === action.mode ? "button-strong" : "button-soft"}
+                  onClick={() => setMode(action.mode)}
+                  disabled={action.disabled}
+                >
+                  {action.label}
+                </button>
+              ))}
+              <div className="ml-auto flex flex-wrap gap-2">
+                <button className="button-soft" onClick={fitToAll}>
+                  全体表示
+                </button>
+                <button className="button-soft" onClick={fitToBackground} disabled={!project.background}>
+                  背景表示
+                </button>
+                <button className="button-soft" onClick={fitToRoom} disabled={!project.room}>
+                  部屋表示
+                </button>
+              </div>
+            </div>
+            <PlannerCanvas
+              project={project}
+              issues={issues}
+              draftRoomPoints={draftRoomPoints}
+              mode={mode}
+              selection={selection}
+              selectedItems={selectedItems}
+              scaleDraft={scaleDraft}
+              draftPlacement={draftPlacement}
+              viewport={viewport}
+              onCanvasClick={handleCanvasClick}
+              onCanvasPointerDown={handleCanvasPointerDown}
+              onCanvasMove={handleCanvasMove}
+              onCanvasPointerUp={handleCanvasPointerUp}
+              onSelect={(nextSelection, additive) => {
+                if (additive) {
+                  toggleSelection(nextSelection);
+                } else {
+                  selectSingle(nextSelection);
+                }
+              }}
+              onMoveFurniture={(id, x, y) =>
+                updateProject((current) => updateFurniturePosition(current, id, snapPoint({ x, y })))
+              }
+              onPreviewRoomVertexMove={(index, point) => moveRoomVertex(index, point, false)}
+              onCommitRoomVertexMove={moveRoomVertex}
+              onCommitRoomMove={moveRoom}
+              onInsertRoomVertex={addRoomVertex}
+              onPreviewZoneMove={(id, point) => moveZone(id, point, false)}
+              onCommitZoneMove={moveZone}
+              onPreviewWallObjectMove={(type, id, point) => moveWallObject(type, id, snapPoint(point), false)}
+              onCommitWallObjectMove={(type, id, point) => moveWallObject(type, id, snapPoint(point), true)}
+              onViewportChange={setViewport}
+              onRotateSelectedFurniture={rotateSelectedFurniture}
+              onDuplicateSelectedFurniture={duplicateSelectedFurniture}
+              onDeleteSelection={removeSelected}
+              onCenterSelection={() => fitToSelection()}
+              onSetSelectedFurnitureKind={setSelectedFurnitureKind}
+              onToggleSelectedDoorSwing={toggleSelectedDoorSwing}
+              onToggleSelectedDoorOpenDirection={toggleSelectedDoorOpenDirection}
+              onResizeSelectedFurniture={resizeSelectedFurniture}
+              onResizeSelectedZone={resizeSelectedZone}
+            />
+          </section>
+
+          <aside className="panel h-fit p-4 xl:col-start-1 xl:row-start-1 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:sticky xl:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -1229,81 +1302,7 @@ export function PlannerShell() {
             </div>
           </aside>
 
-          <div className="min-w-0 grid gap-4 min-[2600px]:grid-cols-[minmax(0,1fr)_330px]">
-          <section className="min-h-[780px] min-w-0 space-y-3">
-            <div className="panel flex flex-wrap items-center gap-2 p-3">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canvas Tools</span>
-              <button className={mode === "select" ? "button-strong" : "button-soft"} onClick={() => setMode("select")}>
-                選択
-              </button>
-              {setupActions.map((action) => (
-                <button
-                  key={`canvas-${action.mode}`}
-                  className={mode === action.mode ? "button-strong" : "button-soft"}
-                  onClick={() => setMode(action.mode)}
-                  disabled={action.disabled}
-                >
-                  {action.label}
-                </button>
-              ))}
-              <div className="ml-auto flex flex-wrap gap-2">
-                <button className="button-soft" onClick={fitToAll}>
-                  全体表示
-                </button>
-                <button className="button-soft" onClick={fitToBackground} disabled={!project.background}>
-                  背景表示
-                </button>
-                <button className="button-soft" onClick={fitToRoom} disabled={!project.room}>
-                  部屋表示
-                </button>
-              </div>
-            </div>
-            <PlannerCanvas
-              project={project}
-              issues={issues}
-              draftRoomPoints={draftRoomPoints}
-              mode={mode}
-              selection={selection}
-              selectedItems={selectedItems}
-              scaleDraft={scaleDraft}
-              draftPlacement={draftPlacement}
-              viewport={viewport}
-              onCanvasClick={handleCanvasClick}
-              onCanvasPointerDown={handleCanvasPointerDown}
-              onCanvasMove={handleCanvasMove}
-              onCanvasPointerUp={handleCanvasPointerUp}
-              onSelect={(nextSelection, additive) => {
-                if (additive) {
-                  toggleSelection(nextSelection);
-                } else {
-                  selectSingle(nextSelection);
-                }
-              }}
-              onMoveFurniture={(id, x, y) =>
-                updateProject((current) => updateFurniturePosition(current, id, snapPoint({ x, y })))
-              }
-              onPreviewRoomVertexMove={(index, point) => moveRoomVertex(index, point, false)}
-              onCommitRoomVertexMove={moveRoomVertex}
-              onCommitRoomMove={moveRoom}
-              onInsertRoomVertex={addRoomVertex}
-              onPreviewZoneMove={(id, point) => moveZone(id, point, false)}
-              onCommitZoneMove={moveZone}
-              onPreviewWallObjectMove={(type, id, point) => moveWallObject(type, id, snapPoint(point), false)}
-              onCommitWallObjectMove={(type, id, point) => moveWallObject(type, id, snapPoint(point), true)}
-              onViewportChange={setViewport}
-              onRotateSelectedFurniture={rotateSelectedFurniture}
-              onDuplicateSelectedFurniture={duplicateSelectedFurniture}
-              onDeleteSelection={removeSelected}
-              onCenterSelection={() => fitToSelection()}
-              onSetSelectedFurnitureKind={setSelectedFurnitureKind}
-              onToggleSelectedDoorSwing={toggleSelectedDoorSwing}
-              onToggleSelectedDoorOpenDirection={toggleSelectedDoorOpenDirection}
-              onResizeSelectedFurniture={resizeSelectedFurniture}
-              onResizeSelectedZone={resizeSelectedZone}
-            />
-          </section>
-
-          <aside className="panel h-fit p-4 min-[2600px]:sticky min-[2600px]:top-4">
+          <aside className="panel h-fit p-4 xl:col-start-3 xl:row-start-1 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:sticky xl:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (
@@ -1684,7 +1683,6 @@ export function PlannerShell() {
               </div>
             </div>
           </aside>
-          </div>
         </div>
       </div>
     </main>
