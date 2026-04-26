@@ -1397,9 +1397,9 @@ export function LiveLogPage() {
     });
   }
 
-  const timelineTileIds = new Set<AnalyticsTileId>(["yearTrend", "summary"]);
+  const timelineTileIds = new Set<AnalyticsTileId>(["yearTrend"]);
   const venueTileIds = new Set<AnalyticsTileId>(["venues", "places"]);
-  const addTileIds = new Set<AnalyticsTileId>(["genres"]);
+  const addTileIds = new Set<AnalyticsTileId>([]);
   const createScopedTiles = (allowedIds: Set<AnalyticsTileId>) =>
     createDashboardLayout(
       analyticsTileOrder.filter((tileId) => allowedIds.has(tileId)),
@@ -1489,18 +1489,18 @@ export function LiveLogPage() {
             ホーム
           </button>
           <button
-            className={activeView === "timeline" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
-            type="button"
-            onClick={() => setActiveView("timeline")}
-          >
-            タイムライン
-          </button>
-          <button
             className={activeView === "add" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
             type="button"
             onClick={() => setActiveView("add")}
           >
             イベント追加
+          </button>
+          <button
+            className={activeView === "timeline" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("timeline")}
+          >
+            タイムライン
           </button>
           <button
             className={activeView === "artists" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
@@ -1549,56 +1549,60 @@ export function LiveLogPage() {
           </div>
         </header>
 
-        <CloudSyncPanel
-          isLoggedIn={Boolean(firebaseUser)}
-          syncStatus={syncStatus}
-          authMessage={authMessage}
-          lastSyncedAtLabel={lastSyncedAtLabel}
-          hasDriveAccessToken={hasDriveAccessToken}
-          driveFolderId={driveFolderId}
-          driveSessionSavedAtLabel={driveSessionSavedAtLabel}
-          isDriveAccessStale={isDriveAccessStale}
-          onGoogleSignIn={handleGoogleSignIn}
-          onGoogleSignOut={handleGoogleSignOut}
-          onConfigureDriveFolder={handleConfigureDriveFolder}
-          onSaveCurrentToCloud={() => {
-            void handleSaveCurrentToCloud();
-          }}
-          onCloudLoad={handleCloudLoad}
-          onForceCloudReplace={handleForceCloudReplace}
-        />
-
       {activeView === "home" ? (
-        <LiveLogHomeView
-          currentYear={currentYear}
-          currentYearEntriesCount={currentYearEntries.length}
-          currentMonthEntriesCount={currentMonthEntries.length}
-          imageCount={overview.imageCount}
-          recentEntries={recentEntries}
-          topArtists={aggregates.focusArtists}
-          yearlyArchiveCards={yearlyArchiveCards}
-          yearlySummaryRef={yearlySummaryRef}
-          selectedYear={selectedYear}
-          availableYears={availableYears}
-          yearOverview={yearOverview}
-          yearAggregates={yearAggregates}
-          onSelectEntry={handleSelectEntry}
-          onShowTimeline={() => setActiveView("timeline")}
-          onShowArtists={() => setActiveView("artists")}
-          onSelectArtist={(artist) => {
-            setSelectedArtistName(artist);
-            setActiveView("artists");
-          }}
-          onSelectYear={(year) => {
-            setSelectedYear(year);
-            setActiveView("timeline");
-          }}
-          renderYearlySummaryActions={renderYearlySummaryActions}
-          renderYearlyAggregateActions={renderYearlyAggregateActions}
-          registerAggregateRef={(key, element) => {
-            yearlyAggregateRefs.current[key] = element;
-          }}
-        />
+        <>
+          <LiveLogHomeView
+            currentYear={currentYear}
+            currentYearEntriesCount={currentYearEntries.length}
+            currentMonthEntriesCount={currentMonthEntries.length}
+            imageCount={overview.imageCount}
+            recentEntries={recentEntries}
+            topArtists={aggregates.focusArtists}
+            yearlyArchiveCards={yearlyArchiveCards}
+            yearlySummaryRef={yearlySummaryRef}
+            selectedYear={selectedYear}
+            availableYears={availableYears}
+            yearOverview={yearOverview}
+            yearAggregates={yearAggregates}
+            onSelectEntry={(entryId) => {
+              handleSelectEntry(entryId);
+              setActiveView("timeline");
+            }}
+            onShowTimeline={() => setActiveView("timeline")}
+            onShowArtists={() => setActiveView("artists")}
+            onSelectArtist={(artist) => {
+              setSelectedArtistName(artist);
+              setActiveView("artists");
+            }}
+            onSelectYear={(year) => {
+              setSelectedYear(year);
+              setActiveView("timeline");
+            }}
+            renderYearlySummaryActions={renderYearlySummaryActions}
+            renderYearlyAggregateActions={renderYearlyAggregateActions}
+            registerAggregateRef={(key, element) => {
+              yearlyAggregateRefs.current[key] = element;
+            }}
+          />
+          <CloudSyncPanel
+            isLoggedIn={Boolean(firebaseUser)}
+            syncStatus={syncStatus}
+            authMessage={authMessage}
+            lastSyncedAtLabel={lastSyncedAtLabel}
+            hasDriveAccessToken={hasDriveAccessToken}
+            driveFolderId={driveFolderId}
+            driveSessionSavedAtLabel={driveSessionSavedAtLabel}
+            isDriveAccessStale={isDriveAccessStale}
+            onGoogleSignIn={handleGoogleSignIn}
+            onGoogleSignOut={handleGoogleSignOut}
+            onConfigureDriveFolder={handleConfigureDriveFolder}
+            onSaveCurrentToCloud={() => {
+              void handleSaveCurrentToCloud();
+            }}
+            onCloudLoad={handleCloudLoad}
+            onForceCloudReplace={handleForceCloudReplace}
+          />
+        </>
       ) : activeView === "timeline" ? (
         <LiveLogTimelineView
           selectedYear={selectedYear}
@@ -1639,7 +1643,10 @@ export function LiveLogPage() {
           artists={artistArchiveView}
           selectedArtistLabel={selectedArtistArchive?.artist ?? ""}
           onSelectArtist={setSelectedArtistName}
-          onSelectEntry={handleSelectEntry}
+          onSelectEntry={(entryId) => {
+            handleSelectEntry(entryId);
+            setActiveView("timeline");
+          }}
           onBrowseArtistHistory={(artist, year) => {
             setQuery(artist);
             if (year) {
@@ -1667,7 +1674,10 @@ export function LiveLogPage() {
           venues={venueArchiveView}
           selectedVenueLabel={selectedVenueArchive?.venue ?? ""}
           onSelectVenue={setSelectedVenueName}
-          onSelectEntry={handleSelectEntry}
+          onSelectEntry={(entryId) => {
+            handleSelectEntry(entryId);
+            setActiveView("timeline");
+          }}
           getLeadArtist={getLeadArtist}
           venueTiles={venueTiles}
           analyticsTileRefs={analyticsTileRefs}
@@ -1720,14 +1730,39 @@ export function LiveLogPage() {
         />
       )}
 
-      {selectedEntry ? (
+      {activeView === "timeline" ? (
+        <>
+          <SummaryTile
+            overview={overview}
+            backupMessage={backupMessage}
+            height="compact"
+            actions={createTileActions("summary", "件数サマリ")}
+          />
+          {selectedEntry ? (
+            <RecordDetailPanel
+              selectedEntry={selectedEntry}
+              detailPhotoInputRef={detailPhotoInputRef}
+              variant="panel"
+              isOpen
+              onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
+              onEntryImageUpload={handleEntryImageUpload}
+              onDeleteImage={handleEntryImageDelete}
+              onRetryImageSync={handleRetryImageSync}
+              onRetryEntryImageSync={handleRetryEntryImageSync}
+              onUpdateEntryField={updateEntryField}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {selectedEntry && activeView !== "timeline" && activeView !== "add" ? (
         <RecordDetailPanel
           selectedEntry={selectedEntry}
           detailPhotoInputRef={detailPhotoInputRef}
-          variant={activeView === "add" ? "panel" : "drawer"}
-          isOpen={activeView === "add" ? true : isDetailDrawerOpen}
+          variant="drawer"
+          isOpen={isDetailDrawerOpen}
           onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
-          onClose={activeView === "add" ? undefined : () => setIsDetailDrawerOpen(false)}
+          onClose={() => setIsDetailDrawerOpen(false)}
           onEntryImageUpload={handleEntryImageUpload}
           onDeleteImage={handleEntryImageDelete}
           onRetryImageSync={handleRetryImageSync}
@@ -1747,19 +1782,19 @@ export function LiveLogPage() {
           ホーム
         </button>
         <button
-          className={activeView === "timeline" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
-          type="button"
-          onClick={() => setActiveView("timeline")}
-        >
-          タイムライン
-        </button>
-          <button
             className={activeView === "add" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
             type="button"
             onClick={() => setActiveView("add")}
           >
             イベント追加
           </button>
+        <button
+          className={activeView === "timeline" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
+          type="button"
+          onClick={() => setActiveView("timeline")}
+        >
+          タイムライン
+        </button>
         <button
           className={activeView === "artists" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
           type="button"
