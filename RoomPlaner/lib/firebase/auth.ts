@@ -1,6 +1,8 @@
 import {
+  browserLocalPersistence,
   GoogleAuthProvider,
   onAuthStateChanged,
+  setPersistence,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -27,6 +29,7 @@ export async function signInWithGoogle() {
 
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+  await setPersistence(auth, browserLocalPersistence);
 
   if (typeof window !== "undefined" && window.innerWidth < 768) {
     await signInWithRedirect(auth, provider);

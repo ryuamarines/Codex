@@ -911,7 +911,7 @@ export function PlannerShell() {
           </div>
         </header>
 
-        <div className="grid gap-4 min-[1900px]:grid-cols-[280px_minmax(0,1fr)] min-[2600px]:grid-cols-[280px_minmax(0,1fr)_330px]">
+        <div className="grid gap-4 min-[1900px]:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="panel h-fit p-4 min-[1900px]:sticky min-[1900px]:top-4">
             <div className="panel-title">Add / Setup</div>
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
@@ -1229,6 +1229,7 @@ export function PlannerShell() {
             </div>
           </aside>
 
+          <div className="min-w-0 grid gap-4 min-[2600px]:grid-cols-[minmax(0,1fr)_330px]">
           <section className="min-h-[780px] min-w-0 space-y-3">
             <div className="panel flex flex-wrap items-center gap-2 p-3">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canvas Tools</span>
@@ -1302,7 +1303,7 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 min-[1900px]:col-span-2 min-[2600px]:col-span-1 min-[2600px]:sticky min-[2600px]:top-4">
+          <aside className="panel h-fit p-4 min-[2600px]:sticky min-[2600px]:top-4">
             <div className="panel-title">Inspector</div>
 
             {project.background ? (
@@ -1683,6 +1684,7 @@ export function PlannerShell() {
               </div>
             </div>
           </aside>
+          </div>
         </div>
       </div>
     </main>
