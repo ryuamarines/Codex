@@ -805,6 +805,9 @@ type AddViewProps = {
   manualForm: ManualEntryInput;
   photoForm: PhotoUploadInput;
   bulkEdit: BulkEditInput;
+  placeOptions: string[];
+  genreOptions: string[];
+  selectedEntryLabel: string;
   csvInputRef: RefObject<HTMLInputElement | null>;
   photoInputRef: RefObject<HTMLInputElement | null>;
   entries: LiveEntry[];
@@ -843,6 +846,9 @@ export function LiveLogAddView({
   manualForm,
   photoForm,
   bulkEdit,
+  placeOptions,
+  genreOptions,
+  selectedEntryLabel,
   csvInputRef,
   photoInputRef,
   entries,
@@ -882,6 +888,9 @@ export function LiveLogAddView({
         manualForm={manualForm}
         photoForm={photoForm}
         bulkEdit={bulkEdit}
+        placeOptions={placeOptions}
+        genreOptions={genreOptions}
+        selectedEntryLabel={selectedEntryLabel}
         csvInputRef={csvInputRef}
         photoInputRef={photoInputRef}
         onManualSubmit={onManualSubmit}

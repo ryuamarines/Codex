@@ -73,7 +73,7 @@ export function mergeImagesWithDedup(
 export function createManualEntry(input: ManualEntryInput) {
   const nextEntry = createEntry(input);
 
-  if (!nextEntry.title || !nextEntry.date || !nextEntry.venue || nextEntry.artists.length === 0) {
+  if (!nextEntry.title || !nextEntry.date || !nextEntry.venue) {
     return null;
   }
 

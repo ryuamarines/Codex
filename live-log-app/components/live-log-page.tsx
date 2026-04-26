@@ -17,7 +17,6 @@ import {
 } from "@/lib/live-import-utils";
 import {
   applyBulkEditToEntries,
-  applyPhotoImportToEntries,
   createManualEntry,
   deleteEntriesById,
   importEntriesFromCsvContent,
@@ -552,6 +551,20 @@ export function LiveLogPage() {
         entries: item.entries
       })),
     [venueArchive]
+  );
+  const placeOptions = useMemo(
+    () =>
+      Array.from(new Set(entries.map((entry) => entry.place.trim()).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, "ja")
+      ),
+    [entries]
+  );
+  const genreOptions = useMemo(
+    () =>
+      Array.from(new Set(entries.map((entry) => entry.genre.trim()).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, "ja")
+      ),
+    [entries]
   );
 
   useEffect(() => {
@@ -1088,7 +1101,6 @@ export function LiveLogPage() {
     setSelectedEntryId(nextEntry.id);
     setHighlightedEntryId(nextEntry.id);
     setActionNotice(`「${nextEntry.title}」を追加しました。`);
-    setActiveView("timeline");
     setIsDetailDrawerOpen(true);
     setActiveTool(null);
     setManualForm({
@@ -1196,12 +1208,6 @@ export function LiveLogPage() {
       return;
     }
 
-    if (!photoForm.title || !photoForm.date) {
-      setImageMessage("写真取り込みでは少なくとも公演名と日付を入れてください。");
-      event.target.value = "";
-      return;
-    }
-
     try {
       const nextImages = await Promise.all(
         files.map(async (file) =>
@@ -1213,29 +1219,75 @@ export function LiveLogPage() {
         )
       );
 
-      const result = applyPhotoImportToEntries(entriesRef.current, photoForm, nextImages);
-      const targetEntry = result.entries.find((entry) => entry.id === result.selectedEntryId);
-      entriesRef.current = result.entries;
-      setEntries(result.entries);
-      if (targetEntry && result.addedCount > 0) {
-        void persistEntryToCloud(result.entries, targetEntry).catch(() => {
-          setImageMessage("写真は登録しました。クラウド保存は自動で再確認します。");
+      const selectedEntry =
+        entriesRef.current.find((entry) => entry.id === selectedEntryId) ?? null;
+
+      if (selectedEntry) {
+        const mergedImages = mergeImagesWithDedup(selectedEntry.images, nextImages);
+        const nextEntries = entriesRef.current.map((entry) =>
+          entry.id === selectedEntry.id ? { ...entry, images: mergedImages.images } : entry
+        );
+        entriesRef.current = nextEntries;
+        setEntries(nextEntries);
+        if (mergedImages.addedCount > 0) {
+          void persistEntryToCloud(nextEntries, {
+            ...selectedEntry,
+            images: mergedImages.images
+          }).catch(() => {
+            setImageMessage("写真は追加しました。クラウド保存は自動で再確認します。");
+          });
+        }
+        setSelectedEntryId(selectedEntry.id);
+        setHighlightedEntryId(selectedEntry.id);
+        setIsDetailDrawerOpen(true);
+        const importMessage =
+          mergedImages.addedCount === 0
+            ? "同じ写真はすでに登録済みのため追加していません。"
+            : mergedImages.duplicateCount > 0
+              ? `写真を ${mergedImages.addedCount} 件追加し、重複 ${mergedImages.duplicateCount} 件はスキップしました。`
+              : `「${selectedEntry.title}」に写真を追加しました。`;
+        setActionNotice(importMessage);
+        setImageMessage(importMessage);
+        event.target.value = "";
+        return;
+      }
+
+      const nextEntry = createManualEntry(manualForm);
+
+      if (!nextEntry) {
+        setImageMessage("先に日付・公演名・会場を入れて記録を追加するか、既存記録を選んでから写真を追加してください。");
+        event.target.value = "";
+        return;
+      }
+
+      const entryWithImages = { ...nextEntry, images: nextImages };
+      const nextEntries = [entryWithImages, ...entriesRef.current];
+      entriesRef.current = nextEntries;
+      setEntries(nextEntries);
+      if (nextImages.length > 0) {
+        void persistEntryToCloud(nextEntries, entryWithImages).catch(() => {
+          setImageMessage("写真付きの記録は追加しました。クラウド保存は自動で再確認します。");
         });
       }
-      setSelectedEntryId(result.selectedEntryId);
-      setHighlightedEntryId(result.selectedEntryId);
-
+      setSelectedEntryId(entryWithImages.id);
+      setHighlightedEntryId(entryWithImages.id);
+      setIsDetailDrawerOpen(true);
       const importMessage =
-        result.addedCount === 0
-          ? "同じ写真はすでに登録済みのため追加していません。"
-          : result.duplicateCount > 0
-            ? `写真を ${result.addedCount} 件追加し、重複 ${result.duplicateCount} 件はスキップしました。`
-            : "写真を登録しました。既存データがあれば紐づけ、なければ新規作成しています。";
+        nextImages.length === 1
+          ? `「${entryWithImages.title}」を作成して写真を追加しました。`
+          : `「${entryWithImages.title}」を作成して写真を ${nextImages.length} 件追加しました。`;
       setActionNotice(importMessage);
       setImageMessage(importMessage);
-      setActiveView("timeline");
-      setIsDetailDrawerOpen(false);
       setActiveTool(null);
+      setManualForm({
+        title: "",
+        date: "",
+        place: "",
+        venue: "",
+        artistsText: "",
+        genre: "",
+        memo: ""
+      });
       event.target.value = "";
     } catch {
       setImageMessage("写真取り込みに失敗しました。別の画像で試してください。");
@@ -1635,6 +1687,9 @@ export function LiveLogPage() {
           manualForm={manualForm}
           photoForm={photoForm}
           bulkEdit={bulkEdit}
+          placeOptions={placeOptions}
+          genreOptions={genreOptions}
+          selectedEntryLabel={selectedEntry?.title ?? ""}
           csvInputRef={csvInputRef}
           photoInputRef={photoInputRef}
           entries={entries}
@@ -1665,14 +1720,14 @@ export function LiveLogPage() {
         />
       )}
 
-      {selectedEntry && activeView !== "add" ? (
+      {selectedEntry ? (
         <RecordDetailPanel
           selectedEntry={selectedEntry}
           detailPhotoInputRef={detailPhotoInputRef}
-          variant="drawer"
-          isOpen={isDetailDrawerOpen}
+          variant={activeView === "add" ? "panel" : "drawer"}
+          isOpen={activeView === "add" ? true : isDetailDrawerOpen}
           onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
-          onClose={() => setIsDetailDrawerOpen(false)}
+          onClose={activeView === "add" ? undefined : () => setIsDetailDrawerOpen(false)}
           onEntryImageUpload={handleEntryImageUpload}
           onDeleteImage={handleEntryImageDelete}
           onRetryImageSync={handleRetryImageSync}

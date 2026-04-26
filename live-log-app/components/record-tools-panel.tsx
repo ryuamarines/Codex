@@ -36,6 +36,9 @@ type RecordToolsPanelProps = {
   manualForm: ManualEntryInput;
   photoForm: PhotoUploadInput;
   bulkEdit: BulkEditInput;
+  placeOptions: string[];
+  genreOptions: string[];
+  selectedEntryLabel: string;
   csvInputRef: RefObject<HTMLInputElement | null>;
   photoInputRef: RefObject<HTMLInputElement | null>;
   onManualSubmit(event: FormEvent<HTMLFormElement>): void;
@@ -62,6 +65,9 @@ export function RecordToolsPanel({
   manualForm,
   photoForm,
   bulkEdit,
+  placeOptions,
+  genreOptions,
+  selectedEntryLabel,
   csvInputRef,
   photoInputRef,
   onManualSubmit,
@@ -73,6 +79,13 @@ export function RecordToolsPanel({
   onApplyBulkUpdate,
   onDeleteSelectedEntries
 }: RecordToolsPanelProps) {
+  const availablePlaceOptions = manualForm.place && !placeOptions.includes(manualForm.place)
+    ? [manualForm.place, ...placeOptions]
+    : placeOptions;
+  const availableGenreOptions = manualForm.genre && !genreOptions.includes(manualForm.genre)
+    ? [manualForm.genre, ...genreOptions]
+    : genreOptions;
+
   return (
     <>
       <section className="panel archiveAddComposer">
@@ -123,11 +136,17 @@ export function RecordToolsPanel({
               </label>
               <label className="archiveField">
                 <span>地域</span>
-                <input
+                <select
                   value={manualForm.place}
                   onChange={(event) => onUpdateForm("place", event.target.value)}
-                  placeholder="場所"
-                />
+                >
+                  <option value="">未選択</option>
+                  {availablePlaceOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           </section>
@@ -144,19 +163,24 @@ export function RecordToolsPanel({
               <label className="archiveField archiveFieldWide">
                 <span>出演アーティスト</span>
                 <input
-                  required
                   value={manualForm.artistsText}
                   onChange={(event) => onUpdateForm("artistsText", event.target.value)}
-                  placeholder="出演者"
+                  placeholder="出演者（あとで追加でもOK）"
                 />
               </label>
               <label className="archiveField">
                 <span>形式</span>
-                <input
+                <select
                   value={manualForm.genre}
                   onChange={(event) => onUpdateForm("genre", event.target.value)}
-                  placeholder="ワンマン / フェス"
-                />
+                >
+                  <option value="">未選択</option>
+                  {availableGenreOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="archiveField archiveFieldWide">
                 <span>メモ</span>
@@ -170,72 +194,19 @@ export function RecordToolsPanel({
             </div>
           </section>
 
-          <div className="archiveAddSubmitRow">
-            <button className="actionButton" type="submit">
-              記録を追加
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="panel archiveAddComposer">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Add Photos</p>
-            <h2>写真から追加する</h2>
-            <p>既存記録に紐づけるか、そのまま新規候補を作れます。</p>
-          </div>
-        </div>
-        <div className="archiveAddSteps">
           <section className="archiveAddStep">
             <div className="archiveAddStepHeader">
-              <span>1</span>
+              <span>3</span>
               <div>
-                <strong>候補情報</strong>
-                <small>公演名と日付があると結びつけやすくなります。</small>
+                <strong>写真を追加する（任意）</strong>
+                <small>
+                  {selectedEntryLabel
+                    ? `いま選択中の「${selectedEntryLabel}」に追加します。`
+                    : "先に記録を追加すると、その記録にそのまま写真を追加できます。"}
+                </small>
               </div>
             </div>
             <div className="archiveAddGrid">
-              <label className="archiveField archiveFieldWide">
-                <span>公演名</span>
-                <input
-                  value={photoForm.title}
-                  onChange={(event) => onUpdatePhotoForm("title", event.target.value)}
-                  placeholder="公演名"
-                />
-              </label>
-              <label className="archiveField">
-                <span>日付</span>
-                <input
-                  type="date"
-                  value={photoForm.date}
-                  onChange={(event) => onUpdatePhotoForm("date", event.target.value)}
-                />
-              </label>
-              <label className="archiveField">
-                <span>会場</span>
-                <input
-                  value={photoForm.venue}
-                  onChange={(event) => onUpdatePhotoForm("venue", event.target.value)}
-                  placeholder="会場"
-                />
-              </label>
-              <label className="archiveField">
-                <span>地域</span>
-                <input
-                  value={photoForm.place}
-                  onChange={(event) => onUpdatePhotoForm("place", event.target.value)}
-                  placeholder="場所"
-                />
-              </label>
-              <label className="archiveField archiveFieldWide">
-                <span>出演アーティスト</span>
-                <input
-                  value={photoForm.artistsText}
-                  onChange={(event) => onUpdatePhotoForm("artistsText", event.target.value)}
-                  placeholder="出演者"
-                />
-              </label>
               <label className="archiveField">
                 <span>写真の種類</span>
                 <select
@@ -249,41 +220,29 @@ export function RecordToolsPanel({
                   <option value="paperTicket">リアルチケット</option>
                 </select>
               </label>
-              <label className="archiveField">
-                <span>形式</span>
-                <input
-                  value={photoForm.genre}
-                  onChange={(event) => onUpdatePhotoForm("genre", event.target.value)}
-                  placeholder="ジャンル"
-                />
-              </label>
-              <label className="archiveField archiveFieldWide">
-                <span>メモ</span>
-                <textarea
-                  rows={3}
-                  value={photoForm.memo}
-                  onChange={(event) => onUpdatePhotoForm("memo", event.target.value)}
-                  placeholder="メモ"
-                />
-              </label>
+            </div>
+            <div className="archiveAddSubmitRow archiveAddSubmitRowStack">
+              <button className="actionButton secondaryButton" type="button" onClick={() => photoInputRef.current?.click()}>
+                写真を選ぶ
+              </button>
+              <p className="importHint">{imageMessage}</p>
+              <input
+                ref={photoInputRef}
+                className="hiddenInput"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={onPhotoImport}
+              />
             </div>
           </section>
 
-          <div className="archiveAddSubmitRow archiveAddSubmitRowStack">
-            <button className="actionButton" type="button" onClick={() => photoInputRef.current?.click()}>
-              写真を選ぶ
+          <div className="archiveAddSubmitRow">
+            <button className="actionButton" type="submit">
+              記録を追加
             </button>
-            <p className="importHint">{imageMessage}</p>
-            <input
-              ref={photoInputRef}
-              className="hiddenInput"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={onPhotoImport}
-            />
           </div>
-        </div>
+        </form>
       </section>
 
       <section className="panel archiveAddUtilities">
