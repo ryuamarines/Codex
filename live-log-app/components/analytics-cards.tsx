@@ -134,6 +134,7 @@ export function ArtistYearStackedChartCard({
   const visibleArtistCount = size === "wide" ? Math.min(items.length, 10) : Math.min(items.length, 5);
   const [artistQuery, setArtistQuery] = useState("");
   const [manualFocusedArtist, setManualFocusedArtist] = useState<string>("");
+  const [forceShowAll, setForceShowAll] = useState(false);
   const normalizedArtistQuery = artistQuery.trim().toLowerCase();
   const sourceItems = useMemo(() => {
     if (!normalizedArtistQuery) {
@@ -146,7 +147,9 @@ export function ArtistYearStackedChartCard({
   const selectedArtistFromList = focusedArtistLabel
     ? items.find((item) => item.artist === focusedArtistLabel)?.artist ?? ""
     : "";
-  const focusedArtist = manualFocusedArtist || (!normalizedArtistQuery ? selectedArtistFromList : "");
+  const focusedArtist = forceShowAll
+    ? ""
+    : manualFocusedArtist || (!normalizedArtistQuery ? selectedArtistFromList : "");
   const focusedTopItems = useMemo(() => {
     if (!focusedArtist) {
       return topItems;
@@ -208,6 +211,7 @@ export function ArtistYearStackedChartCard({
           onClick={() => {
             setManualFocusedArtist("");
             setArtistQuery("");
+            setForceShowAll(true);
           }}
         >
           <span className="stackedBarLegendSwatch stackedBarLegendSwatchNeutral" />
@@ -222,7 +226,10 @@ export function ArtistYearStackedChartCard({
                 : "stackedBarLegendItem"
             }
             type="button"
-            onClick={() => setManualFocusedArtist((current) => (current === item.artist ? "" : item.artist))}
+            onClick={() => {
+              setForceShowAll(false);
+              setManualFocusedArtist((current) => (current === item.artist ? "" : item.artist));
+            }}
           >
             <span
               className="stackedBarLegendSwatch"

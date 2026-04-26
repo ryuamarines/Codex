@@ -224,6 +224,7 @@ type TimelineGroup = {
 };
 
 type TimelineViewProps = {
+  topContent?: ReactNode;
   selectedYear: string;
   availableYears: string[];
   timelinePresentation: TimelinePresentation;
@@ -259,6 +260,7 @@ type TimelineViewProps = {
 };
 
 export function LiveLogTimelineView({
+  topContent,
   selectedYear,
   availableYears,
   timelinePresentation,
@@ -294,6 +296,7 @@ export function LiveLogTimelineView({
 }: TimelineViewProps) {
   return (
     <section className="archiveTimelineLayout">
+      {topContent}
       <section className="panel archiveTimelinePanel">
         <div className="archiveSectionHeader">
           <div>

@@ -1619,6 +1619,31 @@ export function LiveLogPage() {
         </>
       ) : activeView === "timeline" ? (
         <LiveLogTimelineView
+          topContent={
+            <>
+              <SummaryTile
+                overview={overview}
+                backupMessage={backupMessage}
+                height="compact"
+                actions={createTileActions("summary", "件数サマリ")}
+              />
+              {selectedEntry ? (
+                <RecordDetailPanel
+                  selectedEntry={selectedEntry}
+                  detailPhotoInputRef={detailPhotoInputRef}
+                  variant="panel"
+                  isOpen
+                  onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
+                  onEntryImageUpload={handleEntryImageUpload}
+                  onDeleteImage={handleEntryImageDelete}
+                  onRetryImageSync={handleRetryImageSync}
+                  onRetryEntryImageSync={handleRetryEntryImageSync}
+                  onDeleteEntry={deleteSingleEntry}
+                  onUpdateEntryField={updateEntryField}
+                />
+              ) : null}
+            </>
+          }
           selectedYear={selectedYear}
           availableYears={availableYears}
           timelinePresentation={timelinePresentation}
@@ -1743,32 +1768,6 @@ export function LiveLogPage() {
           dashboardRowCount={addDashboardRowCount}
         />
       )}
-
-      {activeView === "timeline" ? (
-        <>
-          <SummaryTile
-            overview={overview}
-            backupMessage={backupMessage}
-            height="compact"
-            actions={createTileActions("summary", "件数サマリ")}
-          />
-          {selectedEntry ? (
-            <RecordDetailPanel
-              selectedEntry={selectedEntry}
-              detailPhotoInputRef={detailPhotoInputRef}
-              variant="panel"
-              isOpen
-              onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
-              onEntryImageUpload={handleEntryImageUpload}
-              onDeleteImage={handleEntryImageDelete}
-              onRetryImageSync={handleRetryImageSync}
-              onRetryEntryImageSync={handleRetryEntryImageSync}
-              onDeleteEntry={deleteSingleEntry}
-              onUpdateEntryField={updateEntryField}
-            />
-          ) : null}
-        </>
-      ) : null}
 
       {selectedEntry && activeView !== "timeline" && activeView !== "add" ? (
         <RecordDetailPanel
