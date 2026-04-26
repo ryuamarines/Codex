@@ -253,11 +253,6 @@ type TimelineViewProps = {
   formatDay(value: string): string;
   formatWeekday(value: string): string;
   getLeadArtist(entry: LiveEntry): string;
-  timelineTiles: PositionedDashboardTile[];
-  analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
-  resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
-  tileMap: Record<AnalyticsTileId, ReactNode>;
-  dashboardRowCount: number;
 };
 
 export function LiveLogTimelineView({
@@ -290,17 +285,12 @@ export function LiveLogTimelineView({
   formatDay,
   formatWeekday,
   getLeadArtist,
-  timelineTiles,
-  analyticsTileRefs,
-  resolvedAnalyticsTileHeights,
-  tileMap,
-  dashboardRowCount
 }: TimelineViewProps) {
   return (
-    <section className="archiveTimelineLayout archiveTimelineThreeColumn">
-      <div className="archiveTimelineSidebarColumn">{summaryContent}</div>
-      <div className="archiveTimelineDetailColumn">{detailContent}</div>
-      <section className="panel archiveTimelinePanel">
+    <section className="archiveTimelineLayout">
+      <div className="archiveTimelineSummaryRow">{summaryContent}</div>
+      <div className="archiveTimelineBodyGrid">
+        <section className="panel archiveTimelinePanel">
         <div className="archiveSectionHeader">
           <div>
             <p className="eyebrow">Timeline</p>
@@ -443,27 +433,9 @@ export function LiveLogTimelineView({
             onResizeStart={onResizeStart}
           />
         )}
-        <div
-          className="analyticsBoardGrid archiveInlineAnalyticsGrid"
-          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
-        >
-          {timelineTiles.map((tile) => (
-            <div
-              key={tile.id}
-              ref={(element) => {
-                analyticsTileRefs.current[tile.id] = element;
-              }}
-              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
-              style={{
-                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
-                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
-              }}
-            >
-              {tileMap[tile.id]}
-            </div>
-          ))}
-        </div>
-      </section>
+        </section>
+        <div className="archiveTimelineDetailColumn">{detailContent}</div>
+      </div>
     </section>
   );
 }

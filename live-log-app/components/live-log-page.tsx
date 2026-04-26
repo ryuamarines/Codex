@@ -1411,7 +1411,6 @@ export function LiveLogPage() {
     });
   }
 
-  const timelineTileIds = new Set<AnalyticsTileId>(["yearTrend"]);
   const venueTileIds = new Set<AnalyticsTileId>(["venues", "places"]);
   const addTileIds = new Set<AnalyticsTileId>([]);
   const createScopedTiles = (allowedIds: Set<AnalyticsTileId>) =>
@@ -1420,10 +1419,8 @@ export function LiveLogPage() {
       resolvedAnalyticsTileSizes,
       resolvedAnalyticsTileHeights
     );
-  const timelineTiles = createScopedTiles(timelineTileIds);
   const venueTiles = createScopedTiles(venueTileIds);
   const addTiles = createScopedTiles(addTileIds);
-  const timelineDashboardRowCount = Math.max(...timelineTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
   const venueDashboardRowCount = Math.max(...venueTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
   const addDashboardRowCount = Math.max(...addTiles.map((tile) => tile.rowStart + tile.rowSpan - 1), 1);
 
@@ -1431,8 +1428,7 @@ export function LiveLogPage() {
     yearTrend: (
       <YearTrendHeroCard
         items={trends.byYear}
-        height={resolvedAnalyticsTileHeights.yearTrend}
-        actions={createTileActions("yearTrend", "年別推移")}
+        height="compact"
       />
     ),
     summary: (
@@ -1620,38 +1616,45 @@ export function LiveLogPage() {
       ) : activeView === "timeline" ? (
         <LiveLogTimelineView
           summaryContent={
-            <SummaryTile
-              overview={overview}
-              backupMessage={backupMessage}
-              height="compact"
-            />
+            <div className="archiveTimelineSummaryCard">
+              <SummaryTile
+                overview={overview}
+                backupMessage={backupMessage}
+                height="compact"
+              />
+            </div>
           }
           detailContent={
-            selectedEntry ? (
-              <RecordDetailPanel
-                selectedEntry={selectedEntry}
-                detailPhotoInputRef={detailPhotoInputRef}
-                variant="panel"
-                isOpen
-                onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
-                onEntryImageUpload={handleEntryImageUpload}
-                onDeleteImage={handleEntryImageDelete}
-                onRetryImageSync={handleRetryImageSync}
-                onRetryEntryImageSync={handleRetryEntryImageSync}
-                onDeleteEntry={deleteSingleEntry}
-                onUpdateEntryField={updateEntryField}
-              />
-            ) : (
-              <section className="panel archiveEntityDetailPanel archiveTimelineEmptyDetail">
-                <div className="archiveSectionHeader">
-                  <div>
-                    <p className="eyebrow">Detail</p>
-                    <h2>ライブ詳細</h2>
-                    <p>タイムラインから記録を選ぶと、ここで修正や削除ができます。</p>
+            <>
+              {selectedEntry ? (
+                <RecordDetailPanel
+                  selectedEntry={selectedEntry}
+                  detailPhotoInputRef={detailPhotoInputRef}
+                  variant="panel"
+                  isOpen
+                  onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
+                  onEntryImageUpload={handleEntryImageUpload}
+                  onDeleteImage={handleEntryImageDelete}
+                  onRetryImageSync={handleRetryImageSync}
+                  onRetryEntryImageSync={handleRetryEntryImageSync}
+                  onDeleteEntry={deleteSingleEntry}
+                  onUpdateEntryField={updateEntryField}
+                />
+              ) : (
+                <section className="panel archiveEntityDetailPanel archiveTimelineEmptyDetail">
+                  <div className="archiveSectionHeader">
+                    <div>
+                      <p className="eyebrow">Detail</p>
+                      <h2>ライブ詳細</h2>
+                      <p>タイムラインから記録を選ぶと、ここで修正や削除ができます。</p>
+                    </div>
                   </div>
-                </div>
-              </section>
-            )
+                </section>
+              )}
+              <div className="archiveTimelineYearTrendCard">
+                {tileMap.yearTrend}
+              </div>
+            </>
           }
           selectedYear={selectedYear}
           availableYears={availableYears}
@@ -1680,11 +1683,6 @@ export function LiveLogPage() {
           formatDay={formatDay}
           formatWeekday={formatWeekday}
           getLeadArtist={getLeadArtist}
-          timelineTiles={timelineTiles}
-          analyticsTileRefs={analyticsTileRefs}
-          resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
-          tileMap={tileMap}
-          dashboardRowCount={timelineDashboardRowCount}
         />
       ) : activeView === "artists" ? (
         <LiveLogArtistsView

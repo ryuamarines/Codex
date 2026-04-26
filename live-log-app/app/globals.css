@@ -19,16 +19,16 @@
   --line: rgba(16, 16, 16, 0.08);
   --shadow: 0 12px 30px rgba(0, 0, 0, 0.035);
   --radius: 20px;
-  --chart-stack-1: #a24b49;
-  --chart-stack-2: #c06a58;
-  --chart-stack-3: #d48d71;
-  --chart-stack-4: #9e6f4d;
-  --chart-stack-5: #6d7b67;
-  --chart-stack-6: #899784;
-  --chart-stack-7: #42536a;
-  --chart-stack-8: #688197;
-  --chart-stack-9: #baa48f;
-  --chart-stack-10: #d3c4b4;
+  --chart-stack-1: #b14f4c;
+  --chart-stack-2: #4f6479;
+  --chart-stack-3: #6d7d61;
+  --chart-stack-4: #9d7a46;
+  --chart-stack-5: #7a607a;
+  --chart-stack-6: #57716c;
+  --chart-stack-7: #c07b59;
+  --chart-stack-8: #8c909b;
+  --chart-stack-9: #5d7f8d;
+  --chart-stack-10: #a96f74;
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
@@ -52,16 +52,16 @@
   --accent-soft: rgba(239, 176, 169, 0.12);
   --line: rgba(255, 255, 255, 0.08);
   --shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
-  --chart-stack-1: #efb0a9;
-  --chart-stack-2: #d88d7f;
-  --chart-stack-3: #bc7869;
-  --chart-stack-4: #a56d5f;
-  --chart-stack-5: #c2d2ba;
-  --chart-stack-6: #98ab91;
-  --chart-stack-7: #b5c9dc;
-  --chart-stack-8: #8097ac;
-  --chart-stack-9: #cbb7a6;
-  --chart-stack-10: #9f8879;
+  --chart-stack-1: #efb1aa;
+  --chart-stack-2: #a7bbcf;
+  --chart-stack-3: #b9c8b3;
+  --chart-stack-4: #d6bd8f;
+  --chart-stack-5: #c8b1ca;
+  --chart-stack-6: #9fc0bb;
+  --chart-stack-7: #e0a989;
+  --chart-stack-8: #bfc4cf;
+  --chart-stack-9: #9ec1d0;
+  --chart-stack-10: #d39da2;
 }
 
 * {
@@ -405,9 +405,8 @@ select {
   gap: 8px;
   padding: 16px 18px;
   border: 1px solid var(--line);
-  border-radius: 24px;
-  background: var(--surface-soft);
-  box-shadow: var(--shadow);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel-strong) 92%, transparent);
 }
 
 .summaryCard span {
@@ -1762,25 +1761,37 @@ select {
   gap: 18px;
 }
 
-.archiveTimelineThreeColumn {
-  grid-template-columns: minmax(260px, 0.72fr) minmax(380px, 1fr) minmax(420px, 1.2fr);
-  align-items: start;
-}
-
-.archiveTimelineSidebarColumn,
+.archiveTimelineSummaryRow,
 .archiveTimelineDetailColumn {
   display: grid;
   gap: 18px;
   align-self: start;
 }
 
-.archiveTimelineSidebarColumn .summaryStrip {
-  grid-template-columns: 1fr;
+.archiveTimelineBodyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(360px, 0.82fr);
+  gap: 18px;
+  align-items: start;
 }
 
-.archiveTimelineSidebarColumn .summaryTileCard,
+.archiveTimelineSummaryCard .summaryStrip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.archiveTimelineSummaryCard .summaryTileCard,
 .archiveTimelineDetailColumn .panel {
   height: auto;
+}
+
+.archiveTimelineSummaryCard .summaryTileCard,
+.archiveTimelineYearTrendCard > .panel {
+  padding: 22px;
+  border-radius: 28px;
+}
+
+.archiveTimelineSummaryCard .panelHeader p {
+  display: none;
 }
 
 .archiveTimelineEmptyDetail {
@@ -2365,7 +2376,7 @@ select {
 
   .archiveHeroCard,
   .archiveOverviewGrid,
-  .archiveTimelineThreeColumn,
+  .archiveTimelineBodyGrid,
   .archiveEntityLayout,
   .archiveHeroStats,
   .archiveEntityStats,
@@ -2384,6 +2395,7 @@ select {
   }
 
   .summaryStrip,
+  .archiveTimelineSummaryCard .summaryStrip,
   .workspaceGrid,
   .yearlyAggregateGrid,
   .batchWorkflowStrip,
