@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 import type { AggregateBucket, ArtistYearTrend, TrendBucket } from "@/lib/live-analytics";
 import type { TileHeight, TileSize } from "@/lib/analytics-dashboard";
 
@@ -128,11 +129,19 @@ export function ArtistYearStackedChartCard({
   height?: TileHeight;
   size?: TileSize;
 }) {
-  const visibleArtistCount = size === "wide" ? Math.min(items.length, 10) : Math.min(items.length, 5);
+  const visibleArtistCount = size === "wide" ? Math.min(items.length, 8) : Math.min(items.length, 5);
   const topItems = items.slice(0, visibleArtistCount);
+  const [focusedArtist, setFocusedArtist] = useState<string>("");
+  const focusedTopItems = useMemo(() => {
+    if (!focusedArtist) {
+      return topItems;
+    }
+
+    return topItems.filter((item) => item.artist === focusedArtist);
+  }, [focusedArtist, topItems]);
   const yearTotals = years.map((year) => ({
     year,
-    total: topItems.reduce((sum, item) => sum + (item.countsByYear[year] ?? 0), 0)
+    total: focusedTopItems.reduce((sum, item) => sum + (item.countsByYear[year] ?? 0), 0)
   }));
   const max = Math.max(...yearTotals.map((item) => item.total), 1);
   const palette = [
@@ -155,21 +164,40 @@ export function ArtistYearStackedChartCard({
           <h2>{title}</h2>
           <p>
             横軸を年にして、
-            {size === "wide" ? " 総数上位10組" : " 総数上位5組"}
+            {size === "wide" ? " 総数上位8組" : " 総数上位5組"}
             の内訳を縦積み棒で見られます。
           </p>
+          <small className="stackedBarHint">凡例を押すと、そのアーティストだけに絞って見られます。</small>
         </div>
         {actions}
       </div>
       <div className="stackedBarLegend">
+        <button
+          className={!focusedArtist ? "stackedBarLegendItem stackedBarLegendItemActive" : "stackedBarLegendItem"}
+          type="button"
+          onClick={() => setFocusedArtist("")}
+        >
+          <span className="stackedBarLegendSwatch stackedBarLegendSwatchNeutral" />
+          すべて
+        </button>
         {topItems.map((item, index) => (
-          <span key={item.artist} className="stackedBarLegendItem">
+          <button
+            key={item.artist}
+            className={
+              focusedArtist === item.artist
+                ? "stackedBarLegendItem stackedBarLegendItemActive"
+                : "stackedBarLegendItem"
+            }
+            type="button"
+            onClick={() => setFocusedArtist((current) => (current === item.artist ? "" : item.artist))}
+          >
             <span
               className="stackedBarLegendSwatch"
               style={{ background: palette[index % palette.length] }}
             />
-            {item.artist}
-          </span>
+            <span className="stackedBarLegendText">{item.artist}</span>
+            <strong className="stackedBarLegendCount">{item.total}</strong>
+          </button>
         ))}
       </div>
       <div className="verticalBarChart">
@@ -181,7 +209,7 @@ export function ArtistYearStackedChartCard({
                 className="stackedBarColumn"
                 style={{ height: `${(total / max) * 100}%` }}
               >
-                {topItems.map((item, index) => {
+                {focusedTopItems.map((item, index) => {
                   const value = item.countsByYear[year] ?? 0;
 
                   if (value === 0) {

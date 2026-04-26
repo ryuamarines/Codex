@@ -1013,6 +1013,16 @@ select {
   min-height: 520px;
 }
 
+.analyticsBoardTile > .summaryTileCard {
+  min-height: 0;
+}
+
+.analyticsBoardTile-compact > .summaryTileCard,
+.analyticsBoardTile-standard > .summaryTileCard,
+.analyticsBoardTile-tall > .summaryTileCard {
+  min-height: 0;
+}
+
 .rankList,
 .trendList {
   display: grid;
@@ -1049,9 +1059,9 @@ select {
 }
 
 .stackedBarLegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .artistYearStackedChartCard-compact .stackedBarLegend {
@@ -1077,6 +1087,7 @@ select {
   color: var(--muted);
   font-size: 0.82rem;
   text-align: left;
+  width: 100%;
 }
 
 .stackedBarLegendItemActive {
@@ -1757,6 +1768,12 @@ select {
   border-radius: 26px;
 }
 
+.archiveEntityListPanel,
+.archiveEntityDetailPanel {
+  display: grid;
+  align-content: start;
+}
+
 .archiveHeroCard {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
@@ -1883,13 +1900,15 @@ select {
 }
 
 .archiveLinkedList {
-  max-height: 420px;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   padding-right: 4px;
 }
 
 .archiveEntityList {
-  max-height: 420px;
+  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   padding-right: 4px;
 }
