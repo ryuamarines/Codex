@@ -224,7 +224,8 @@ type TimelineGroup = {
 };
 
 type TimelineViewProps = {
-  topContent?: ReactNode;
+  summaryContent?: ReactNode;
+  detailContent?: ReactNode;
   selectedYear: string;
   availableYears: string[];
   timelinePresentation: TimelinePresentation;
@@ -260,7 +261,8 @@ type TimelineViewProps = {
 };
 
 export function LiveLogTimelineView({
-  topContent,
+  summaryContent,
+  detailContent,
   selectedYear,
   availableYears,
   timelinePresentation,
@@ -295,8 +297,9 @@ export function LiveLogTimelineView({
   dashboardRowCount
 }: TimelineViewProps) {
   return (
-    <section className="archiveTimelineLayout">
-      {topContent}
+    <section className="archiveTimelineLayout archiveTimelineThreeColumn">
+      <div className="archiveTimelineSidebarColumn">{summaryContent}</div>
+      <div className="archiveTimelineDetailColumn">{detailContent}</div>
       <section className="panel archiveTimelinePanel">
         <div className="archiveSectionHeader">
           <div>

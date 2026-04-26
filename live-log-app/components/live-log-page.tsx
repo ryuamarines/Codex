@@ -1619,30 +1619,39 @@ export function LiveLogPage() {
         </>
       ) : activeView === "timeline" ? (
         <LiveLogTimelineView
-          topContent={
-            <>
-              <SummaryTile
-                overview={overview}
-                backupMessage={backupMessage}
-                height="compact"
-                actions={createTileActions("summary", "件数サマリ")}
+          summaryContent={
+            <SummaryTile
+              overview={overview}
+              backupMessage={backupMessage}
+              height="compact"
+            />
+          }
+          detailContent={
+            selectedEntry ? (
+              <RecordDetailPanel
+                selectedEntry={selectedEntry}
+                detailPhotoInputRef={detailPhotoInputRef}
+                variant="panel"
+                isOpen
+                onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
+                onEntryImageUpload={handleEntryImageUpload}
+                onDeleteImage={handleEntryImageDelete}
+                onRetryImageSync={handleRetryImageSync}
+                onRetryEntryImageSync={handleRetryEntryImageSync}
+                onDeleteEntry={deleteSingleEntry}
+                onUpdateEntryField={updateEntryField}
               />
-              {selectedEntry ? (
-                <RecordDetailPanel
-                  selectedEntry={selectedEntry}
-                  detailPhotoInputRef={detailPhotoInputRef}
-                  variant="panel"
-                  isOpen
-                  onOpenPhotoPicker={() => detailPhotoInputRef.current?.click()}
-                  onEntryImageUpload={handleEntryImageUpload}
-                  onDeleteImage={handleEntryImageDelete}
-                  onRetryImageSync={handleRetryImageSync}
-                  onRetryEntryImageSync={handleRetryEntryImageSync}
-                  onDeleteEntry={deleteSingleEntry}
-                  onUpdateEntryField={updateEntryField}
-                />
-              ) : null}
-            </>
+            ) : (
+              <section className="panel archiveEntityDetailPanel archiveTimelineEmptyDetail">
+                <div className="archiveSectionHeader">
+                  <div>
+                    <p className="eyebrow">Detail</p>
+                    <h2>ライブ詳細</h2>
+                    <p>タイムラインから記録を選ぶと、ここで修正や削除ができます。</p>
+                  </div>
+                </div>
+              </section>
+            )
           }
           selectedYear={selectedYear}
           availableYears={availableYears}
