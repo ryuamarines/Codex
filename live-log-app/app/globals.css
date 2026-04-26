@@ -1911,9 +1911,13 @@ select {
 
 .archiveEntityList {
   min-height: 0;
-  max-height: 640px;
+  max-height: min(74vh, 920px);
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.stackedBarSearchBox {
+  margin-bottom: 12px;
 }
 
 .archiveEntityFilterBadge {

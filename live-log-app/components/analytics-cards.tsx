@@ -132,12 +132,21 @@ export function ArtistYearStackedChartCard({
   size?: TileSize;
 }) {
   const visibleArtistCount = size === "wide" ? Math.min(items.length, 8) : Math.min(items.length, 5);
-  const topItems = items.slice(0, visibleArtistCount);
+  const [artistQuery, setArtistQuery] = useState("");
   const [manualFocusedArtist, setManualFocusedArtist] = useState<string>("");
+  const normalizedArtistQuery = artistQuery.trim().toLowerCase();
+  const sourceItems = useMemo(() => {
+    if (!normalizedArtistQuery) {
+      return items;
+    }
+
+    return items.filter((item) => item.artist.toLowerCase().includes(normalizedArtistQuery));
+  }, [items, normalizedArtistQuery]);
+  const topItems = sourceItems.slice(0, visibleArtistCount);
   const selectedArtistFromList = focusedArtistLabel
     ? items.find((item) => item.artist === focusedArtistLabel)?.artist ?? ""
     : "";
-  const focusedArtist = manualFocusedArtist || selectedArtistFromList;
+  const focusedArtist = manualFocusedArtist || (!normalizedArtistQuery ? selectedArtistFromList : "");
   const focusedTopItems = useMemo(() => {
     if (!focusedArtist) {
       return topItems;
@@ -184,11 +193,22 @@ export function ArtistYearStackedChartCard({
         </div>
         {actions}
       </div>
+      <label className="searchBox stackedBarSearchBox">
+        <span>アーティスト検索</span>
+        <input
+          value={artistQuery}
+          onChange={(event) => setArtistQuery(event.target.value)}
+          placeholder="アーティスト名で絞り込む"
+        />
+      </label>
       <div className="stackedBarLegend">
         <button
           className={!focusedArtist ? "stackedBarLegendItem stackedBarLegendItemActive" : "stackedBarLegendItem"}
           type="button"
-          onClick={() => setManualFocusedArtist("")}
+          onClick={() => {
+            setManualFocusedArtist("");
+            setArtistQuery("");
+          }}
         >
           <span className="stackedBarLegendSwatch stackedBarLegendSwatchNeutral" />
           すべて
@@ -213,6 +233,9 @@ export function ArtistYearStackedChartCard({
           </button>
         ))}
       </div>
+      {normalizedArtistQuery && topItems.length === 0 ? (
+        <p className="trendEmpty">一致するアーティストがありません。</p>
+      ) : null}
       <div className="verticalBarChart">
         {yearTotals.map(({ year, total }) => (
           <div key={`${title}-${year}`} className="verticalBarItem">
