@@ -277,12 +277,15 @@ export function RecordToolsPanel({
                   <small className="importHint">{driveFolderLabel}</small>
                 </div>
               </div>
-            </div>
-            <div className="archiveAddSubmitRow archiveAddSubmitRowStack">
-              <button className="actionButton secondaryButton" type="button" onClick={() => photoInputRef.current?.click()}>
-                写真を選ぶ
-              </button>
-              <p className="importHint">{imageMessage}</p>
+              <div className="archiveField archiveFieldWide">
+                <span>写真ファイル</span>
+                <div className="archiveAddSubmitRow">
+                  <button className="actionButton secondaryButton" type="button" onClick={() => photoInputRef.current?.click()}>
+                    写真を選ぶ
+                  </button>
+                  <small className="importHint">{imageMessage}</small>
+                </div>
+              </div>
               <input
                 ref={photoInputRef}
                 className="hiddenInput"
