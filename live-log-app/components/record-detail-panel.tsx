@@ -15,6 +15,7 @@ type RecordDetailPanelProps = {
   onDeleteImage?(entryId: string, imageId: string): void;
   onRetryImageSync?(entryId: string, imageId: string): void;
   onRetryEntryImageSync?(entryId: string): void;
+  onDeleteEntry?(entryId: string): void;
   onUpdateEntryField(
     entryId: string,
     key: keyof Omit<LiveEntry, "id" | "images">,
@@ -33,6 +34,7 @@ export function RecordDetailPanel({
   onDeleteImage,
   onRetryImageSync,
   onRetryEntryImageSync,
+  onDeleteEntry,
   onUpdateEntryField
 }: RecordDetailPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -78,6 +80,15 @@ export function RecordDetailPanel({
               <button className="actionButton secondaryButton" type="button" onClick={onOpenPhotoPicker}>
                 この記録に写真追加
               </button>
+              {onDeleteEntry ? (
+                <button
+                  className="toolButton imageDeleteButton"
+                  type="button"
+                  onClick={() => onDeleteEntry(selectedEntry.id)}
+                >
+                  この記録を削除
+                </button>
+              ) : null}
               {(variant === "drawer" || variant === "overlay") && onClose ? (
                 <button className="toolButton" type="button" onClick={onClose}>
                   閉じる

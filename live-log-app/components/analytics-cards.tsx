@@ -131,7 +131,7 @@ export function ArtistYearStackedChartCard({
   height?: TileHeight;
   size?: TileSize;
 }) {
-  const visibleArtistCount = size === "wide" ? Math.min(items.length, 8) : Math.min(items.length, 5);
+  const visibleArtistCount = size === "wide" ? Math.min(items.length, 10) : Math.min(items.length, 5);
   const [artistQuery, setArtistQuery] = useState("");
   const [manualFocusedArtist, setManualFocusedArtist] = useState<string>("");
   const normalizedArtistQuery = artistQuery.trim().toLowerCase();
@@ -186,7 +186,7 @@ export function ArtistYearStackedChartCard({
           <h2>{title}</h2>
           <p>
             横軸を年にして、
-            {size === "wide" ? " 総数上位8組" : " 総数上位5組"}
+            {size === "wide" ? " 総数上位10組" : " 総数上位5組"}
             の内訳を縦積み棒で見られます。
           </p>
           <small className="stackedBarHint">凡例を押すと、そのアーティストだけに絞って見られます。</small>

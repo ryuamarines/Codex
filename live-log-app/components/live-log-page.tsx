@@ -1384,6 +1384,20 @@ export function LiveLogPage() {
     setSelectedEntryIds([]);
   }
 
+  function deleteSingleEntry(entryId: string) {
+    const nextEntries = deleteEntriesById(entriesRef.current, [entryId]);
+    entriesRef.current = nextEntries;
+    setEntries(nextEntries);
+    void deleteEntryFromCloud(nextEntries, entryId).catch(() => {
+      setActionNotice("削除は反映しました。クラウド保存は自動で再確認します。");
+    });
+    setSelectedEntryIds((current) => current.filter((id) => id !== entryId));
+    if (selectedEntryId === entryId) {
+      setSelectedEntryId(nextEntries[0]?.id ?? "");
+      setIsDetailDrawerOpen(nextEntries.length > 0);
+    }
+  }
+
   function handleBatchApply(nextEntriesOrUpdater: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])) {
     const nextEntries =
       typeof nextEntriesOrUpdater === "function"
@@ -1749,6 +1763,7 @@ export function LiveLogPage() {
               onDeleteImage={handleEntryImageDelete}
               onRetryImageSync={handleRetryImageSync}
               onRetryEntryImageSync={handleRetryEntryImageSync}
+              onDeleteEntry={deleteSingleEntry}
               onUpdateEntryField={updateEntryField}
             />
           ) : null}
@@ -1767,6 +1782,7 @@ export function LiveLogPage() {
           onDeleteImage={handleEntryImageDelete}
           onRetryImageSync={handleRetryImageSync}
           onRetryEntryImageSync={handleRetryEntryImageSync}
+          onDeleteEntry={deleteSingleEntry}
           onUpdateEntryField={updateEntryField}
         />
       ) : null}

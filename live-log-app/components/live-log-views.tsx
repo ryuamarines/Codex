@@ -761,14 +761,7 @@ export function LiveLogVenuesView({
           </>
         ) : null}
       </section>
-      <section className="panel archiveSectionCard">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Venue Analytics</p>
-            <h2>会場分析</h2>
-            <p>会場と地域の集計をここで見ます。</p>
-          </div>
-        </div>
+      <section className="archiveEntityAnalyticsPanel">
         <div
           className="analyticsBoardGrid"
           style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
