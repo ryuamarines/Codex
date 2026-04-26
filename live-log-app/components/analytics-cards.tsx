@@ -118,6 +118,7 @@ export function ArtistYearStackedChartCard({
   title,
   years,
   items,
+  focusedArtistLabel,
   actions,
   height = "standard",
   size = "standard"
@@ -125,20 +126,32 @@ export function ArtistYearStackedChartCard({
   title: string;
   years: string[];
   items: ArtistYearTrend[];
+  focusedArtistLabel?: string;
   actions?: ReactNode;
   height?: TileHeight;
   size?: TileSize;
 }) {
   const visibleArtistCount = size === "wide" ? Math.min(items.length, 8) : Math.min(items.length, 5);
   const topItems = items.slice(0, visibleArtistCount);
-  const [focusedArtist, setFocusedArtist] = useState<string>("");
+  const [manualFocusedArtist, setManualFocusedArtist] = useState<string>("");
+  const selectedArtistFromList = focusedArtistLabel
+    ? items.find((item) => item.artist === focusedArtistLabel)?.artist ?? ""
+    : "";
+  const focusedArtist = manualFocusedArtist || selectedArtistFromList;
   const focusedTopItems = useMemo(() => {
     if (!focusedArtist) {
       return topItems;
     }
 
-    return topItems.filter((item) => item.artist === focusedArtist);
-  }, [focusedArtist, topItems]);
+    const matchedTopItem = topItems.find((item) => item.artist === focusedArtist);
+
+    if (matchedTopItem) {
+      return [matchedTopItem];
+    }
+
+    const matchedItem = items.find((item) => item.artist === focusedArtist);
+    return matchedItem ? [matchedItem] : topItems;
+  }, [focusedArtist, items, topItems]);
   const yearTotals = years.map((year) => ({
     year,
     total: focusedTopItems.reduce((sum, item) => sum + (item.countsByYear[year] ?? 0), 0)
@@ -175,7 +188,7 @@ export function ArtistYearStackedChartCard({
         <button
           className={!focusedArtist ? "stackedBarLegendItem stackedBarLegendItemActive" : "stackedBarLegendItem"}
           type="button"
-          onClick={() => setFocusedArtist("")}
+          onClick={() => setManualFocusedArtist("")}
         >
           <span className="stackedBarLegendSwatch stackedBarLegendSwatchNeutral" />
           すべて
@@ -189,7 +202,7 @@ export function ArtistYearStackedChartCard({
                 : "stackedBarLegendItem"
             }
             type="button"
-            onClick={() => setFocusedArtist((current) => (current === item.artist ? "" : item.artist))}
+            onClick={() => setManualFocusedArtist((current) => (current === item.artist ? "" : item.artist))}
           >
             <span
               className="stackedBarLegendSwatch"

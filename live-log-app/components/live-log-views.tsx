@@ -481,7 +481,7 @@ type ArtistsViewProps = {
   getLeadArtist(entry: LiveEntry): string;
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
   resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
-  tileMap: Record<AnalyticsTileId, ReactNode>;
+  renderArtistTrendTile(focusedArtistLabel?: string): ReactNode;
 };
 
 export function LiveLogArtistsView({
@@ -493,19 +493,18 @@ export function LiveLogArtistsView({
   getLeadArtist,
   analyticsTileRefs,
   resolvedAnalyticsTileHeights,
-  tileMap
+  renderArtistTrendTile
 }: ArtistsViewProps) {
   const [artistQuery, setArtistQuery] = useState("");
   const [selectedArtistYear, setSelectedArtistYear] = useState<string>("");
   const normalizedArtistQuery = artistQuery.trim().toLowerCase();
-  const topArtists = artists.slice(0, 10);
   const filteredArtists = useMemo(() => {
     if (!normalizedArtistQuery) {
-      return topArtists;
+      return artists;
     }
 
     return artists.filter((artist) => artist.label.toLowerCase().includes(normalizedArtistQuery));
-  }, [artists, normalizedArtistQuery, topArtists]);
+  }, [artists, normalizedArtistQuery]);
   const selectedArtist = artists.find((item) => item.label === selectedArtistLabel) ?? artists[0] ?? null;
   const selectedArtistYears = useMemo(
     () => [...(selectedArtist?.years ?? [])].sort((left, right) => right.label.localeCompare(left.label, "ja")),
@@ -556,7 +555,7 @@ export function LiveLogArtistsView({
           <div>
             <p className="eyebrow">Artists</p>
             <h2>アーティスト</h2>
-            <p>{normalizedArtistQuery ? "検索結果" : "まずは参加回数の多い10組を表示しています。"}</p>
+            <p>{normalizedArtistQuery ? "検索結果" : "記録済みのアーティストを参加回数順に表示しています。"}</p>
           </div>
         </div>
         <div className="searchBox archiveEntitySearchBox">
@@ -663,7 +662,7 @@ export function LiveLogArtistsView({
         }}
         className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights.artistYearStackedChart} archiveEntityAnalyticsPanel`}
       >
-        {tileMap.artistYearStackedChart}
+        {renderArtistTrendTile(selectedArtist?.label ?? "")}
       </div>
     </section>
   );

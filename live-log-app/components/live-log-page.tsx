@@ -1588,14 +1588,27 @@ export function LiveLogPage() {
           selectedArtistLabel={selectedArtistArchive?.artist ?? ""}
           onSelectArtist={setSelectedArtistName}
           onSelectEntry={handleSelectEntry}
-          onBrowseArtistHistory={(artist) => {
+          onBrowseArtistHistory={(artist, year) => {
             setQuery(artist);
+            if (year) {
+              setSelectedYear(year);
+            }
             setActiveView("timeline");
           }}
           getLeadArtist={getLeadArtist}
           analyticsTileRefs={analyticsTileRefs}
           resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
-          tileMap={tileMap}
+          renderArtistTrendTile={(focusedArtistLabel) => (
+            <ArtistYearStackedChartCard
+              title="アーティスト別 推移グラフ"
+              years={trends.artistYears.years}
+              items={trends.artistYears.items}
+              focusedArtistLabel={focusedArtistLabel}
+              height={resolvedAnalyticsTileHeights.artistYearStackedChart}
+              size={resolvedAnalyticsTileSizes.artistYearStackedChart}
+              actions={createTileActions("artistYearStackedChart", "アーティスト別 推移グラフ")}
+            />
+          )}
         />
       ) : activeView === "venues" ? (
         <LiveLogVenuesView
