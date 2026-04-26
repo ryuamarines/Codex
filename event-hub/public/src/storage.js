@@ -12,55 +12,22 @@ function getRepository() {
 
 export async function initializeStorage() {
   const repository = await getRepository();
-
-  if (repository.getSession) {
-    return repository.getSession();
-  }
-
-  return {
-    authRequired: false,
-    backendLabel: "Local API / JSON",
-    user: null,
-    isAllowed: true
-  };
+  return repository.getSession();
 }
 
 export async function signInWithGoogle() {
   const repository = await getRepository();
-  if (!repository.signInWithGoogle) {
-    throw new Error("この保存方式では Google ログインを使いません。");
-  }
   return repository.signInWithGoogle();
 }
 
-export async function signInWithEmailPassword(email, password) {
+export async function signOutStorage() {
   const repository = await getRepository();
-  if (!repository.signInWithEmailPassword) {
-    throw new Error("この保存方式ではメールログインを使いません。");
-  }
-  return repository.signInWithEmailPassword(email, password);
+  return repository.signOut();
 }
 
-export async function signOutStorageUser() {
+export async function subscribeStorageSession(listener) {
   const repository = await getRepository();
-  if (repository.signOut) {
-    await repository.signOut();
-  }
-}
-
-export async function refreshStorageSession() {
-  const repository = await getRepository();
-
-  if (repository.getSession) {
-    return repository.getSession();
-  }
-
-  return {
-    authRequired: false,
-    backendLabel: "Local API / JSON",
-    user: null,
-    isAllowed: true
-  };
+  return repository.subscribeSession(listener);
 }
 
 export async function loadEvents() {

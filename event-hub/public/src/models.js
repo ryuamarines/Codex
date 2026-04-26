@@ -195,6 +195,11 @@ export function createEmptyEvent({ withTemplateTasks = true, templateId = "custo
     lumaNotes: "",
     templateId,
     notes: "",
+    assetArchive: {
+      driveFolderUrl: "",
+      notes: "",
+      images: []
+    },
     tasks: withTemplateTasks ? createTasksFromTemplate(templateId) : [],
     runbook: createRunbookFromTemplate(templateId),
     result: {
@@ -248,6 +253,11 @@ export function normalizeEvent(event) {
       touchedParticipants: Array.isArray(eventWithoutDrive.participantHub?.touchedParticipants)
         ? eventWithoutDrive.participantHub.touchedParticipants
         : []
+    },
+    assetArchive: {
+      ...base.assetArchive,
+      ...(eventWithoutDrive.assetArchive || {}),
+      images: Array.isArray(eventWithoutDrive.assetArchive?.images) ? eventWithoutDrive.assetArchive.images : []
     },
     finance: {
       ...base.finance,

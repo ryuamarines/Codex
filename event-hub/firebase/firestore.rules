@@ -2,10 +2,15 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
     match /eventHub/appState {
-      // event-hub は現状 Firestore を未認証で直接利用しているため、
-      // いまは単一ドキュメント appState のみに権限を絞る。
-      allow read, write: if true;
+      // event-hub は共有の単一ドキュメントを全員で使うため、
+      // RoomPlaner のような request.auth.uid == userId ではなく、
+      // まずは「Google ログイン済みなら read / write 可」にする。
+      allow read, write: if signedIn();
     }
   }
 }

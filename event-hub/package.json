@@ -6,11 +6,6 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "test:smoke": "node --experimental-default-type=module ./scripts/smoke-tests.mjs",
-    "firebase:deploy": "npx firebase-tools deploy --only hosting,firestore:rules",
-    "firebase:serve": "npx firebase-tools emulators:start --only hosting,auth,firestore"
-  },
-  "dependencies": {
-    "firebase": "^12.12.0"
+    "test:smoke": "node --experimental-default-type=module ./scripts/smoke-tests.mjs"
   }
 }

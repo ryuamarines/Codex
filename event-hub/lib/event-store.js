@@ -1,3 +1,139 @@
+const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const path = require("node:path");
+
+const rootDir = path.join(__dirname, "..");
+const dataDir = path.join(rootDir, "data");
+const dataFile = path.join(dataDir, "events.json");
+const defaultDataFile = path.join(dataDir, "default-events.json");
+
+const EVENT_COLUMNS = [
+  "id",
+  "name",
+  "startsAt",
+  "venue",
+  "status",
+  "summary",
+  "theme",
+  "speakers",
+  "owners",
+  "lumaUrl",
+  "lumaStatus",
+  "lumaRegistrationCount",
+  "lumaCheckedAt",
+  "lumaNotes",
+  "templateId",
+  "notes",
+  "imageDriveFolderUrl",
+  "imageArchiveNotes",
+  "runbookAttentionNotes",
+  "runbookReceptionMemo",
+  "runbookEmergencyMemo",
+  "runbookParticipantMemoPlaceholder",
+  "resultAttendeeCount",
+  "resultImpression",
+  "resultWentWell",
+  "resultImprovements",
+  "resultNextMemo",
+  "resultContactNotes",
+  "resultClosedAt",
+  "participantSource",
+  "participantImportStatus",
+  "participantCheckedInCount",
+  "participantLastImportedAt",
+  "participantNotes",
+  "financeMemo",
+  "createdAt",
+  "updatedAt",
+  "tasksBlob",
+  "timetableBlob",
+  "rolesBlob",
+  "checklistBlob",
+  "participantsBlob",
+  "financeLinesBlob",
+  "imageLinksBlob"
+];
+
+function getSessionInfo() {
+  return {
+    authRequired: false,
+    backendLabel: "Local JSON / Node",
+    user: null,
+    isAllowed: true
+  };
+}
+
+async function ensureDataStore() {
+  await fsp.mkdir(dataDir, { recursive: true });
+
+  try {
+    await fsp.access(dataFile, fs.constants.F_OK);
+  } catch {
+    await fsp.copyFile(defaultDataFile, dataFile);
+  }
+}
+
+async function readSeedEvents() {
+  const raw = await fsp.readFile(defaultDataFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+async function readEvents() {
+  await ensureDataStore();
+  const raw = await fsp.readFile(dataFile, "utf8");
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+async function writeEvents(events) {
+  await ensureDataStore();
+
+  if (!isValidEventsPayload(events)) {
+    throw new Error("Events payload must be an array.");
+  }
+
+  const tempFile = `${dataFile}.tmp`;
+  const body = `${JSON.stringify(events, null, 2)}\n`;
+  await fsp.writeFile(tempFile, body, "utf8");
+  await fsp.rename(tempFile, dataFile);
+
+  return readEvents();
+}
+
+async function resetEvents() {
+  await ensureDataStore();
+  const seedEvents = await readSeedEvents();
+  await fsp.writeFile(dataFile, `${JSON.stringify(seedEvents, null, 2)}\n`, "utf8");
+  return seedEvents;
+}
+
+function isValidEventsPayload(events) {
+  return Array.isArray(events) && events.every(isValidEventRecord);
+}
+
+function isValidEventRecord(event) {
+  return (
+    event &&
+    typeof event === "object" &&
+    !Array.isArray(event) &&
+    typeof event.id === "string" &&
+    typeof event.name !== "undefined" &&
+    typeof event.runbook === "object" &&
+    typeof event.result === "object" &&
+    typeof event.finance === "object" &&
+    typeof event.participantHub === "object" &&
+    typeof event.assetArchive === "object" &&
+    Array.isArray(event.tasks) &&
+    Array.isArray(event.runbook?.timetable) &&
+    Array.isArray(event.runbook?.roles) &&
+    Array.isArray(event.runbook?.checklist) &&
+    Array.isArray(event.participantHub?.touchedParticipants) &&
+    Array.isArray(event.finance?.lines) &&
+    Array.isArray(event.assetArchive?.images)
+  );
+}
+
 function encodeNestedValue(value) {
   return encodeURIComponent(value == null ? "" : String(value));
 }
@@ -116,53 +252,6 @@ function parseCollection(text, fields, transforms = {}) {
     });
 }
 
-const EVENT_COLUMNS = [
-  "id",
-  "name",
-  "startsAt",
-  "venue",
-  "status",
-  "summary",
-  "theme",
-  "speakers",
-  "owners",
-  "lumaUrl",
-  "lumaStatus",
-  "lumaRegistrationCount",
-  "lumaCheckedAt",
-  "lumaNotes",
-  "templateId",
-  "notes",
-  "imageDriveFolderUrl",
-  "imageArchiveNotes",
-  "runbookAttentionNotes",
-  "runbookReceptionMemo",
-  "runbookEmergencyMemo",
-  "runbookParticipantMemoPlaceholder",
-  "resultAttendeeCount",
-  "resultImpression",
-  "resultWentWell",
-  "resultImprovements",
-  "resultNextMemo",
-  "resultContactNotes",
-  "resultClosedAt",
-  "participantSource",
-  "participantImportStatus",
-  "participantCheckedInCount",
-  "participantLastImportedAt",
-  "participantNotes",
-  "financeMemo",
-  "createdAt",
-  "updatedAt",
-  "tasksBlob",
-  "timetableBlob",
-  "rolesBlob",
-  "checklistBlob",
-  "participantsBlob",
-  "financeLinesBlob",
-  "imageLinksBlob"
-];
-
 function serializeEventRow(event) {
   return [
     event.id || "",
@@ -219,11 +308,11 @@ function serializeEventRow(event) {
   ];
 }
 
-export function serializeEventsToCsv(events) {
+function serializeEventsToCsv(events) {
   return stringifyCsv([EVENT_COLUMNS, ...events.map((event) => serializeEventRow(event))]);
 }
 
-export function parseEventsCsv(text) {
+function parseEventsCsv(text) {
   const rows = parseCsv(text);
 
   if (!rows.length) {
@@ -313,3 +402,13 @@ export function parseEventsCsv(text) {
     };
   });
 }
+
+module.exports = {
+  getSessionInfo,
+  isValidEventsPayload,
+  parseEventsCsv,
+  readEvents,
+  resetEvents,
+  serializeEventsToCsv,
+  writeEvents
+};

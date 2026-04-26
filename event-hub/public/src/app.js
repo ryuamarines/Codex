@@ -37,18 +37,17 @@ import {
 } from "./event-selectors.js";
 import { copyText } from "./clipboard.js";
 import { parseFinanceAmount, validateEntity, validateEventCore } from "./validation.js";
-import { APP_RUNTIME, APP_TITLE } from "./firebase-config.js";
+import { APP_TITLE } from "./app-config.js";
 import {
   exportEventsCsv,
   importEventsCsv,
   initializeStorage,
   loadEvents,
-  refreshStorageSession,
   resetEvents,
   saveEvents,
-  signInWithEmailPassword,
   signInWithGoogle,
-  signOutStorageUser
+  signOutStorage,
+  subscribeStorageSession
 } from "./storage.js";
 
 const app = document.getElementById("app");
@@ -60,19 +59,23 @@ const LOCAL_BACKUP_KEY = "event-hub:last-known-events";
 const state = {
   events: [],
   selectedEventId: null,
+  activeView: "dashboard",
   activeTab: "基本情報",
   filter: "all",
   attentionOnly: false,
   sortMode: "smart",
   searchQuery: "",
+  eventStageFilter: "進行中",
   prepFilter: "all",
   prepAssigneeFilter: "all",
   financeFilter: "all",
+  taskBoardFilter: "open",
+  taskBoardAssigneeFilter: "all",
   modal: null,
   mobileSidebarOpen: false,
+  backendLabel: "Local JSON / Node",
   authRequired: false,
   authUser: null,
-  backendLabel: "Local API / JSON",
   isLoading: true,
   error: "",
   saveState: "idle",
@@ -264,69 +267,12 @@ function render() {
 
   app.innerHTML = `
     <div class="shell ${mobileLayout ? "mobile-shell" : ""}">
-      ${mobileLayout ? renderMobileToolbar(selectedEvent) : ""}
-      ${mobileLayout && state.mobileSidebarOpen ? '<button class="sidebar-scrim" data-action="close-mobile-sidebar" aria-label="イベント一覧を閉じる"></button>' : ""}
-      <aside class="sidebar ${mobileLayout ? "mobile-sidebar" : ""} ${mobileLayout && state.mobileSidebarOpen ? "open" : ""}">
-        <div class="brand-card">
-          <div class="brand-head">
-            <div>
-              <p class="eyebrow">${escapeHtml(APP_TITLE)}</p>
-              <h1>イベント運営の母艦</h1>
-              <p class="subtle">Lumaは公開・申込、ここでは準備から収支までをイベント単位で扱います。</p>
-              <p class="subtle">保存先: ${escapeHtml(state.backendLabel)}</p>
-            </div>
-            ${renderSavePill()}
-          </div>
-          <div class="sidebar-actions sidebar-actions-primary">
-            <button class="button button-primary" data-action="open-create-event">新規イベント</button>
-          </div>
-          <div class="sidebar-actions sidebar-actions-utility">
-            <button class="button button-ghost" data-action="reset-sample">サンプルに戻す</button>
-            <button class="button button-ghost" data-action="export-events">CSV書き出し</button>
-            <button class="button button-ghost" data-action="trigger-import">CSV読込</button>
-            ${state.authRequired && state.authUser ? `<button class="button button-ghost" data-action="sign-out">ログアウト</button>` : ""}
-          </div>
-          ${state.authRequired && state.authUser ? `<p class="subtle">ログイン中: ${escapeHtml(formatAuthUserLabel(state.authUser))}</p>` : ""}
-        </div>
-
-        ${renderPortfolioSummary()}
-
+      ${mobileLayout ? renderMobileTopbar(selectedEvent) : renderDesktopSidebar()}
+      <main class="main workspace-main ${mobileLayout ? "mobile-main" : ""}">
         ${state.error ? `<div class="app-banner error">${escapeHtml(state.error)}</div>` : ""}
-
-        <section class="panel">
-          <div class="panel-head compact">
-            <h2>イベント一覧</h2>
-            <span class="count-pill">${state.events.length}件</span>
-          </div>
-          <div class="filter-row">
-            ${renderFilterButton("all", "すべて")}
-            ${EVENT_STATUS_OPTIONS.map((status) => renderFilterButton(status, status)).join("")}
-          </div>
-          <div class="filter-row">
-            <button class="filter-chip ${state.attentionOnly ? "active" : ""}" data-action="toggle-attention-only">要対応のみ</button>
-          </div>
-          <label class="search-field">
-            <span>並び順</span>
-            <select data-action="sort-events">
-              <option value="smart" ${state.sortMode === "smart" ? "selected" : ""}>おすすめ順</option>
-              <option value="dateDesc" ${state.sortMode === "dateDesc" ? "selected" : ""}>開催日が新しい順</option>
-              <option value="updatedDesc" ${state.sortMode === "updatedDesc" ? "selected" : ""}>更新日が新しい順</option>
-              <option value="nameAsc" ${state.sortMode === "nameAsc" ? "selected" : ""}>名前順</option>
-            </select>
-          </label>
-          <label class="search-field">
-            <span>検索</span>
-            <input type="search" data-action="search-events" placeholder="イベント名・会場・担当で検索" value="${escapeAttr(state.searchQuery)}" />
-          </label>
-          <div class="event-list">
-            ${renderEventList()}
-          </div>
-        </section>
-      </aside>
-
-      <main class="main ${mobileLayout ? "mobile-main" : ""}">
-        ${selectedEvent ? renderEventDetail(selectedEvent) : renderEmptyState()}
+        ${renderWorkspace(selectedEvent)}
       </main>
+      ${mobileLayout ? renderMobileBottomNav() : ""}
     </div>
     ${state.modal ? renderModal() : ""}
     <input id="events-import-input" type="file" accept="text/csv,.csv" hidden />
@@ -338,25 +284,862 @@ function renderAuthGate() {
     <div class="loading-view">
       <div class="loading-card auth-card">
         <p class="eyebrow">${escapeHtml(APP_TITLE)}</p>
-        <h1>ログインして Event Hub を開く</h1>
-        <p class="subtle">現在の保存先は ${escapeHtml(state.backendLabel)} です。Google かメールでログインするとイベントを読めます。</p>
+        <h1>Googleでログイン</h1>
+        <p class="subtle">Vercel 公開版は Firestore に保存します。まず Google アカウントでログインしてください。</p>
+        <p class="subtle">保存先: ${escapeHtml(state.backendLabel)}</p>
         ${state.error ? `<div class="app-banner error">${escapeHtml(state.error)}</div>` : ""}
         <div class="auth-actions">
           <button class="button button-primary" data-action="sign-in-google">Googleでログイン</button>
         </div>
-        <form class="stack-form auth-form" data-form="auth-email">
-          ${renderField("メールアドレス", `<input type="email" name="email" autocomplete="username" required />`)}
-          ${renderField("パスワード", `<input type="password" name="password" autocomplete="current-password" required />`)}
-          <div class="form-actions">
-            <button class="button button-secondary" type="submit">メールでログイン</button>
-          </div>
-        </form>
-        ${
-          APP_RUNTIME.allowedEmails.length
-            ? `<p class="subtle">許可メールに入っているアカウントだけアクセスできます。</p>`
-            : `<p class="subtle">今は認証済みユーザーなら入れます。仲間限定にするなら ` + "`allowedEmails`" + ` を設定してください。</p>`
-        }
       </div>
+    </div>
+  `;
+}
+
+function getStorageHint() {
+  if (state.authRequired) {
+    return "Vercel 公開版では Google ログイン後に Firestore を使います。CSV は退避と復元用に使えます。";
+  }
+
+  return "ローカルでは `/api` 経由で JSON に保存します。CSV は退避と復元用に使えます。";
+}
+
+function renderDesktopSidebar() {
+  return `
+    <aside class="sidebar workspace-sidebar">
+      <div class="brand-card brand-card-compact">
+        <div class="brand-head">
+          <div>
+            <p class="eyebrow">${escapeHtml(APP_TITLE)}</p>
+            <h1>Event Hub</h1>
+            <p class="subtle">いま危ないイベントと、次にやることを動かすための運営ツールです。</p>
+            <p class="subtle">保存先: ${escapeHtml(state.backendLabel)}</p>
+          </div>
+          ${renderSavePill()}
+        </div>
+        <div class="sidebar-actions sidebar-actions-primary">
+          <button class="button button-primary" data-action="open-create-event">新しいイベント</button>
+        </div>
+      </div>
+
+      <nav class="panel workspace-nav">
+        ${renderWorkspaceNavItems()}
+      </nav>
+
+      <section class="panel sidebar-utility-panel">
+        <div class="panel-head compact">
+          <h2>運用</h2>
+          <span class="count-pill">${state.events.length}件</span>
+        </div>
+        <div class="sidebar-actions sidebar-actions-utility stack-utility-actions">
+          <button class="button button-ghost" data-action="reset-sample">サンプルに戻す</button>
+          <button class="button button-ghost" data-action="export-events">CSV書き出し</button>
+          <button class="button button-ghost" data-action="trigger-import">CSV読込</button>
+          ${state.authRequired ? `<button class="button button-ghost" data-action="sign-out">ログアウト</button>` : ""}
+        </div>
+        <p class="subtle">${escapeHtml(getStorageHint())}</p>
+        ${state.authUser ? `<p class="subtle">ログイン中: ${escapeHtml(state.authUser.displayName || state.authUser.email || "")}</p>` : ""}
+      </section>
+    </aside>
+  `;
+}
+
+function renderWorkspaceNavItems() {
+  const items = [
+    { id: "dashboard", label: "ダッシュボード", count: buildDashboardSnapshot(state.events).activeEvents },
+    { id: "events", label: "イベント", count: state.events.length },
+    { id: "tasks", label: "タスク", count: buildGlobalTaskItems(state.events, { mode: "open", assignee: "all" }).length },
+    { id: "finance", label: "収支", count: state.events.filter((event) => event.finance.lines.length > 0).length }
+  ];
+
+  return items
+    .map(
+      (item) => `
+        <button class="nav-item ${state.activeView === item.id ? "active" : ""}" data-action="set-view" data-view="${item.id}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${item.count}</strong>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function renderMobileTopbar(selectedEvent) {
+  const titleMap = {
+    dashboard: "ダッシュボード",
+    events: "イベント",
+    tasks: "タスク",
+    finance: "収支",
+    detail: selectedEvent?.name || "イベント詳細"
+  };
+
+  return `
+    <header class="mobile-topbar">
+      <div>
+        <p class="eyebrow">${escapeHtml(APP_TITLE)}</p>
+        <strong>${escapeHtml(titleMap[state.activeView] || "Event Hub")}</strong>
+        <small>${state.activeView === "detail" && selectedEvent ? escapeHtml(formatDateTime(selectedEvent.startsAt)) : "運営状況を確認できます"}</small>
+      </div>
+      <div class="mobile-toolbar-actions">
+        ${state.activeView === "detail" ? `<button class="button button-ghost" data-action="set-view" data-view="events">戻る</button>` : ""}
+        <button class="button button-primary" data-action="open-create-event">＋</button>
+      </div>
+    </header>
+  `;
+}
+
+function renderMobileBottomNav() {
+  const currentView = state.activeView === "detail" ? "events" : state.activeView;
+  const items = [
+    { id: "dashboard", label: "ホーム" },
+    { id: "events", label: "イベント" },
+    { id: "tasks", label: "タスク" },
+    { id: "finance", label: "収支" }
+  ];
+
+  return `
+    <nav class="mobile-bottom-nav">
+      ${items
+        .map(
+          (item) => `
+            <button class="mobile-nav-item ${currentView === item.id ? "active" : ""}" data-action="set-view" data-view="${item.id}">
+              <span>${escapeHtml(item.label)}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </nav>
+  `;
+}
+
+function renderWorkspace(selectedEvent) {
+  switch (state.activeView) {
+    case "events":
+      return renderEventsWorkspace();
+    case "tasks":
+      return renderTasksWorkspace();
+    case "finance":
+      return renderFinanceWorkspace();
+    case "detail":
+      return selectedEvent ? renderEventDetailWorkspace(selectedEvent) : renderEmptyState();
+    case "dashboard":
+    default:
+      return renderDashboardView();
+  }
+}
+
+function renderDashboardView() {
+  const dashboard = buildDashboardSnapshot(state.events);
+  const spotlightEvents = getStageScopedEvents("進行中").slice(0, 4);
+  const todayTasks = buildGlobalTaskItems(state.events, { mode: "today", assignee: "all" }).slice(0, 6);
+  const monthSummary = buildMonthlyFinanceSummary(state.events)[0];
+
+  return `
+    <section class="workspace-section">
+      <div class="workspace-header">
+        <div>
+          <p class="eyebrow">Dashboard</p>
+          <h2>今の運営状況</h2>
+          <p class="subtle">イベント名よりも、いま詰まりそうな状態と判断材料を先に見せます。</p>
+        </div>
+        <div class="header-actions">
+          <button class="button button-secondary" data-action="set-view" data-view="finance">収支を見る</button>
+          <button class="button button-primary" data-action="open-create-event">新規イベント</button>
+        </div>
+      </div>
+
+      <section class="dashboard-metrics">
+        ${renderDashboardMetric("進行中イベント", dashboard.activeEvents, "公開準備中 / 募集中")}
+        ${renderDashboardMetric("未完了タスク", dashboard.openTasks, `期限超過 ${dashboard.overdueTasks}`)}
+        ${renderDashboardMetric("合計申込数", dashboard.totalRegistrations, "Luma 手入力合計")}
+        ${renderDashboardMetric("収支サマリー", formatSignedCurrency(dashboard.totalProfit), dashboard.totalProfit >= 0 ? "全体で黒字" : "全体で赤字")}
+      </section>
+
+      <section class="panel workspace-panel">
+        <div class="panel-head">
+          <div>
+            <h3>進行中イベント</h3>
+            <p class="subtle">危ない順に優先して見られるよう、状態値を前に出しています。</p>
+          </div>
+          <button class="button button-ghost" data-action="set-view" data-view="events">すべて見る</button>
+        </div>
+        <div class="state-card-grid">
+          ${
+            spotlightEvents.length
+              ? spotlightEvents.map((event) => renderEventStateCard(event, "dashboard")).join("")
+              : `<div class="empty-panel">進行中イベントはまだありません。</div>`
+          }
+        </div>
+      </section>
+
+      <section class="workspace-split">
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>今日やること</h3>
+            <span class="count-pill">${todayTasks.length}</span>
+          </div>
+          <div class="global-task-list">
+            ${
+              todayTasks.length
+                ? todayTasks.map((item) => renderGlobalTaskRow(item, true)).join("")
+                : `<div class="empty-panel small">今日優先したいタスクはまだありません。</div>`
+            }
+          </div>
+        </div>
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>収支サマリー</h3>
+            <span class="count-pill">${monthSummary ? monthSummary.label : "全体"}</span>
+          </div>
+          <div class="finance-summary-stack">
+            <div class="finance-balance-card ${dashboard.totalProfit >= 0 ? "positive" : "negative"}">
+              <span>合計利益</span>
+              <strong>${formatSignedCurrency(dashboard.totalProfit)}</strong>
+              <small>売上 ${formatCurrency(dashboard.totalRevenue)} / 支出 ${formatCurrency(dashboard.totalExpense)}</small>
+            </div>
+            ${monthSummary ? renderMiniMonthSummary(monthSummary) : `<p class="subtle">月別集計はイベントを追加すると表示されます。</p>`}
+          </div>
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderDashboardMetric(label, value, detail) {
+  return `
+    <article class="metric-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </article>
+  `;
+}
+
+function renderEventsWorkspace() {
+  const stageEvents = getStageScopedEvents(state.eventStageFilter);
+
+  return `
+    <section class="workspace-section">
+      <div class="workspace-header">
+        <div>
+          <p class="eyebrow">Events</p>
+          <h2>イベント一覧</h2>
+          <p class="subtle">状態から見るための一覧です。必要最小限の情報だけで危険度が分かるようにしています。</p>
+        </div>
+        <div class="header-actions">
+          <label class="search-field compact-search">
+            <span>検索</span>
+            <input type="search" data-action="search-events" placeholder="イベント名・会場・担当で検索" value="${escapeAttr(state.searchQuery)}" />
+          </label>
+        </div>
+      </div>
+
+      <div class="segmented-row">
+        ${renderStageFilterChip("進行中")}
+        ${renderStageFilterChip("予定")}
+        ${renderStageFilterChip("終了")}
+      </div>
+
+      <section class="state-card-grid wide">
+        ${
+          stageEvents.length
+            ? stageEvents.map((event) => renderEventStateCard(event, "events")).join("")
+            : `<div class="empty-panel">この条件のイベントはまだありません。</div>`
+        }
+      </section>
+    </section>
+  `;
+}
+
+function renderStageFilterChip(value) {
+  const count = getStageScopedEvents(value).length;
+  return `
+    <button class="filter-chip ${state.eventStageFilter === value ? "active" : ""}" data-action="set-event-stage" data-stage="${value}">
+      <span>${escapeHtml(value)}</span>
+      <span class="chip-count">${count}</span>
+    </button>
+  `;
+}
+
+function renderEventStateCard(event, context) {
+  const progress = getTaskProgress(event.tasks);
+  const completionRate = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const finance = calculateFinance(event);
+  const ops = buildOperationalSummary(event);
+  const registrationCount = Number(event.lumaRegistrationCount || 0);
+  const schedule = buildScheduleStatus(event);
+
+  return `
+    <article class="state-card ${context === "dashboard" ? "spotlight" : ""}">
+      <button class="state-card-hit" data-action="open-event-detail" data-event-id="${event.id}" aria-label="${escapeAttr(event.name || "イベント詳細")}"></button>
+      <div class="state-card-head">
+        <div>
+          <small>${escapeHtml(formatDate(event.startsAt))}</small>
+          <h3>${escapeHtml(event.name || "名称未設定")}</h3>
+          <p>${escapeHtml(event.venue || "会場未設定")}</p>
+        </div>
+        <span class="status-badge">${escapeHtml(event.status)}</span>
+      </div>
+      <div class="state-card-metrics">
+        <div><span>申込</span><strong>${registrationCount}</strong></div>
+        <div><span>進捗</span><strong>${completionRate}%</strong></div>
+        <div><span>収支見込み</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong></div>
+      </div>
+      <div class="progress-track"><span style="width:${completionRate}%"></span></div>
+      <div class="state-card-foot">
+        <span class="mini-pill">${escapeHtml(schedule.shortLabel)}</span>
+        <span class="mini-pill warning">未完了 ${progress.total - progress.done}</span>
+        ${ops.overdueTasks.length ? `<span class="mini-pill warning">期限超過 ${ops.overdueTasks.length}</span>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderEventDetailWorkspace(event) {
+  const finance = calculateFinance(event);
+  const progress = getTaskProgress(event.tasks);
+  const completionRate = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const audience = buildAudienceSnapshot(event);
+  const financeTone = getFinanceTone(event);
+  const openTasks = event.tasks.slice().sort(sortTasks).filter((task) => task.status !== "完了");
+  const completedTasks = event.tasks.filter((task) => task.status === "完了");
+  const categoryBreakdown = buildFinanceCategoryBreakdown(event.finance.lines);
+  const followUps = event.participantHub.touchedParticipants.filter((item) => item.followUp);
+
+  return `
+    <section class="workspace-section detail-workspace">
+      <div class="detail-backbar">
+        <button class="button button-ghost" data-action="set-view" data-view="events">イベント一覧に戻る</button>
+      </div>
+
+      <section class="detail-summary-card">
+        <div class="detail-summary-main">
+          <p class="eyebrow">Event Detail</p>
+          <div class="detail-title-row">
+            <div>
+              <h2>${escapeHtml(event.name || "名称未設定")}</h2>
+              <p class="subtle">${escapeHtml(event.venue || "会場未設定")} / ${escapeHtml(formatDateTime(event.startsAt))}</p>
+            </div>
+            <div class="detail-header-tags">
+              <span class="status-badge">${escapeHtml(event.status)}</span>
+              <span class="finance-badge ${financeTone.tone}">${financeTone.label}</span>
+            </div>
+          </div>
+          <div class="detail-summary-grid">
+            <div><span>申込数</span><strong>${audience.registrations}</strong><small>${escapeHtml(event.lumaStatus || "Luma未設定")}</small></div>
+            <div><span>進捗</span><strong>${completionRate}%</strong><small>${progress.done}/${progress.total} 完了</small></div>
+            <div><span>収支見込み</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong><small>売上 ${formatCurrency(finance.revenueActual)}</small></div>
+          </div>
+          <div class="progress-track large"><span style="width:${completionRate}%"></span></div>
+        </div>
+        <div class="detail-summary-actions">
+          ${renderStatusActions(event)}
+          ${event.lumaUrl ? `<a class="button button-secondary" href="${escapeAttr(event.lumaUrl)}" target="_blank" rel="noreferrer">Luma を開く</a>` : ""}
+          <button class="button button-ghost" data-action="duplicate-event" data-event-id="${event.id}">複製</button>
+          <button class="button button-ghost button-danger" data-action="delete-event" data-event-id="${event.id}">削除</button>
+        </div>
+      </section>
+
+      <section class="detail-block-grid">
+        <div class="panel workspace-panel span-2">
+          <div class="panel-head">
+            <div>
+              <h3>タスク</h3>
+              <p class="subtle">未完了タスクを先に出し、完了済みは折りたたみで後ろに回します。</p>
+            </div>
+            <div class="inline-actions">
+              <button class="button button-secondary" data-action="set-tab" data-tab="準備">詳細編集</button>
+              <button class="button button-primary" data-action="open-task-modal" data-event-id="${event.id}">タスク追加</button>
+            </div>
+          </div>
+          <div class="operational-task-list">
+            ${
+              openTasks.length
+                ? openTasks.slice(0, 8).map((task) => renderOperationalTaskRow(event.id, task)).join("")
+                : `<div class="empty-panel small">未完了タスクはありません。</div>`
+            }
+          </div>
+          <details class="collapsible-panel" ${completedTasks.length && openTasks.length === 0 ? "open" : ""}>
+            <summary>完了済みタスク ${completedTasks.length}件</summary>
+            <div class="operational-task-list muted-list">
+              ${
+                completedTasks.length
+                  ? completedTasks.map((task) => renderOperationalTaskRow(event.id, task)).join("")
+                  : `<div class="empty-panel small">完了済みタスクはありません。</div>`
+              }
+            </div>
+          </details>
+        </div>
+
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>集客</h3>
+            <span class="count-pill">${audience.registrations}名</span>
+          </div>
+          <div class="audience-stat-grid">
+            <div><span>申込数</span><strong>${audience.registrations}</strong></div>
+            <div><span>参加見込み</span><strong>${audience.expectedLabel}</strong></div>
+            <div><span>キャンセル数</span><strong>${audience.cancelledLabel}</strong></div>
+          </div>
+          <div class="audience-chart">
+            ${renderAudienceMiniChart(audience)}
+          </div>
+        </div>
+
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>収支</h3>
+            <span class="count-pill">${event.finance.lines.length}件</span>
+          </div>
+          <div class="finance-summary-stack">
+            <div class="finance-row"><span>売上</span><strong>${formatCurrency(finance.revenueActual)}</strong></div>
+            <div class="finance-row"><span>支出</span><strong>${formatCurrency(finance.expenseActual)}</strong></div>
+            <div class="finance-row total"><span>利益</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong></div>
+          </div>
+          <div class="mini-breakdown-list">
+            ${
+              categoryBreakdown.length
+                ? categoryBreakdown.slice(0, 4).map((item) => `<div class="finance-row"><span>${escapeHtml(item.category)}</span><strong>${formatCurrency(item.actual)}</strong></div>`).join("")
+                : `<p class="subtle">収支明細はまだありません。</p>`
+            }
+          </div>
+        </div>
+
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>チーム</h3>
+            <span class="count-pill">${event.runbook.roles.length}役割</span>
+          </div>
+          <div class="team-list">
+            <div class="team-item">
+              <span>担当メンバー</span>
+              <strong>${escapeHtml(event.owners || "未設定")}</strong>
+            </div>
+            ${
+              event.runbook.roles.length
+                ? event.runbook.roles
+                    .slice(0, 5)
+                    .map(
+                      (role) => `
+                        <div class="team-item">
+                          <span>${escapeHtml(role.role || "役割未設定")}</span>
+                          <strong>${escapeHtml(role.owner || "担当未設定")}</strong>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<p class="subtle">役割分担はまだありません。</p>`
+            }
+          </div>
+        </div>
+
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>画像保管</h3>
+            <span class="count-pill">${event.assetArchive.images.length}件</span>
+          </div>
+          <div class="team-list">
+            <div class="team-item">
+              <span>Drive フォルダ</span>
+              ${
+                event.assetArchive.driveFolderUrl
+                  ? `<a href="${escapeAttr(event.assetArchive.driveFolderUrl)}" target="_blank" rel="noreferrer">開く</a>`
+                  : `<strong>未設定</strong>`
+              }
+            </div>
+            <div class="team-item">
+              <span>画像リンク</span>
+              <strong>${event.assetArchive.images.length ? `${event.assetArchive.images.length}件` : "未登録"}</strong>
+            </div>
+            <div class="team-item">
+              <span>管理メモ</span>
+              <strong>${escapeHtml(event.assetArchive.notes || "未入力")}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel workspace-panel span-2">
+          <div class="panel-head compact">
+            <h3>振り返り</h3>
+            <span class="count-pill">${followUps.length}件フォロー候補</span>
+          </div>
+          <div class="reflection-grid">
+            <div><span>良かった点</span><p>${escapeHtml(event.result.wentWell || "未入力")}</p></div>
+            <div><span>問題点</span><p>${escapeHtml(event.result.improvements || "未入力")}</p></div>
+            <div><span>次回改善</span><p>${escapeHtml(event.result.nextMemo || "未入力")}</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel workspace-panel detail-editor-panel">
+        <div class="panel-head">
+          <div>
+            <h3>詳細編集</h3>
+            <p class="subtle">PCではここから基本情報・当日・収支・画像リンクまで深く編集できます。</p>
+          </div>
+        </div>
+        <div class="tabs">
+          ${TAB_OPTIONS.map(
+            (tab) => `
+              <button class="tab-button ${state.activeTab === tab ? "active" : ""}" data-action="set-tab" data-tab="${escapeAttr(tab)}">
+                ${escapeHtml(tab)}
+              </button>
+            `
+          ).join("")}
+        </div>
+        <div class="tab-panel">${renderTabContent(event)}</div>
+      </section>
+    </section>
+  `;
+}
+
+function renderOperationalTaskRow(eventId, task) {
+  const overdue = getOverdueTasks([task]).length > 0;
+  const dueSoon = !overdue && getDueSoonTasks([task]).length > 0;
+
+  return `
+    <div class="task-row ${task.status === "完了" ? "completed" : ""}">
+      <label class="global-task-check">
+        <input type="checkbox" data-action="toggle-task-status" data-event-id="${eventId}" data-task-id="${task.id}" ${task.status === "完了" ? "checked" : ""} />
+      </label>
+      <div class="task-row-main">
+        <strong>${escapeHtml(task.title)}</strong>
+        <p>${escapeHtml(task.assignee || "担当未設定")} / ${escapeHtml(task.category || "未分類")}</p>
+      </div>
+      <div class="task-row-meta">
+        <span class="task-row-due ${overdue ? "overdue" : dueSoon ? "due-soon" : ""}">${escapeHtml(formatDate(task.dueDate))}</span>
+        <button class="icon-button" type="button" data-action="edit-task" data-event-id="${eventId}" data-task-id="${task.id}">編集</button>
+      </div>
+    </div>
+  `;
+}
+
+function buildAudienceSnapshot(event) {
+  const registrations = Number(event.lumaRegistrationCount || 0);
+  const checkedIn = Number(event.participantHub.checkedInCount || 0);
+  const actualAttendees = Number(event.result.attendeeCount || 0);
+  const expected = actualAttendees || checkedIn || 0;
+  const cancelled = event.status === "開催済み" && registrations && expected ? Math.max(registrations - expected, 0) : 0;
+
+  return {
+    registrations,
+    expected,
+    cancelled,
+    expectedLabel: expected ? `${expected}名` : "未入力",
+    cancelledLabel: cancelled ? `${cancelled}名` : "未管理"
+  };
+}
+
+function renderAudienceMiniChart(audience) {
+  const maxValue = Math.max(audience.registrations, audience.expected, audience.cancelled, 1);
+  const items = [
+    { label: "申込", value: audience.registrations },
+    { label: "見込み", value: audience.expected },
+    { label: "キャンセル", value: audience.cancelled }
+  ];
+
+  return items
+    .map(
+      (item) => `
+        <div class="mini-chart-row">
+          <span>${escapeHtml(item.label)}</span>
+          <div class="mini-chart-track"><i style="width:${Math.max((item.value / maxValue) * 100, item.value ? 12 : 0)}%"></i></div>
+          <strong>${item.value}</strong>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderTasksWorkspace() {
+  const taskItems = buildGlobalTaskItems(state.events, {
+    mode: state.taskBoardFilter,
+    assignee: state.taskBoardAssigneeFilter
+  });
+  const assigneeOptions = Array.from(
+    new Set(
+      state.events
+        .flatMap((event) => event.tasks)
+        .map((task) => task.assignee?.trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "ja"));
+
+  return `
+    <section class="workspace-section">
+      <div class="workspace-header">
+        <div>
+          <p class="eyebrow">Tasks</p>
+          <h2>全イベントのタスク</h2>
+          <p class="subtle">今日やること、未完了、担当者別で切り替えて、運営全体のボトルネックを見ます。</p>
+        </div>
+      </div>
+      <div class="workspace-toolbar">
+        <div class="segmented-row">
+          ${renderTaskBoardFilterChip("open", "未完了")}
+          ${renderTaskBoardFilterChip("today", "今日やること")}
+          ${renderTaskBoardFilterChip("done", "完了")}
+        </div>
+        <label class="search-field compact-search">
+          <span>担当者</span>
+          <select data-action="set-task-board-assignee-filter">
+            <option value="all" ${state.taskBoardAssigneeFilter === "all" ? "selected" : ""}>すべて</option>
+            <option value="__unassigned__" ${state.taskBoardAssigneeFilter === "__unassigned__" ? "selected" : ""}>未割当</option>
+            ${assigneeOptions
+              .map(
+                (assignee) =>
+                  `<option value="${escapeAttr(assignee)}" ${state.taskBoardAssigneeFilter === assignee ? "selected" : ""}>${escapeHtml(
+                    assignee
+                  )}</option>`
+              )
+              .join("")}
+          </select>
+        </label>
+      </div>
+      <section class="panel workspace-panel">
+        <div class="panel-head compact">
+          <h3>タスクリスト</h3>
+          <span class="count-pill">${taskItems.length}件</span>
+        </div>
+        <div class="global-task-list">
+          ${
+            taskItems.length
+              ? taskItems.map((item) => renderGlobalTaskRow(item, false)).join("")
+              : `<div class="empty-panel">この条件のタスクはありません。</div>`
+          }
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderTaskBoardFilterChip(value, label) {
+  return `
+    <button class="filter-chip ${state.taskBoardFilter === value ? "active" : ""}" data-action="set-task-board-filter" data-task-filter="${value}">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function buildGlobalTaskItems(events, { mode = "open", assignee = "all" } = {}) {
+  return events
+    .flatMap((event) =>
+      event.tasks.map((task) => ({
+        eventId: event.id,
+        eventName: event.name || "名称未設定",
+        eventStatus: event.status,
+        startsAt: event.startsAt,
+        task
+      }))
+    )
+    .filter((item) => {
+      if (assignee === "__unassigned__") {
+        return !item.task.assignee?.trim();
+      }
+      if (assignee !== "all" && item.task.assignee?.trim() !== assignee) {
+        return false;
+      }
+      if (mode === "open") {
+        return item.task.status !== "完了";
+      }
+      if (mode === "done") {
+        return item.task.status === "完了";
+      }
+      if (mode === "today") {
+        return item.task.status !== "完了" && (getOverdueTasks([item.task]).length || getDueSoonTasks([item.task], 1).length);
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const rankDiff = getTaskRank(a.task) - getTaskRank(b.task);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return toTimestamp(a.startsAt) - toTimestamp(b.startsAt);
+    });
+}
+
+function renderGlobalTaskRow(item, compact) {
+  const overdue = getOverdueTasks([item.task]).length > 0;
+  const dueSoon = !overdue && getDueSoonTasks([item.task], compact ? 1 : 3).length > 0;
+
+  return `
+    <div class="global-task-row ${compact ? "compact" : ""}">
+      <label class="global-task-check">
+        <input type="checkbox" data-action="toggle-task-status" data-event-id="${item.eventId}" data-task-id="${item.task.id}" ${item.task.status === "完了" ? "checked" : ""} />
+        <span></span>
+      </label>
+      <div class="global-task-content">
+        <strong>${escapeHtml(item.task.title)}</strong>
+        <p>${escapeHtml(item.eventName)} / ${escapeHtml(item.task.assignee || "担当未設定")}</p>
+      </div>
+      <div class="global-task-side">
+        <span class="mini-pill">${escapeHtml(item.task.category || "未分類")}</span>
+        <span class="task-row-due ${overdue ? "overdue" : dueSoon ? "due-soon" : ""}">${escapeHtml(formatDate(item.task.dueDate))}</span>
+        <button class="button button-ghost compact-button" data-action="open-event-detail" data-event-id="${item.eventId}">イベントへ</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderFinanceWorkspace() {
+  const monthly = buildMonthlyFinanceSummary(state.events);
+  const summary = buildDashboardSnapshot(state.events);
+  const orderedEvents = [...state.events].sort((a, b) => toTimestamp(a.startsAt) - toTimestamp(b.startsAt));
+
+  return `
+    <section class="workspace-section">
+      <div class="workspace-header">
+        <div>
+          <p class="eyebrow">Finance</p>
+          <h2>収支</h2>
+          <p class="subtle">イベント別の収支を横断して、利益の偏りや未精算を見つけやすくします。</p>
+        </div>
+      </div>
+      <section class="dashboard-metrics">
+        ${renderDashboardMetric("売上合計", formatCurrency(summary.totalRevenue), "実績ベース")}
+        ${renderDashboardMetric("支出合計", formatCurrency(summary.totalExpense), "実績ベース")}
+        ${renderDashboardMetric("利益合計", formatSignedCurrency(summary.totalProfit), summary.totalProfit >= 0 ? "黒字" : "赤字")}
+        ${renderDashboardMetric("未精算", formatCurrency(summary.totalUnsettledAmount), `${summary.totalUnsettledLines}件`)}
+      </section>
+      <section class="workspace-split">
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>月別サマリー</h3>
+            <span class="count-pill">${monthly.length}ヶ月</span>
+          </div>
+          <div class="month-summary-list">
+            ${
+              monthly.length
+                ? monthly.map((item) => renderMiniMonthSummary(item)).join("")
+                : `<div class="empty-panel small">月別サマリーはまだありません。</div>`
+            }
+          </div>
+        </div>
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>イベント別収支</h3>
+            <span class="count-pill">${orderedEvents.length}件</span>
+          </div>
+          <div class="finance-event-list">
+            ${orderedEvents
+              .map((event) => {
+                const finance = calculateFinance(event);
+                return `
+                  <button class="finance-event-row" data-action="open-event-detail" data-event-id="${event.id}">
+                    <div>
+                      <strong>${escapeHtml(event.name || "名称未設定")}</strong>
+                      <p>${escapeHtml(formatDate(event.startsAt))}</p>
+                    </div>
+                    <div class="finance-event-meta">
+                      <span>売上 ${formatCurrency(finance.revenueActual)}</span>
+                      <span>支出 ${formatCurrency(finance.expenseActual)}</span>
+                      <strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong>
+                    </div>
+                  </button>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function buildDashboardSnapshot(events) {
+  return events.reduce(
+    (acc, event) => {
+      const finance = calculateFinance(event);
+      acc.activeEvents += ["公開準備中", "募集中"].includes(event.status) ? 1 : 0;
+      acc.openTasks += event.tasks.filter((task) => task.status !== "完了").length;
+      acc.overdueTasks += getOverdueTasks(event.tasks).length;
+      acc.totalRegistrations += Number(event.lumaRegistrationCount || 0);
+      acc.totalRevenue += finance.revenueActual;
+      acc.totalExpense += finance.expenseActual;
+      acc.totalProfit += finance.profitActual;
+      acc.totalUnsettledLines += getUnsettledLines(event.finance.lines).length;
+      acc.totalUnsettledAmount += getUnsettledLines(event.finance.lines).reduce(
+        (sum, line) => sum + Number(line.actualAmount || line.plannedAmount || 0),
+        0
+      );
+      return acc;
+    },
+    {
+      activeEvents: 0,
+      openTasks: 0,
+      overdueTasks: 0,
+      totalRegistrations: 0,
+      totalRevenue: 0,
+      totalExpense: 0,
+      totalProfit: 0,
+      totalUnsettledLines: 0,
+      totalUnsettledAmount: 0
+    }
+  );
+}
+
+function getStageScopedEvents(stage) {
+  const visible = getVisibleEvents();
+
+  if (stage === "進行中") {
+    return visible.filter((event) => ["公開準備中", "募集中"].includes(event.status));
+  }
+
+  if (stage === "予定") {
+    return visible.filter((event) => event.status === "企画中");
+  }
+
+  if (stage === "終了") {
+    return visible.filter((event) => event.status === "開催済み");
+  }
+
+  return visible;
+}
+
+function buildMonthlyFinanceSummary(events) {
+  const grouped = new Map();
+
+  events.forEach((event) => {
+    if (!event.startsAt) {
+      return;
+    }
+
+    const key = event.startsAt.slice(0, 7);
+    const finance = calculateFinance(event);
+    const current = grouped.get(key) || {
+      key,
+      label: formatMonthLabel(key),
+      revenue: 0,
+      expense: 0,
+      profit: 0,
+      events: 0
+    };
+
+    current.revenue += finance.revenueActual;
+    current.expense += finance.expenseActual;
+    current.profit += finance.profitActual;
+    current.events += 1;
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()].sort((a, b) => b.key.localeCompare(a.key));
+}
+
+function renderMiniMonthSummary(item) {
+  const denominator = Math.max(item.revenue, item.expense, Math.abs(item.profit), 1);
+  const profitWidth = Math.min((Math.abs(item.profit) / denominator) * 100, 100);
+
+  return `
+    <div class="month-summary-card">
+      <div class="month-summary-head">
+        <strong>${escapeHtml(item.label)}</strong>
+        <span>${item.events}件</span>
+      </div>
+      <div class="finance-row"><span>売上</span><strong>${formatCurrency(item.revenue)}</strong></div>
+      <div class="finance-row"><span>支出</span><strong>${formatCurrency(item.expense)}</strong></div>
+      <div class="mini-chart-track profit ${item.profit >= 0 ? "positive" : "negative"}"><i style="width:${profitWidth}%"></i></div>
+      <div class="finance-row total"><span>利益</span><strong class="${item.profit >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(item.profit)}</strong></div>
     </div>
   `;
 }
@@ -466,14 +1249,6 @@ function renderSavePill() {
   return `<span class="save-pill ${state.saveState}">${labels[state.saveState]}</span>`;
 }
 
-function formatAuthUserLabel(user) {
-  if (!user) {
-    return "未ログイン";
-  }
-
-  return user.displayName || user.email || "ログイン中";
-}
-
 function renderFilterButton(value, label) {
   const isActive = state.filter === value;
   const count =
@@ -517,6 +1292,7 @@ function renderEventList() {
           <dl class="meta-list compact-meta-list">
             <div><dt>開催</dt><dd>${formatDateTime(event.startsAt)}</dd></div>
             <div><dt>会場</dt><dd>${escapeHtml(event.venue || "未設定")}</dd></div>
+            <div><dt>Luma</dt><dd>${escapeHtml(formatShortUrl(event.lumaUrl) || "未設定")}</dd></div>
           </dl>
           <div class="card-foot">
             <span class="mini-pill">${event.lumaRegistrationCount || 0}名</span>
@@ -785,6 +1561,7 @@ function renderTabContent(event) {
 
 function renderBasicsTab(event) {
   const templateLabel = EVENT_TEMPLATES.find((template) => template.id === event.templateId)?.label || "カスタム";
+  const imageCount = event.assetArchive.images.length;
 
   return `
     <form class="stack-form" data-form="basic-info" data-event-id="${event.id}">
@@ -843,6 +1620,56 @@ function renderBasicsTab(event) {
           ${renderField("公開URL", `<input type="url" name="lumaUrlMirror" value="${escapeAttr(event.lumaUrl)}" disabled />`)}
         </div>
         ${renderField("Luma運用メモ", `<textarea name="lumaNotes" rows="4">${escapeHtml(event.lumaNotes)}</textarea>`)}
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>画像保管</h3>
+            <p class="subtle">画像本体は Google Drive 側で管理し、このイベントにはフォルダ URL と共有したい画像リンクだけを残します。</p>
+          </div>
+          <div class="inline-actions">
+            <span class="count-pill">${imageCount}件</span>
+            <button class="button button-primary" type="button" data-action="open-asset-modal" data-event-id="${event.id}">画像リンク追加</button>
+          </div>
+        </div>
+        <div class="section-grid two-column">
+          ${renderField(
+            "Google Drive フォルダ URL",
+            `<input type="url" name="imageDriveFolderUrl" value="${escapeAttr(event.assetArchive.driveFolderUrl)}" placeholder="https://drive.google.com/..." />`
+          )}
+          ${renderField(
+            "フォルダ確認",
+            event.assetArchive.driveFolderUrl
+              ? `<a class="button button-secondary button-block" href="${escapeAttr(event.assetArchive.driveFolderUrl)}" target="_blank" rel="noreferrer">Google Drive を開く</a>`
+              : `<input value="URL未設定" disabled />`
+          )}
+        </div>
+        ${renderField("画像管理メモ", `<textarea name="imageArchiveNotes" rows="4">${escapeHtml(event.assetArchive.notes)}</textarea>`)}
+        <div class="participant-list">
+          ${
+            imageCount
+              ? event.assetArchive.images
+                  .map(
+                    (item) => `
+                      <article class="compact-row">
+                        <div>
+                          <strong>${escapeHtml(item.label || "画像リンク")}</strong>
+                          <p>${escapeHtml(formatShortUrl(item.url) || item.url || "URL未設定")}</p>
+                          <small>${escapeHtml(item.note || "メモなし")}</small>
+                        </div>
+                        <div class="inline-actions">
+                          <a class="icon-button" href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">開く</a>
+                          <button class="icon-button" type="button" data-action="edit-asset" data-event-id="${event.id}" data-item-id="${item.id}">編集</button>
+                          <button class="icon-button danger" type="button" data-action="delete-asset" data-event-id="${event.id}" data-item-id="${item.id}">削除</button>
+                        </div>
+                      </article>
+                    `
+                  )
+                  .join("")
+              : `<div class="empty-panel small">画像リンクはまだありません。Drive フォルダ URL と、共有したい画像リンクを残せます。</div>`
+          }
+        </div>
       </div>
 
       <div class="form-actions">
@@ -1994,6 +2821,20 @@ function renderField(label, inputHtml) {
   `;
 }
 
+function formatShortUrl(value) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value);
+    const pathLabel = url.pathname === "/" ? "" : url.pathname.replace(/\/$/, "");
+    return `${url.host}${pathLabel}`.slice(0, 64);
+  } catch {
+    return String(value);
+  }
+}
+
 function renderModal() {
   const modal = state.modal;
   const event = modal.eventId ? state.events.find((item) => item.id === modal.eventId) : null;
@@ -2022,7 +2863,8 @@ function getModalTitle(modal) {
     role: modal.mode === "edit" ? "役割編集" : "役割追加",
     checklist: modal.mode === "edit" ? "チェック項目編集" : "チェック項目追加",
     finance: modal.mode === "edit" ? "収支明細編集" : "収支明細追加",
-    participant: modal.mode === "edit" ? "接点メモ編集" : "接点メモ追加"
+    participant: modal.mode === "edit" ? "接点メモ編集" : "接点メモ追加",
+    asset: modal.mode === "edit" ? "画像リンク編集" : "画像リンク追加"
   };
 
   return titles[modal.kind] || "編集";
@@ -2036,7 +2878,8 @@ function getModalSubtitle(modal) {
     role: "当日の役割分担を明文化します。",
     checklist: "当日チェック用の簡易項目です。",
     finance: "立替と精算状態まで見える明細を残します。",
-    participant: "将来の参加者一覧取り込みに備えた軽い接点メモです。"
+    participant: "将来の参加者一覧取り込みに備えた軽い接点メモです。",
+    asset: "画像自体は Google Drive に置き、このイベントには参照リンクだけを残します。"
   };
 
   return subtitles[modal.kind] || "";
@@ -2233,6 +3076,19 @@ function renderModalBody(modal, event) {
     `;
   }
 
+  if (modal.kind === "asset") {
+    return `
+      <form class="stack-form" data-form="asset" data-event-id="${modal.eventId}" data-mode="${modal.mode}" data-item-id="${item?.id || ""}">
+        ${renderField("画像リンク名", `<input name="label" value="${escapeAttr(item?.label || "")}" required />`)}
+        ${renderField("画像URL", `<input type="url" name="url" value="${escapeAttr(item?.url || "")}" placeholder="https://drive.google.com/..." required />`)}
+        ${renderField("メモ", `<textarea name="note" rows="4">${escapeHtml(item?.note || "")}</textarea>`)}
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">${modal.mode === "edit" ? "更新" : "追加"}</button>
+        </div>
+      </form>
+    `;
+  }
+
   return "";
 }
 
@@ -2263,6 +3119,10 @@ function findModalItem(modal, event) {
 
   if (modal.kind === "participant") {
     return event.participantHub.touchedParticipants.find((item) => item.id === modal.itemId) || null;
+  }
+
+  if (modal.kind === "asset") {
+    return event.assetArchive.images.find((item) => item.id === modal.itemId) || null;
   }
 
   return null;
@@ -2302,7 +3162,7 @@ async function syncEvents() {
       state.saveState = "error";
       state.error = error?.message?.includes("他の端末の更新")
         ? "別の端末の更新が先に保存されたため、最後に保存できた状態へ戻しました。画面を開き直してから、必要な変更を反映してください。"
-        : "保存に失敗したため、最後に保存できた状態へ戻しました。サーバーを確認してから再度編集してください。";
+        : `${error?.message || "保存に失敗しました。"} 最後に保存できた状態へ戻しました。`;
       break;
     }
 
@@ -2334,6 +3194,11 @@ function cloneEvent(sourceEvent) {
   next.lumaCheckedAt = "";
   next.lumaNotes = cloned.lumaNotes;
   next.notes = cloned.notes;
+  next.assetArchive = {
+    driveFolderUrl: "",
+    notes: "",
+    images: []
+  };
   next.tasks = cloned.tasks.map((task) => ({
     ...task,
     id: createId("task"),
@@ -2435,6 +3300,7 @@ async function createEventFromForm(formData) {
 
   state.events = [touchEvent(event), ...state.events].sort(sortEvents);
   state.selectedEventId = event.id;
+  state.activeView = "detail";
   state.activeTab = "基本情報";
   state.modal = null;
   render();
@@ -2460,6 +3326,10 @@ async function handleBasicInfoSubmit(form) {
     summary: String(formData.get("summary") || ""),
     notes: String(formData.get("notes") || "")
   };
+  const assetArchivePatch = {
+    driveFolderUrl: String(formData.get("imageDriveFolderUrl") || ""),
+    notes: String(formData.get("imageArchiveNotes") || "")
+  };
 
   try {
     validateEventCore(payload);
@@ -2470,7 +3340,11 @@ async function handleBasicInfoSubmit(form) {
 
   await updateEvent(eventId, (event) => ({
     ...event,
-    ...payload
+    ...payload,
+    assetArchive: {
+      ...event.assetArchive,
+      ...assetArchivePatch
+    }
   }));
 }
 
@@ -2590,6 +3464,14 @@ async function handleEntitySubmit(form, kind) {
       };
     }
 
+    if (kind === "asset") {
+      draft = {
+        label: String(formData.get("label") || ""),
+        url: String(formData.get("url") || ""),
+        note: String(formData.get("note") || "")
+      };
+    }
+
     validateEntity(kind, draft || {});
   } catch (error) {
     showUiError(error.message);
@@ -2680,6 +3562,20 @@ async function handleEntitySubmit(form, kind) {
       };
     }
 
+    if (kind === "asset") {
+      const nextItem = {
+        id: itemId || createId("asset"),
+        ...draft
+      };
+      nextEvent.assetArchive = {
+        ...event.assetArchive,
+        images:
+          mode === "edit"
+            ? event.assetArchive.images.map((item) => (item.id === itemId ? nextItem : item))
+            : [...event.assetArchive.images, nextItem]
+      };
+    }
+
     return nextEvent;
   });
 
@@ -2743,6 +3639,16 @@ async function handleDelete(kind, eventId, itemId) {
       };
     }
 
+    if (kind === "asset") {
+      return {
+        ...event,
+        assetArchive: {
+          ...event.assetArchive,
+          images: event.assetArchive.images.filter((item) => item.id !== itemId)
+        }
+      };
+    }
+
     return event;
   });
 }
@@ -2763,23 +3669,14 @@ document.addEventListener("click", async (event) => {
   const eventId = button.dataset.eventId;
   const itemId = button.dataset.itemId;
 
-  if (action === "open-create-event") {
-    state.mobileSidebarOpen = false;
-    openModal("create-event");
-    return;
-  }
-
   if (action === "sign-in-google") {
     try {
-      state.isLoading = true;
+      state.error = "";
       render();
       await signInWithGoogle();
-      await refreshSessionAndEvents();
     } catch (error) {
       console.error(error);
       state.error = error.message || "Google ログインに失敗しました。";
-    } finally {
-      state.isLoading = false;
       render();
     }
     return;
@@ -2787,17 +3684,26 @@ document.addEventListener("click", async (event) => {
 
   if (action === "sign-out") {
     try {
-      state.isLoading = true;
-      render();
-      await signOutStorageUser();
-      await refreshSessionAndEvents();
+      await signOutStorage();
+      state.error = "";
     } catch (error) {
       console.error(error);
-      state.error = error.message || "ログアウトに失敗しました。";
-    } finally {
-      state.isLoading = false;
+      state.error = "ログアウトに失敗しました。";
       render();
     }
+    return;
+  }
+
+  if (action === "open-create-event") {
+    state.mobileSidebarOpen = false;
+    openModal("create-event");
+    return;
+  }
+
+  if (action === "set-view") {
+    state.activeView = button.dataset.view || "dashboard";
+    state.mobileSidebarOpen = false;
+    render();
     return;
   }
 
@@ -2849,6 +3755,18 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "set-event-stage") {
+    state.eventStageFilter = button.dataset.stage || "進行中";
+    render();
+    return;
+  }
+
+  if (action === "set-task-board-filter") {
+    state.taskBoardFilter = button.dataset.taskFilter || "open";
+    render();
+    return;
+  }
+
   if (action === "toggle-attention-only") {
     state.attentionOnly = !state.attentionOnly;
     render();
@@ -2872,6 +3790,17 @@ document.addEventListener("click", async (event) => {
       return;
     }
     state.selectedEventId = eventId;
+    state.mobileSidebarOpen = false;
+    render();
+    return;
+  }
+
+  if (action === "open-event-detail") {
+    if (!eventId) {
+      return;
+    }
+    state.selectedEventId = eventId;
+    state.activeView = "detail";
     state.mobileSidebarOpen = false;
     render();
     return;
@@ -3084,6 +4013,23 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "open-asset-modal") {
+    openModal("asset", { eventId });
+    return;
+  }
+
+  if (action === "edit-asset") {
+    openModal("asset", { eventId, itemId, mode: "edit" });
+    return;
+  }
+
+  if (action === "delete-asset") {
+    if (window.confirm("この画像リンクを削除しますか？")) {
+      await handleDelete("asset", eventId, itemId);
+    }
+    return;
+  }
+
   if (action === "stamp-luma-check") {
     await updateEvent(eventId, (eventItem) => ({
       ...eventItem,
@@ -3178,6 +4124,23 @@ document.addEventListener("click", async (event) => {
 document.addEventListener("change", async (event) => {
   const target = event.target;
 
+  if (target.matches('[data-action="toggle-task-status"]')) {
+    const eventId = target.dataset.eventId;
+    const taskId = target.dataset.taskId;
+    await updateEvent(eventId, (eventItem) => ({
+      ...eventItem,
+      tasks: eventItem.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              status: target.checked ? "完了" : task.status === "完了" ? "進行中" : task.status
+            }
+          : task
+      )
+    }));
+    return;
+  }
+
   if (target.matches('[data-action="toggle-checklist"]')) {
     const eventId = target.dataset.eventId;
     const itemId = target.dataset.itemId;
@@ -3214,6 +4177,12 @@ document.addEventListener("change", async (event) => {
 
   if (target.matches('[data-action="set-prep-assignee-filter"]')) {
     state.prepAssigneeFilter = target.value || "all";
+    render();
+    return;
+  }
+
+  if (target.matches('[data-action="set-task-board-assignee-filter"]')) {
+    state.taskBoardAssigneeFilter = target.value || "all";
     render();
     return;
   }
@@ -3257,24 +4226,6 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (formName === "auth-email") {
-    const formData = new FormData(form);
-
-    try {
-      state.isLoading = true;
-      render();
-      await signInWithEmailPassword(String(formData.get("email") || ""), String(formData.get("password") || ""));
-      await refreshSessionAndEvents();
-    } catch (error) {
-      console.error(error);
-      state.error = error.message || "メールログインに失敗しました。";
-    } finally {
-      state.isLoading = false;
-      render();
-    }
-    return;
-  }
-
   if (formName === "basic-info") {
     await handleBasicInfoSubmit(form);
     return;
@@ -3295,7 +4246,7 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (["task", "timeline", "role", "checklist", "finance", "participant"].includes(formName)) {
+  if (["task", "timeline", "role", "checklist", "finance", "participant", "asset"].includes(formName)) {
     await handleEntitySubmit(form, formName);
   }
 });
@@ -3341,25 +4292,73 @@ async function importEventsFromFile(file) {
   }
 }
 
+function applySession(session) {
+  const previousUserId = state.authUser?.uid || null;
+  const nextUserId = session.user?.uid || null;
+
+  state.backendLabel = session.backendLabel;
+  state.authRequired = Boolean(session.authRequired);
+  state.authUser = session.user || null;
+
+  return {
+    previousUserId,
+    nextUserId
+  };
+}
+
+function clearLoadedEvents() {
+  state.events = [];
+  persistedEvents = [];
+  state.selectedEventId = null;
+}
+
 async function init() {
   render();
 
   try {
     const session = await initializeStorage();
-    state.authRequired = session.authRequired;
-    state.authUser = session.user;
-    state.backendLabel = session.backendLabel;
+    applySession(session);
     state.error = "";
 
-    if (session.authRequired && !session.user) {
-      state.saveState = "idle";
-      state.lastSavedAt = "";
-    } else {
+    await subscribeStorageSession(async (nextSession) => {
+      const { previousUserId, nextUserId } = applySession(nextSession);
+
+      if (state.authRequired && !nextUserId) {
+        clearLoadedEvents();
+        state.saveState = "idle";
+        state.lastSavedAt = "";
+        state.isLoading = false;
+        render();
+        return;
+      }
+
+      if (state.authRequired && previousUserId !== nextUserId) {
+        state.isLoading = true;
+        render();
+
+        try {
+          await loadEventData();
+          state.error = "";
+        } catch (error) {
+          console.error(error);
+          state.error = error.message || "Firestore の読込に失敗しました。";
+        } finally {
+          state.isLoading = false;
+          render();
+        }
+
+        return;
+      }
+
+      render();
+    });
+
+    if (!state.authRequired || state.authUser) {
       await loadEventData();
     }
   } catch (error) {
     console.error(error);
-    state.error = "Event Hub の初期化に失敗しました。Firebase 設定かローカルサーバーを確認してください。";
+    state.error = "Event Hub の初期化に失敗しました。Firebase 設定・Rules・API を確認してください。";
   } finally {
     state.isLoading = false;
     render();
@@ -3375,7 +4374,7 @@ async function loadEventData() {
   } catch (error) {
     if (localBackupEvents.length) {
       applyLoadedEvents(localBackupEvents);
-      state.error = "クラウドからの読込に失敗したため、この端末に残っていた最新バックアップを表示しています。内容を確認してから保存し直してください。";
+      state.error = `${error.message || "保存先からの読込に失敗しました。"} この端末に残っていた最新バックアップを表示しています。内容を確認してから保存し直してください。`;
       state.saveState = "error";
       state.lastSavedAt = "";
       return;
@@ -3386,7 +4385,7 @@ async function loadEventData() {
 
   if (!remoteEvents.length && localBackupEvents.length) {
     applyLoadedEvents(localBackupEvents);
-    state.error = "クラウド上のイベント一覧が空だったため、この端末に残っていた最新バックアップを表示しています。内容を確認してから保存し直してください。";
+    state.error = "現在の保存先にイベントがなかったため、この端末に残っていた最新バックアップを表示しています。内容を確認してから保存し直してください。";
   } else {
     applyLoadedEvents(remoteEvents);
     state.error = "";
@@ -3395,24 +4394,6 @@ async function loadEventData() {
   state.saveState = "saved";
   state.lastSavedAt = new Date().toISOString();
 }
-
-async function refreshSessionAndEvents() {
-  const session = await refreshStorageSession();
-  state.authRequired = session.authRequired;
-  state.authUser = session.user;
-  state.backendLabel = session.backendLabel;
-
-  if (session.authRequired && !session.user) {
-    state.events = [];
-    state.selectedEventId = null;
-    state.saveState = "idle";
-    state.lastSavedAt = "";
-    return;
-  }
-
-  await loadEventData();
-}
-
 let lastResponsiveMode = isMobileLayout();
 
 window.addEventListener("resize", () => {
@@ -3494,6 +4475,23 @@ function formatDate(value) {
     year: "numeric",
     month: "short",
     day: "numeric"
+  }).format(date);
+}
+
+function formatMonthLabel(value) {
+  if (!value) {
+    return "未設定";
+  }
+
+  const date = new Date(`${value}-01T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "long"
   }).format(date);
 }
 

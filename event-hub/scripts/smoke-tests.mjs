@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 import { buildHealthSnapshot, buildResultCompleteness } from "../public/src/event-insights.js";
+import { parseEventsCsv as parseBrowserCsv, serializeEventsToCsv as serializeBrowserCsv } from "../public/src/csv-transfer.js";
 import { buildScheduleStatus, getFilteredFinanceLines, matchesCurrentPrepFilters } from "../public/src/event-selectors.js";
 import { createEmptyEvent } from "../public/src/models.js";
 import { validateEntity, validateEventCore } from "../public/src/validation.js";
@@ -15,6 +16,14 @@ event.startsAt = "2026-05-20T19:00";
 event.venue = "Test Venue";
 event.owners = "Ryu";
 event.result.impression = "よかった";
+event.assetArchive.driveFolderUrl = "https://drive.google.com/drive/folders/example";
+event.assetArchive.notes = "イベント写真";
+event.assetArchive.images.push({
+  id: "asset_1",
+  label: "当日写真アルバム",
+  url: "https://drive.google.com/file/d/example/view",
+  note: "広報共有用"
+});
 event.runbook.timetable.push({ id: "time_1", time: "19:00", title: "開場", owner: "受付", note: "" });
 event.runbook.roles.push({ id: "role_1", role: "受付", owner: "Ryu", note: "" });
 event.runbook.checklist.push({ id: "check_1", label: "音響確認", checked: false, note: "" });
@@ -76,5 +85,11 @@ assert.equal(roundTrip[0].name, event.name);
 assert.equal(roundTrip[0].tasks[0].title, event.tasks[0].title);
 assert.equal(roundTrip[0].runbook.timetable[0].title, event.runbook.timetable[0].title);
 assert.equal(roundTrip[0].finance.lines[0].plannedAmount, event.finance.lines[0].plannedAmount);
+assert.equal(roundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
+
+const browserCsv = serializeBrowserCsv([event]);
+const browserRoundTrip = parseBrowserCsv(browserCsv);
+assert.equal(browserRoundTrip.length, 1);
+assert.equal(browserRoundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
 
 console.log("smoke ok");

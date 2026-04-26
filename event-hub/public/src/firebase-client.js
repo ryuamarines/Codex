@@ -1,32 +1,33 @@
-import { APP_RUNTIME, FIREBASE_WEB_CONFIG } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import {
+  browserLocalPersistence,
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithPopup,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+import { doc, getDoc, getFirestore, runTransaction, setDoc } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
-let firebaseClientPromise = null;
+import { FIREBASE_CONFIG, FIRESTORE_COLLECTION, FIRESTORE_DOCUMENT } from "./firebase-config.js";
 
-function requireFirebaseGlobal() {
-  if (!window.firebase) {
-    throw new Error("Firebase SDK の読み込みに失敗しました。index.html の script 設定を確認してください。");
-  }
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+auth.languageCode = "ja";
+const db = getFirestore(app);
+const eventHubDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOCUMENT);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
-  return window.firebase;
-}
+const authReadyPromise = new Promise((resolve) => {
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    unsubscribe();
+    resolve(user);
+  });
+});
 
-function isAllowedUser(user) {
-  if (!APP_RUNTIME.requireLogin) {
-    return true;
-  }
-
-  if (!user?.email) {
-    return false;
-  }
-
-  if (!APP_RUNTIME.allowedEmails.length) {
-    return true;
-  }
-
-  return APP_RUNTIME.allowedEmails.includes(user.email.toLowerCase());
-}
-
-function buildUserProfile(user) {
+function serializeAuthUser(user) {
   if (!user) {
     return null;
   }
@@ -34,59 +35,31 @@ function buildUserProfile(user) {
   return {
     uid: user.uid,
     email: user.email || "",
-    displayName: user.displayName || "",
-    photoURL: user.photoURL || ""
+    displayName: user.displayName || user.email || "Google User"
   };
 }
 
-export async function getFirebaseClient() {
-  if (firebaseClientPromise) {
-    return firebaseClientPromise;
-  }
-
-  firebaseClientPromise = Promise.resolve().then(() => {
-    const firebase = requireFirebaseGlobal();
-    const app = firebase.apps?.length ? firebase.app() : firebase.initializeApp(FIREBASE_WEB_CONFIG);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-
-    return {
-      app,
-      auth,
-      db,
-      isAllowedUser,
-      buildUserProfile,
-      async waitForInitialAuth() {
-        return new Promise((resolve) => {
-          const unsubscribe = auth.onAuthStateChanged((user) => {
-            unsubscribe();
-            resolve(user);
-          });
-        });
-      },
-      async getSession() {
-        const user = auth.currentUser || (await this.waitForInitialAuth());
-        return {
-          authRequired: Boolean(APP_RUNTIME.requireLogin),
-          backendLabel: "Firebase / Firestore",
-          user: buildUserProfile(user),
-          isAllowed: isAllowedUser(user)
-        };
-      },
-      async signInWithGoogle() {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        const result = await auth.signInWithPopup(provider);
-        return buildUserProfile(result.user);
-      },
-      async signInWithEmailPassword(email, password) {
-        const result = await auth.signInWithEmailAndPassword(email, password);
-        return buildUserProfile(result.user);
-      },
-      async signOut() {
-        await auth.signOut();
-      }
-    };
-  });
-
-  return firebaseClientPromise;
+async function signInWithGoogleAccount() {
+  await setPersistence(auth, browserLocalPersistence);
+  return signInWithPopup(auth, googleProvider);
 }
+
+function subscribeAuthSession(listener) {
+  return onAuthStateChanged(auth, (user) => {
+    listener(serializeAuthUser(user));
+  });
+}
+
+export {
+  auth,
+  authReadyPromise,
+  db,
+  eventHubDoc,
+  getDoc,
+  runTransaction,
+  serializeAuthUser,
+  setDoc,
+  signInWithGoogleAccount,
+  signOut,
+  subscribeAuthSession
+};

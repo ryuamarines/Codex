@@ -86,6 +86,26 @@ export function validateEntity(kind, payload) {
   if (kind === "participant" && !String(payload.name || "").trim()) {
     throw new Error("参加者名は必須です。");
   }
+
+  if (kind === "asset") {
+    if (!String(payload.label || "").trim()) {
+      throw new Error("画像リンク名は必須です。");
+    }
+
+    if (!String(payload.url || "").trim()) {
+      throw new Error("画像URLは必須です。");
+    }
+
+    try {
+      const parsed = new URL(payload.url);
+
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("invalid");
+      }
+    } catch {
+      throw new Error("画像URLの形式が不正です。");
+    }
+  }
 }
 
 export function parseFinanceAmount(value) {

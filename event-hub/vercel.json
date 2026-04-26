@@ -1,0 +1,21 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/styles.css",
+      "destination": "/public/styles.css"
+    },
+    {
+      "source": "/src/(.*)",
+      "destination": "/public/src/$1"
+    },
+    {
+      "source": "/seed/(.*)",
+      "destination": "/public/seed/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/public/index.html"
+    }
+  ]
+}
