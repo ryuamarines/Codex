@@ -20,15 +20,15 @@
   --shadow: 0 12px 30px rgba(0, 0, 0, 0.035);
   --radius: 20px;
   --chart-stack-1: #d83b31;
-  --chart-stack-2: #314b5f;
-  --chart-stack-3: #45695d;
-  --chart-stack-4: #b56d22;
-  --chart-stack-5: #6b4e7f;
-  --chart-stack-6: #2f7b79;
-  --chart-stack-7: #c95542;
-  --chart-stack-8: #636c77;
-  --chart-stack-9: #934766;
-  --chart-stack-10: #8b6d31;
+  --chart-stack-2: #2f3742;
+  --chart-stack-3: #59616b;
+  --chart-stack-4: #8a929b;
+  --chart-stack-5: #b14f47;
+  --chart-stack-6: #6f6760;
+  --chart-stack-7: #444c56;
+  --chart-stack-8: #a4998f;
+  --chart-stack-9: #7a3a3a;
+  --chart-stack-10: #c1b8af;
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
 }
 
@@ -52,16 +52,16 @@
   --accent-soft: rgba(255, 109, 96, 0.14);
   --line: rgba(255, 255, 255, 0.08);
   --shadow: 0 20px 48px rgba(0, 0, 0, 0.24);
-  --chart-stack-1: #ff9086;
-  --chart-stack-2: #9eb8cf;
-  --chart-stack-3: #a7c5b8;
-  --chart-stack-4: #e0be84;
-  --chart-stack-5: #c6add6;
-  --chart-stack-6: #8ecbc6;
-  --chart-stack-7: #f0a286;
-  --chart-stack-8: #b4bdc8;
-  --chart-stack-9: #d08ea8;
-  --chart-stack-10: #bca168;
+  --chart-stack-1: #ff8d82;
+  --chart-stack-2: #b7c0cb;
+  --chart-stack-3: #919aa5;
+  --chart-stack-4: #6e7884;
+  --chart-stack-5: #d97269;
+  --chart-stack-6: #b3aaa2;
+  --chart-stack-7: #cfd5dc;
+  --chart-stack-8: #8f8580;
+  --chart-stack-9: #ffb1ab;
+  --chart-stack-10: #5e6670;
 }
 
 * {
@@ -2168,7 +2168,7 @@ select {
   gap: 20px;
   padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 28px;
+  border-radius: 32px;
   background: var(--panel);
   box-shadow: var(--panel-shadow);
 }
@@ -2187,7 +2187,7 @@ select {
   gap: 16px;
   padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 26px;
   background: color-mix(in srgb, var(--panel-strong) 92%, transparent);
 }
 
@@ -2205,7 +2205,7 @@ select {
   width: 36px;
   height: 36px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 16px;
   color: var(--accent);
   font-size: 0.88rem;
   font-weight: 700;
