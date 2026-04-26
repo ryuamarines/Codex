@@ -51,12 +51,17 @@ function shouldUseRedirectForGoogleSignIn() {
     /iPhone|iPad|iPod/.test(userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/i.test(userAgent);
+  const isAndroidChromium = isAndroid && /Chrome|CriOS|Brave/i.test(userAgent);
   const isAlternateMobileBrowser = /CriOS|FxiOS|EdgiOS|DuckDuckGo|YaBrowser/i.test(userAgent);
   const isTouchDevice = navigator.maxTouchPoints > 1;
   const isCompactViewport = window.matchMedia("(max-width: 900px)").matches;
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
     (typeof navigator !== "undefined" && "standalone" in navigator && Boolean(navigator.standalone));
+
+  if (isAndroidChromium) {
+    return false;
+  }
 
   return isIOS || isAndroid || isAlternateMobileBrowser || isStandalone || (isTouchDevice && isCompactViewport);
 }
@@ -82,6 +87,7 @@ export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.addScope("https://www.googleapis.com/auth/drive.file");
   provider.setCustomParameters({ prompt: "select_account" });
+  const prefersRedirect = shouldUseRedirectForGoogleSignIn();
   try {
     await setPersistence(auth, browserLocalPersistence);
   } catch {
@@ -92,7 +98,7 @@ export async function signInWithGoogle() {
     }
   }
 
-  if (shouldUseRedirectForGoogleSignIn()) {
+  if (prefersRedirect) {
     await signInWithRedirect(auth, provider);
     return null;
   }
@@ -110,6 +116,10 @@ export async function signInWithGoogle() {
       code === "auth/cancelled-popup-request" ||
       code === "auth/operation-not-supported-in-this-environment"
     ) {
+      if (!prefersRedirect) {
+        throw formatGoogleAuthError(error);
+      }
+
       await signInWithRedirect(auth, provider);
       return null;
     }

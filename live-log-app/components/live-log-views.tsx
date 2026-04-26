@@ -507,16 +507,22 @@ export function LiveLogArtistsView({
     return artists.filter((artist) => artist.label.toLowerCase().includes(normalizedArtistQuery));
   }, [artists, normalizedArtistQuery, topArtists]);
   const selectedArtist = artists.find((item) => item.label === selectedArtistLabel) ?? artists[0] ?? null;
+  const selectedArtistYears = useMemo(
+    () => [...(selectedArtist?.years ?? [])].sort((left, right) => right.label.localeCompare(left.label, "ja")),
+    [selectedArtist]
+  );
   const selectedArtistYearEntries = useMemo(() => {
     if (!selectedArtist) {
       return [];
     }
 
+    const sortedEntries = [...selectedArtist.entries].sort((left, right) => right.date.localeCompare(left.date, "ja"));
+
     if (!selectedArtistYear) {
-      return selectedArtist.entries;
+      return sortedEntries;
     }
 
-    return selectedArtist.entries.filter((entry) => entry.date.startsWith(selectedArtistYear));
+    return sortedEntries.filter((entry) => entry.date.startsWith(selectedArtistYear));
   }, [selectedArtist, selectedArtistYear]);
   const visibleArtists = useMemo(() => {
     if (!selectedArtist) {
@@ -529,8 +535,6 @@ export function LiveLogArtistsView({
 
     return [selectedArtist, ...filteredArtists];
   }, [filteredArtists, selectedArtist]);
-  const selectedArtistEntries = selectedArtistYearEntries.slice(0, 10);
-
   useEffect(() => {
     if (!selectedArtistYear) {
       return;
@@ -602,7 +606,7 @@ export function LiveLogArtistsView({
               </article>
             </div>
             <div className="archiveMiniTrend">
-              {(selectedArtist.years ?? []).map((item) => (
+              {selectedArtistYears.map((item) => (
                 <button
                   key={item.label}
                   className={
@@ -628,7 +632,7 @@ export function LiveLogArtistsView({
               </button>
             ) : null}
             <div className="archiveLinkedList">
-              {selectedArtistEntries.map((entry) => (
+              {selectedArtistYearEntries.map((entry) => (
                 <button
                   key={entry.id}
                   className="archiveLinkedItem"
@@ -643,15 +647,13 @@ export function LiveLogArtistsView({
                 </button>
               ))}
             </div>
-            {selectedArtistYearEntries.length > selectedArtistEntries.length ? (
-              <button
-                className="archiveEntityListHintButton"
-                type="button"
-                onClick={() => onBrowseArtistHistory(selectedArtist.label, selectedArtistYear || undefined)}
-              >
-                最新10件を表示中です。タイムラインで続きを見る
-              </button>
-            ) : null}
+            <button
+              className="archiveEntityListHintButton"
+              type="button"
+              onClick={() => onBrowseArtistHistory(selectedArtist.label, selectedArtistYear || undefined)}
+            >
+              タイムラインでこのアーティストを辿る
+            </button>
           </>
         ) : null}
       </section>

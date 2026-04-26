@@ -1015,12 +1015,15 @@ select {
 
 .analyticsBoardTile > .summaryTileCard {
   min-height: 0;
+  height: auto;
+  align-self: start;
 }
 
 .analyticsBoardTile-compact > .summaryTileCard,
 .analyticsBoardTile-standard > .summaryTileCard,
 .analyticsBoardTile-tall > .summaryTileCard {
   min-height: 0;
+  height: auto;
 }
 
 .rankList,
@@ -1901,14 +1904,14 @@ select {
 
 .archiveLinkedList {
   min-height: 0;
-  height: 100%;
+  max-height: 390px;
   overflow-y: auto;
   padding-right: 4px;
 }
 
 .archiveEntityList {
   min-height: 0;
-  height: 100%;
+  max-height: 640px;
   overflow-y: auto;
   padding-right: 4px;
 }

@@ -640,8 +640,58 @@ function renderEventDetailWorkspace(event) {
         </div>
       </section>
 
+      <nav class="detail-quicknav">
+        <a href="#detail-tasks" class="mini-pill">タスク</a>
+        <a href="#detail-audience" class="mini-pill">集客</a>
+        <a href="#detail-finance" class="mini-pill">収支</a>
+        <a href="#detail-team" class="mini-pill">チーム</a>
+        <a href="#detail-reflection" class="mini-pill">振り返り</a>
+      </nav>
+
+      <section class="detail-secondary-grid">
+        <article class="panel workspace-panel secondary-metric-panel">
+          <div class="panel-head compact">
+            <h3>集客状況</h3>
+            <span class="count-pill">${audience.registrations}名</span>
+          </div>
+          <div class="audience-stat-grid">
+            <div><span>申込数</span><strong>${audience.registrations}</strong></div>
+            <div><span>参加見込み</span><strong>${audience.expectedLabel}</strong></div>
+            <div><span>キャンセル</span><strong>${audience.cancelledLabel}</strong></div>
+          </div>
+          <div class="audience-chart">
+            ${renderAudienceMiniChart(audience)}
+          </div>
+        </article>
+
+        <article class="panel workspace-panel secondary-metric-panel">
+          <div class="panel-head compact">
+            <h3>タスク進捗</h3>
+            <span class="count-pill">${progress.total}件</span>
+          </div>
+          <div class="audience-stat-grid">
+            <div><span>未完了</span><strong>${progress.total - progress.done}</strong></div>
+            <div><span>進行中</span><strong>${progress.inProgress}</strong></div>
+            <div><span>完了</span><strong>${progress.done}</strong></div>
+          </div>
+          <div class="progress-track large"><span style="width:${completionRate}%"></span></div>
+        </article>
+
+        <article class="panel workspace-panel secondary-metric-panel">
+          <div class="panel-head compact">
+            <h3>収支サマリー</h3>
+            <span class="count-pill">${event.finance.lines.length}件</span>
+          </div>
+          <div class="finance-summary-stack compact-finance-stack">
+            <div class="finance-row"><span>売上</span><strong>${formatCurrency(finance.revenueActual)}</strong></div>
+            <div class="finance-row"><span>支出</span><strong>${formatCurrency(finance.expenseActual)}</strong></div>
+            <div class="finance-row total"><span>利益</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong></div>
+          </div>
+        </article>
+      </section>
+
       <section class="detail-block-grid">
-        <div class="panel workspace-panel span-2">
+        <div id="detail-tasks" class="panel workspace-panel span-2">
           <div class="panel-head">
             <div>
               <h3>タスク</h3>
@@ -671,22 +721,28 @@ function renderEventDetailWorkspace(event) {
           </details>
         </div>
 
-        <div class="panel workspace-panel">
+        <div id="detail-audience" class="panel workspace-panel">
           <div class="panel-head compact">
-            <h3>集客</h3>
-            <span class="count-pill">${audience.registrations}名</span>
+            <h3>集客メモ</h3>
+            <span class="count-pill">${event.lumaRegistrationCount || 0}名</span>
           </div>
-          <div class="audience-stat-grid">
-            <div><span>申込数</span><strong>${audience.registrations}</strong></div>
-            <div><span>参加見込み</span><strong>${audience.expectedLabel}</strong></div>
-            <div><span>キャンセル数</span><strong>${audience.cancelledLabel}</strong></div>
-          </div>
-          <div class="audience-chart">
-            ${renderAudienceMiniChart(audience)}
+          <div class="reflection-grid compact-reflection-grid">
+            <div>
+              <span>Luma 状態</span>
+              <p>${escapeHtml(event.lumaStatus || "未設定")}</p>
+            </div>
+            <div>
+              <span>最終確認</span>
+              <p>${escapeHtml(formatDateTime(event.lumaCheckedAt))}</p>
+            </div>
+            <div>
+              <span>運用メモ</span>
+              <p>${escapeHtml(event.lumaNotes || "未入力")}</p>
+            </div>
           </div>
         </div>
 
-        <div class="panel workspace-panel">
+        <div id="detail-finance" class="panel workspace-panel">
           <div class="panel-head compact">
             <h3>収支</h3>
             <span class="count-pill">${event.finance.lines.length}件</span>
@@ -705,7 +761,7 @@ function renderEventDetailWorkspace(event) {
           </div>
         </div>
 
-        <div class="panel workspace-panel">
+        <div id="detail-team" class="panel workspace-panel">
           <div class="panel-head compact">
             <h3>チーム</h3>
             <span class="count-pill">${event.runbook.roles.length}役割</span>
@@ -758,7 +814,7 @@ function renderEventDetailWorkspace(event) {
           </div>
         </div>
 
-        <div class="panel workspace-panel span-2">
+        <div id="detail-reflection" class="panel workspace-panel span-2">
           <div class="panel-head compact">
             <h3>振り返り</h3>
             <span class="count-pill">${followUps.length}件フォロー候補</span>

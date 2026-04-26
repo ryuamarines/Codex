@@ -1344,6 +1344,34 @@ textarea {
   flex-basis: calc(66.666% - 8px);
 }
 
+.detail-quicknav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.detail-quicknav a {
+  text-decoration: none;
+}
+
+.detail-secondary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.secondary-metric-panel {
+  flex: 1 1 260px;
+}
+
+.compact-finance-stack {
+  margin-top: 6px;
+}
+
+.compact-reflection-grid > div {
+  min-height: 0;
+}
+
 .operational-task-list,
 .finance-summary-stack,
 .team-list,
@@ -1590,6 +1618,7 @@ textarea {
   .workspace-header,
   .workspace-toolbar,
   .workspace-split,
+  .detail-secondary-grid,
   .detail-summary-grid,
   .detail-block-grid,
   .detail-title-row {
