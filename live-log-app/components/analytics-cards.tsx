@@ -48,7 +48,7 @@ export function SummaryTile({
     <section className={`panel summaryTileCard summaryTileCard-${height}`}>
       <div className="panelHeader">
         <div>
-          <h2>件数サマリ</h2>
+          <h2>記録の概要</h2>
           {!isCompact ? <p>記録全体の規模感をざっくり把握するための補助ブロックです。</p> : null}
         </div>
         {actions}
@@ -143,7 +143,13 @@ export function ArtistYearStackedChartCard({
 
     return items.filter((item) => item.artist.toLowerCase().includes(normalizedArtistQuery));
   }, [items, normalizedArtistQuery]);
-  const topItems = sourceItems.slice(0, visibleArtistCount);
+  const topItems = sourceItems.slice(0, visibleArtistCount).map((item) => ({
+    ...item,
+    sourceIndex: Math.max(
+      0,
+      items.findIndex((sourceItem) => sourceItem.artist === item.artist)
+    )
+  }));
   const selectedArtistFromList = focusedArtistLabel
     ? items.find((item) => item.artist === focusedArtistLabel)?.artist ?? ""
     : "";
@@ -162,7 +168,19 @@ export function ArtistYearStackedChartCard({
     }
 
     const matchedItem = items.find((item) => item.artist === focusedArtist);
-    return matchedItem ? [matchedItem] : topItems;
+    if (!matchedItem) {
+      return topItems;
+    }
+
+    return [
+      {
+        ...matchedItem,
+        sourceIndex: Math.max(
+          0,
+          items.findIndex((sourceItem) => sourceItem.artist === matchedItem.artist)
+        )
+      }
+    ];
   }, [focusedArtist, items, topItems]);
   const yearTotals = years.map((year) => ({
     year,
@@ -233,7 +251,7 @@ export function ArtistYearStackedChartCard({
           >
             <span
               className="stackedBarLegendSwatch"
-              style={{ background: palette[index % palette.length] }}
+              style={{ background: palette[item.sourceIndex % palette.length] }}
             />
             <span className="stackedBarLegendText">{item.artist}</span>
             <strong className="stackedBarLegendCount">{item.total}</strong>
@@ -265,7 +283,7 @@ export function ArtistYearStackedChartCard({
                       className="stackedBarSegment"
                       style={{
                         height: `${total > 0 ? (value / total) * 100 : 0}%`,
-                        background: palette[index % palette.length]
+                        background: palette[item.sourceIndex % palette.length]
                       }}
                       title={`${year} / ${item.artist}: ${value}件`}
                     />
