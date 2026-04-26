@@ -12,6 +12,35 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
+function formatGoogleAuthError(error: unknown) {
+  const code =
+    typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  const message =
+    typeof error === "object" && error && "message" in error ? String(error.message) : "";
+
+  if (code === "auth/unauthorized-domain") {
+    return new Error("このドメインは Firebase Auth で許可されていません。Authorized domains を確認してください。");
+  }
+
+  if (code === "auth/operation-not-allowed") {
+    return new Error("Firebase の Google ログインが有効になっていません。Authentication の設定を確認してください。");
+  }
+
+  if (code === "auth/network-request-failed") {
+    return new Error("Google ログイン中に通信エラーが起きました。回線とブラウザ設定を確認してください。");
+  }
+
+  if (
+    code === "auth/operation-not-supported-in-this-environment" ||
+    message.includes("/__/auth/handler") ||
+    message.includes("redirect_uri")
+  ) {
+    return new Error("このブラウザでは Google ログインのリダイレクト設定が不足しています。`/__/auth/handler` の設定を確認してください。");
+  }
+
+  return error instanceof Error ? error : new Error("Google ログインに失敗しました。");
+}
+
 function shouldUseRedirectForGoogleSignIn() {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
     return false;
@@ -85,7 +114,7 @@ export async function signInWithGoogle() {
       return null;
     }
 
-    throw error;
+    throw formatGoogleAuthError(error);
   }
 }
 
@@ -96,7 +125,9 @@ export async function consumeGoogleRedirectAccessToken() {
     return null;
   }
 
-  const result = await getRedirectResult(auth);
+  const result = await getRedirectResult(auth).catch((error) => {
+    throw formatGoogleAuthError(error);
+  });
   const credential = result ? GoogleAuthProvider.credentialFromResult(result) : null;
   return credential?.accessToken ?? null;
 }

@@ -1805,11 +1805,22 @@ select {
 .archiveOverviewGrid,
 .archiveEntityLayout {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archiveOverviewGrid {
   align-items: start;
+}
+
+.archiveEntityLayout {
+  align-items: stretch;
 }
 
 .archiveEntityAnalyticsPanel {
   grid-column: 1 / -1;
+}
+
+.archiveInlineAnalyticsGrid {
+  margin-top: 18px;
 }
 
 .archiveStat,

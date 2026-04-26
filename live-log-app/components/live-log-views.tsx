@@ -437,6 +437,26 @@ export function LiveLogTimelineView({
             onResizeStart={onResizeStart}
           />
         )}
+        <div
+          className="analyticsBoardGrid archiveInlineAnalyticsGrid"
+          style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+        >
+          {timelineTiles.map((tile) => (
+            <div
+              key={tile.id}
+              ref={(element) => {
+                analyticsTileRefs.current[tile.id] = element;
+              }}
+              className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+              style={{
+                gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+                gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+              }}
+            >
+              {tileMap[tile.id]}
+            </div>
+          ))}
+        </div>
       </section>
     </section>
   );
@@ -878,6 +898,26 @@ export function LiveLogAddView({
         onApply={onBatchApply}
         onLinkedToEntry={onLinkedToEntry}
       />
+      <div
+        className="analyticsBoardGrid archiveInlineAnalyticsGrid"
+        style={{ gridTemplateRows: `repeat(${dashboardRowCount}, minmax(0, 1fr))` }}
+      >
+        {addTiles.map((tile) => (
+          <div
+            key={tile.id}
+            ref={(element) => {
+              analyticsTileRefs.current[tile.id] = element;
+            }}
+            className={`analyticsBoardTile analyticsBoardTile-${resolvedAnalyticsTileHeights[tile.id]}`}
+            style={{
+              gridColumn: `${tile.colStart} / span ${tile.colSpan}`,
+              gridRow: `${tile.rowStart} / span ${tile.rowSpan}`
+            }}
+          >
+            {tileMap[tile.id]}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

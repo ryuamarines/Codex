@@ -92,8 +92,12 @@ export function useDriveSession({
             showMessage("Google Drive 連携の更新に失敗しました。");
           });
       })
-      .catch(() => {
-        showMessage("Google ログインの復帰に失敗しました。もう一度ログインしてください。");
+      .catch((error) => {
+        showMessage(
+          error instanceof Error
+            ? error.message
+            : "Google ログインの復帰に失敗しました。もう一度ログインしてください。"
+        );
       });
 
     return () => {
