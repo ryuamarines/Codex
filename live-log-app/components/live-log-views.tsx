@@ -778,7 +778,7 @@ type AddViewProps = {
   bulkEdit: BulkEditInput;
   placeOptions: string[];
   genreOptions: string[];
-  selectedEntryLabel: string;
+  driveFolderLabel: string;
   csvInputRef: RefObject<HTMLInputElement | null>;
   photoInputRef: RefObject<HTMLInputElement | null>;
   entries: LiveEntry[];
@@ -797,6 +797,7 @@ type AddViewProps = {
   onUpdateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]): void;
   onApplyBulkUpdate(): void;
   onDeleteSelectedEntries(): void;
+  onConfigureDriveFolder(): void;
   onBatchApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
   onLinkedToEntry(entryId: string): void;
   addTiles: PositionedDashboardTile[];
@@ -819,7 +820,7 @@ export function LiveLogAddView({
   bulkEdit,
   placeOptions,
   genreOptions,
-  selectedEntryLabel,
+  driveFolderLabel,
   csvInputRef,
   photoInputRef,
   entries,
@@ -835,6 +836,7 @@ export function LiveLogAddView({
   onUpdateBulkEdit,
   onApplyBulkUpdate,
   onDeleteSelectedEntries,
+  onConfigureDriveFolder,
   onBatchApply,
   onLinkedToEntry,
   addTiles,
@@ -861,7 +863,7 @@ export function LiveLogAddView({
         bulkEdit={bulkEdit}
         placeOptions={placeOptions}
         genreOptions={genreOptions}
-        selectedEntryLabel={selectedEntryLabel}
+        driveFolderLabel={driveFolderLabel}
         csvInputRef={csvInputRef}
         photoInputRef={photoInputRef}
         onManualSubmit={onManualSubmit}
@@ -872,6 +874,7 @@ export function LiveLogAddView({
         onUpdateBulkEdit={onUpdateBulkEdit}
         onApplyBulkUpdate={onApplyBulkUpdate}
         onDeleteSelectedEntries={onDeleteSelectedEntries}
+        onConfigureDriveFolder={onConfigureDriveFolder}
       />
       <BatchImportBoard
         entries={entries}

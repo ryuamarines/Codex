@@ -38,7 +38,7 @@ type RecordToolsPanelProps = {
   bulkEdit: BulkEditInput;
   placeOptions: string[];
   genreOptions: string[];
-  selectedEntryLabel: string;
+  driveFolderLabel: string;
   csvInputRef: RefObject<HTMLInputElement | null>;
   photoInputRef: RefObject<HTMLInputElement | null>;
   onManualSubmit(event: FormEvent<HTMLFormElement>): void;
@@ -49,7 +49,30 @@ type RecordToolsPanelProps = {
   onUpdateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]): void;
   onApplyBulkUpdate(): void;
   onDeleteSelectedEntries(): void;
+  onConfigureDriveFolder(): void;
 };
+
+const REGION_GROUPS = [
+  { label: "北海道", options: ["北海道"] },
+  { label: "東北", options: ["青森", "岩手", "宮城", "秋田", "山形", "福島"] },
+  { label: "関東", options: ["茨城", "栃木", "群馬", "埼玉", "千葉", "東京", "神奈川"] },
+  { label: "中部", options: ["新潟", "富山", "石川", "福井", "山梨", "長野", "岐阜", "静岡", "愛知"] },
+  { label: "近畿", options: ["三重", "滋賀", "京都", "大阪", "兵庫", "奈良", "和歌山"] },
+  { label: "中国", options: ["鳥取", "島根", "岡山", "広島", "山口"] },
+  { label: "四国", options: ["徳島", "香川", "愛媛", "高知"] },
+  { label: "九州・沖縄", options: ["福岡", "佐賀", "長崎", "熊本", "大分", "宮崎", "鹿児島", "沖縄"] }
+] as const;
+
+const REGION_LABEL_SET = new Set<string>(REGION_GROUPS.flatMap((group) => group.options));
+const PLACE_EXCLUDE_SET = new Set([
+  "ワンマン",
+  "対バン",
+  "フェス",
+  "ツーマン",
+  "スリーマン",
+  "サーキット",
+  "イベント"
+]);
 
 export function RecordToolsPanel({
   activeTool,
@@ -67,7 +90,7 @@ export function RecordToolsPanel({
   bulkEdit,
   placeOptions,
   genreOptions,
-  selectedEntryLabel,
+  driveFolderLabel,
   csvInputRef,
   photoInputRef,
   onManualSubmit,
@@ -77,11 +100,25 @@ export function RecordToolsPanel({
   onUpdatePhotoForm,
   onUpdateBulkEdit,
   onApplyBulkUpdate,
-  onDeleteSelectedEntries
+  onDeleteSelectedEntries,
+  onConfigureDriveFolder
 }: RecordToolsPanelProps) {
-  const availablePlaceOptions = manualForm.place && !placeOptions.includes(manualForm.place)
-    ? [manualForm.place, ...placeOptions]
-    : placeOptions;
+  const normalizedPlaces = Array.from(
+    new Set(
+      placeOptions
+        .map((option) => option.trim())
+        .filter((option) => option && !PLACE_EXCLUDE_SET.has(option))
+    )
+  );
+  const availablePlaceOptions =
+    manualForm.place && !normalizedPlaces.includes(manualForm.place)
+      ? [manualForm.place, ...normalizedPlaces]
+      : normalizedPlaces;
+  const groupedPlaceOptions = REGION_GROUPS.map((group) => ({
+    ...group,
+    options: group.options.filter((option) => availablePlaceOptions.includes(option))
+  })).filter((group) => group.options.length > 0);
+  const otherPlaceOptions = availablePlaceOptions.filter((option) => !REGION_LABEL_SET.has(option));
   const availableGenreOptions = manualForm.genre && !genreOptions.includes(manualForm.genre)
     ? [manualForm.genre, ...genreOptions]
     : genreOptions;
@@ -141,11 +178,24 @@ export function RecordToolsPanel({
                   onChange={(event) => onUpdateForm("place", event.target.value)}
                 >
                   <option value="">未選択</option>
-                  {availablePlaceOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                  {groupedPlaceOptions.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
+                  {otherPlaceOptions.length > 0 ? (
+                    <optgroup label="その他">
+                      {otherPlaceOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
                 </select>
               </label>
             </div>
@@ -200,9 +250,7 @@ export function RecordToolsPanel({
               <div>
                 <strong>写真を追加する（任意）</strong>
                 <small>
-                  {selectedEntryLabel
-                    ? `いま選択中の「${selectedEntryLabel}」に追加します。`
-                    : "先に記録を追加すると、その記録にそのまま写真を追加できます。"}
+                  入力中の新しいイベントに、そのまま写真を添えて追加します。
                 </small>
               </div>
             </div>
@@ -220,6 +268,15 @@ export function RecordToolsPanel({
                   <option value="paperTicket">リアルチケット</option>
                 </select>
               </label>
+              <div className="archiveField archiveFieldWide">
+                <span>保存先フォルダ</span>
+                <div className="archiveAddSubmitRow">
+                  <button className="actionButton secondaryButton" type="button" onClick={onConfigureDriveFolder}>
+                    保存先を選ぶ
+                  </button>
+                  <small className="importHint">{driveFolderLabel}</small>
+                </div>
+              </div>
             </div>
             <div className="archiveAddSubmitRow archiveAddSubmitRowStack">
               <button className="actionButton secondaryButton" type="button" onClick={() => photoInputRef.current?.click()}>

@@ -1219,43 +1219,10 @@ export function LiveLogPage() {
         )
       );
 
-      const selectedEntry =
-        entriesRef.current.find((entry) => entry.id === selectedEntryId) ?? null;
-
-      if (selectedEntry) {
-        const mergedImages = mergeImagesWithDedup(selectedEntry.images, nextImages);
-        const nextEntries = entriesRef.current.map((entry) =>
-          entry.id === selectedEntry.id ? { ...entry, images: mergedImages.images } : entry
-        );
-        entriesRef.current = nextEntries;
-        setEntries(nextEntries);
-        if (mergedImages.addedCount > 0) {
-          void persistEntryToCloud(nextEntries, {
-            ...selectedEntry,
-            images: mergedImages.images
-          }).catch(() => {
-            setImageMessage("写真は追加しました。クラウド保存は自動で再確認します。");
-          });
-        }
-        setSelectedEntryId(selectedEntry.id);
-        setHighlightedEntryId(selectedEntry.id);
-        setIsDetailDrawerOpen(true);
-        const importMessage =
-          mergedImages.addedCount === 0
-            ? "同じ写真はすでに登録済みのため追加していません。"
-            : mergedImages.duplicateCount > 0
-              ? `写真を ${mergedImages.addedCount} 件追加し、重複 ${mergedImages.duplicateCount} 件はスキップしました。`
-              : `「${selectedEntry.title}」に写真を追加しました。`;
-        setActionNotice(importMessage);
-        setImageMessage(importMessage);
-        event.target.value = "";
-        return;
-      }
-
       const nextEntry = createManualEntry(manualForm);
 
       if (!nextEntry) {
-        setImageMessage("先に日付・公演名・会場を入れて記録を追加するか、既存記録を選んでから写真を追加してください。");
+        setImageMessage("日付・公演名・会場を入れてから写真を追加してください。");
         event.target.value = "";
         return;
       }
@@ -1745,7 +1712,7 @@ export function LiveLogPage() {
           bulkEdit={bulkEdit}
           placeOptions={placeOptions}
           genreOptions={genreOptions}
-          selectedEntryLabel={selectedEntry?.title ?? ""}
+          driveFolderLabel={driveFolderId ? "保存先設定済み" : "まだ保存先が設定されていません"}
           csvInputRef={csvInputRef}
           photoInputRef={photoInputRef}
           entries={entries}
@@ -1761,6 +1728,7 @@ export function LiveLogPage() {
           onUpdateBulkEdit={updateBulkEdit}
           onApplyBulkUpdate={applyBulkUpdate}
           onDeleteSelectedEntries={deleteSelectedEntries}
+          onConfigureDriveFolder={handleConfigureDriveFolder}
           onBatchApply={handleBatchApply}
           onLinkedToEntry={(entryId) => {
             setQuery("");
