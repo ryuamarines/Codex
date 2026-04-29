@@ -156,15 +156,14 @@ export function ArtistYearStackedChartCard({
   const focusedArtist = forceShowAll
     ? ""
     : manualFocusedArtist || (!normalizedArtistQuery ? selectedArtistFromList : "");
-  const focusedTopItems = useMemo(() => {
+  const visibleItems = useMemo(() => {
     if (!focusedArtist) {
       return topItems;
     }
 
     const matchedTopItem = topItems.find((item) => item.artist === focusedArtist);
-
     if (matchedTopItem) {
-      return [matchedTopItem];
+      return topItems;
     }
 
     const matchedItem = items.find((item) => item.artist === focusedArtist);
@@ -179,12 +178,13 @@ export function ArtistYearStackedChartCard({
           0,
           items.findIndex((sourceItem) => sourceItem.artist === matchedItem.artist)
         )
-      }
+      },
+      ...topItems.filter((item) => item.artist !== matchedItem.artist).slice(0, Math.max(0, visibleArtistCount - 1))
     ];
-  }, [focusedArtist, items, topItems]);
+  }, [focusedArtist, items, topItems, visibleArtistCount]);
   const yearTotals = years.map((year) => ({
     year,
-    total: focusedTopItems.reduce((sum, item) => sum + (item.countsByYear[year] ?? 0), 0)
+    total: visibleItems.reduce((sum, item) => sum + (item.countsByYear[year] ?? 0), 0)
   }));
   const max = Math.max(...yearTotals.map((item) => item.total), 1);
   const palette = [
@@ -224,7 +224,7 @@ export function ArtistYearStackedChartCard({
       </label>
       <div className="stackedBarLegend">
         <button
-          className={!focusedArtist ? "stackedBarLegendItem stackedBarLegendItemActive" : "stackedBarLegendItem"}
+          className={!focusedArtist ? "stackedBarLegendItem stackedBarLegendItemAllActive" : "stackedBarLegendItem"}
           type="button"
           onClick={() => {
             setManualFocusedArtist("");
@@ -235,7 +235,7 @@ export function ArtistYearStackedChartCard({
           <span className="stackedBarLegendSwatch stackedBarLegendSwatchNeutral" />
           すべて
         </button>
-        {topItems.map((item, index) => (
+        {visibleItems.map((item) => (
           <button
             key={item.artist}
             className={
@@ -258,7 +258,7 @@ export function ArtistYearStackedChartCard({
           </button>
         ))}
       </div>
-      {normalizedArtistQuery && topItems.length === 0 ? (
+      {normalizedArtistQuery && visibleItems.length === 0 ? (
         <p className="trendEmpty">一致するアーティストがありません。</p>
       ) : null}
       <div className="verticalBarChart">
@@ -270,7 +270,7 @@ export function ArtistYearStackedChartCard({
                 className="stackedBarColumn"
                 style={{ height: `${(total / max) * 100}%` }}
               >
-                {focusedTopItems.map((item, index) => {
+                {visibleItems.map((item) => {
                   const value = item.countsByYear[year] ?? 0;
 
                   if (value === 0) {
@@ -283,7 +283,8 @@ export function ArtistYearStackedChartCard({
                       className="stackedBarSegment"
                       style={{
                         height: `${total > 0 ? (value / total) * 100 : 0}%`,
-                        background: palette[item.sourceIndex % palette.length]
+                        background: palette[item.sourceIndex % palette.length],
+                        opacity: focusedArtist && item.artist !== focusedArtist ? 0.26 : 1
                       }}
                       title={`${year} / ${item.artist}: ${value}件`}
                     />
