@@ -88,7 +88,7 @@ type BulkEditInput = {
   genre: string;
 };
 
-type ActiveView = "home" | "timeline" | "add" | "artists" | "venues";
+type ActiveView = "home" | "timeline" | "add" | "artists" | "venues" | "sync";
 type ActiveTool = "csv" | "bulk" | null;
 type TimelinePresentation = "cards" | "table";
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
@@ -1470,6 +1470,13 @@ export function LiveLogPage() {
             イベント追加
           </button>
           <button
+            className={activeView === "sync" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
+            type="button"
+            onClick={() => setActiveView("sync")}
+          >
+            同期 / バックアップ
+          </button>
+          <button
             className={activeView === "timeline" ? "archiveSidebarLink archiveSidebarLinkActive" : "archiveSidebarLink"}
             type="button"
             onClick={() => setActiveView("timeline")}
@@ -1504,10 +1511,12 @@ export function LiveLogPage() {
       <section className="archiveMainCanvas">
         <header className="archiveMainHeader">
           <div className="archiveMainHeading">
-            <h1>{activeView === "home" ? "ホーム" : activeView === "timeline" ? "タイムライン" : activeView === "artists" ? "アーティスト" : activeView === "venues" ? "会場" : "イベント追加"}</h1>
+            <h1>{activeView === "home" ? "ホーム" : activeView === "sync" ? "同期 / バックアップ" : activeView === "timeline" ? "タイムライン" : activeView === "artists" ? "アーティスト" : activeView === "venues" ? "会場" : "イベント追加"}</h1>
             <p>
               {activeView === "home"
                 ? "積み重ねたライブ記録を静かに辿るホーム"
+                : activeView === "sync"
+                  ? "Google ログイン、Drive 連携、クラウド保存をまとめて扱います"
                 : activeView === "timeline"
                   ? "年と月ごとの履歴と、時間軸の分析を見返す"
                   : activeView === "artists"
@@ -1558,6 +1567,9 @@ export function LiveLogPage() {
               yearlyAggregateRefs.current[key] = element;
             }}
           />
+        </>
+      ) : activeView === "sync" ? (
+        <section className="archiveHomeLayout">
           <CloudSyncPanel
             isLoggedIn={Boolean(firebaseUser)}
             syncStatus={syncStatus}
@@ -1576,7 +1588,19 @@ export function LiveLogPage() {
             onCloudLoad={handleCloudLoad}
             onForceCloudReplace={handleForceCloudReplace}
           />
-        </>
+          <section className="panel archiveSectionCard">
+            <div className="archiveSectionHeader">
+              <div>
+                <p className="eyebrow">Backup</p>
+                <h2>ローカルのバックアップ</h2>
+                <p>{backupMessage}</p>
+              </div>
+              <button className="toolButton" type="button" onClick={handleCsvExport}>
+                CSVを書き出す
+              </button>
+            </div>
+          </section>
+        </section>
       ) : activeView === "timeline" ? (
         <LiveLogTimelineView
           summaryContent={
@@ -1770,6 +1794,13 @@ export function LiveLogPage() {
           >
             イベント追加
           </button>
+        <button
+          className={activeView === "sync" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
+          type="button"
+          onClick={() => setActiveView("sync")}
+        >
+          同期
+        </button>
         <button
           className={activeView === "timeline" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
           type="button"
