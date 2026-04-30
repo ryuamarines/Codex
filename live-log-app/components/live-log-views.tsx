@@ -2,10 +2,7 @@
 
 import type { ChangeEvent, FormEvent, RefObject } from "react";
 import { BatchImportBoard } from "@/components/batch-import-board";
-import { LiveLogArtistsView, LiveLogVenuesView } from "@/components/live-log-entity-views";
-import { LiveLogHomeView } from "@/components/live-log-home-view";
 import { RecordToolsPanel } from "@/components/record-tools-panel";
-import { LiveLogTimelineView } from "@/components/live-log-timeline-view";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { ManualEntryInput } from "@/lib/live-entry-utils";
 import type { LiveEntry } from "@/lib/types";
@@ -78,12 +75,21 @@ export function LiveLogAddView({
         onUpdatePhotoForm={onUpdatePhotoForm}
         onConfigureDriveFolder={onConfigureDriveFolder}
       />
-      <BatchImportBoard
-        entries={entries}
-        imageService={imageService}
-        onApply={onBatchApply}
-        onLinkedToEntry={onLinkedToEntry}
-      />
+      <section className="panel archiveAddBatchPanel">
+        <div className="archiveSectionHeader">
+          <div>
+            <p className="eyebrow">Batch Import</p>
+            <h2>画像をまとめて整理する</h2>
+            <p>大量に入れるときだけ使う補助フローです。通常の追加とは分けて扱います。</p>
+          </div>
+        </div>
+        <BatchImportBoard
+          entries={entries}
+          imageService={imageService}
+          onApply={onBatchApply}
+          onLinkedToEntry={onLinkedToEntry}
+        />
+      </section>
     </section>
   );
 }

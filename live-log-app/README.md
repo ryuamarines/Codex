@@ -103,7 +103,7 @@
 - 別ブラウザでは Drive サムネイルが表示できないことがあるため、最低保証は `Driveで開く` です
 - Drive 保存先フォルダは Firestore にも保存し、新しいURLや別ブラウザでは復元を優先します
 
-### 画像整理の現時点の方針
+### 画像ロット取り込みの現時点の方針
 
 - 電子チケット
   - `新規候補` の主ソース
@@ -145,7 +145,7 @@ Vercel のような Firebase Hosting 以外のドメインで `signInWithRedirec
 - `lib/firebase/client.ts`
   - 本番では `authDomain` を現在の app domain に寄せる
 
-Firebase Console 側では、公開ドメインを `Authentication > Settings > Authorized domains` に追加してください。
+Firebase Console 側では、公開ドメインを `Authentication > Settings > Authorized domains` に追加してください。`同期 / バックアップ` タブでの再連携導線とセットで使います。
 
 ### 公開URLの土台
 
@@ -350,7 +350,7 @@ date,event_title,venue,venues_raw,area,artists,event_type,notes
 
 ## 画像ロット取り込み
 
-`画像整理` タブで、複数画像をまとめて投入できます。
+`イベント追加` 画面の下段にあるロット取り込みから、複数画像をまとめて投入できます。
 
 - チケット / 立て看板 / その他を仮分類
 - 日付候補 / 会場候補 / 開場候補 / 開演候補 / アーティスト候補 / タイトル断片を保持

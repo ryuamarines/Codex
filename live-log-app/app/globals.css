@@ -2182,6 +2182,7 @@ select {
 
 .archiveAddComposer,
 .archiveAddUtilities,
+.archiveAddBatchPanel,
 .shareSnapshotCard {
   display: grid;
   gap: 20px;
@@ -2314,6 +2315,13 @@ select {
 .archiveAddSubmitHint small {
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.archiveAddBatchPanel .batchImportBoard {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .shareSnapshotPage {
