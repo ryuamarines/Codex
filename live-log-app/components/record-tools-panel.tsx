@@ -110,6 +110,11 @@ export function RecordToolsPanel({
   const availableGenreOptions = manualForm.genre && !genreOptions.includes(manualForm.genre)
     ? [manualForm.genre, ...genreOptions]
     : genreOptions;
+  const coreFieldCount = [manualForm.date, manualForm.title, manualForm.venue].filter((value) => value.trim()).length;
+  const optionalFieldCount = [manualForm.place, manualForm.artistsText, manualForm.genre, manualForm.memo].filter(
+    (value) => value.trim()
+  ).length;
+  const hasPhotoIntent = photoForm.photoType !== "signboard";
 
   return (
     <>
@@ -119,6 +124,21 @@ export function RecordToolsPanel({
             <p className="eyebrow">Add Event</p>
             <h2>ライブを追加する</h2>
             <p>必要な情報から順に入れて、記録を軽く作れる入力画面です。</p>
+          </div>
+          <div className="archiveAddProgressCard">
+            <strong>入力の進み具合</strong>
+            <div className="archiveAddProgressRow">
+              <span>基本情報</span>
+              <b>{coreFieldCount}/3</b>
+            </div>
+            <div className="archiveAddProgressRow">
+              <span>補足情報</span>
+              <b>{optionalFieldCount}</b>
+            </div>
+            <div className="archiveAddProgressRow">
+              <span>写真</span>
+              <b>{hasPhotoIntent ? "準備中" : "任意"}</b>
+            </div>
           </div>
         </div>
 
@@ -286,6 +306,10 @@ export function RecordToolsPanel({
           </section>
 
           <div className="archiveAddSubmitRow">
+            <div className="archiveAddSubmitHint">
+              <strong>この内容で新しい記録を作成します。</strong>
+              <small>写真を選んでいれば、そのまま同じ記録に添えて追加されます。</small>
+            </div>
             <button className="actionButton" type="submit">
               記録を追加
             </button>

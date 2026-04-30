@@ -23,26 +23,15 @@ import {
   mergeImagesWithDedup,
   updateEntryFieldValue
 } from "@/lib/live-entry-actions";
-import { BatchImportBoard } from "@/components/batch-import-board";
 import {
   AggregateCard,
   ArtistYearStackedChartCard,
   SummaryTile,
   YearTrendHeroCard
 } from "@/components/analytics-cards";
-import { CloudSyncPanel } from "@/components/cloud-sync-panel";
 import { LiveLogPageContent } from "@/components/live-log-page-content";
 import { LiveLogShell } from "@/components/live-log-shell";
-import { RecordDetailPanel } from "@/components/record-detail-panel";
-import { RecordUtilitiesPanel } from "@/components/record-tools-panel";
 import type { YearlyAggregateKey } from "@/components/yearly-summary-panel";
-import {
-  LiveLogAddView,
-  LiveLogArtistsView,
-  LiveLogHomeView,
-  LiveLogTimelineView,
-  LiveLogVenuesView
-} from "@/components/live-log-views";
 import {
   createAggregateSummary,
   createOverview,

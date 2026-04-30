@@ -2269,11 +2269,51 @@ select {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+  justify-content: space-between;
 }
 
 .archiveAddSubmitRowStack {
   display: grid;
   justify-items: start;
+}
+
+.archiveAddProgressCard {
+  min-width: 180px;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--panel-strong) 94%, transparent);
+}
+
+.archiveAddProgressCard strong,
+.archiveAddSubmitHint strong {
+  font-size: 0.96rem;
+}
+
+.archiveAddProgressRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.archiveAddProgressRow b {
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.archiveAddSubmitHint {
+  display: grid;
+  gap: 4px;
+}
+
+.archiveAddSubmitHint small {
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .shareSnapshotPage {

@@ -3,15 +3,12 @@
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
 import { ArtistYearStackedChartCard, SummaryTile } from "@/components/analytics-cards";
 import { CloudSyncPanel } from "@/components/cloud-sync-panel";
+import { LiveLogArtistsView, LiveLogVenuesView } from "@/components/live-log-entity-views";
+import { LiveLogHomeView } from "@/components/live-log-home-view";
 import { RecordDetailPanel } from "@/components/record-detail-panel";
 import { RecordUtilitiesPanel } from "@/components/record-tools-panel";
-import {
-  LiveLogAddView,
-  LiveLogArtistsView,
-  LiveLogHomeView,
-  LiveLogTimelineView,
-  LiveLogVenuesView
-} from "@/components/live-log-views";
+import { LiveLogAddView } from "@/components/live-log-views";
+import { LiveLogTimelineView } from "@/components/live-log-timeline-view";
 import type { YearlyAggregateKey } from "@/components/yearly-summary-panel";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { AggregateBucket, TrendBucket } from "@/lib/live-analytics";
