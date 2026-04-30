@@ -37,15 +37,6 @@ export type LiveLogShareSnapshot =
     }
   | {
       version: 1;
-      kind: "artistYears";
-      title: string;
-      subtitle?: string;
-      generatedAt: string;
-      years: string[];
-      items: ArtistYearTrend[];
-    }
-  | {
-      version: 1;
       kind: "artistStacked";
       title: string;
       subtitle?: string;
@@ -70,7 +61,29 @@ export function encodeShareSnapshot(snapshot: LiveLogShareSnapshot) {
 
 export function decodeShareSnapshot(payload: string) {
   try {
-    const parsed = JSON.parse(decodeURIComponent(payload)) as LiveLogShareSnapshot;
+    const parsed = JSON.parse(decodeURIComponent(payload)) as LiveLogShareSnapshot | {
+      version: 1;
+      kind: "artistYears";
+      title: string;
+      subtitle?: string;
+      generatedAt: string;
+      years: string[];
+      items: ArtistYearTrend[];
+    };
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "version" in parsed &&
+      parsed.version === 1 &&
+      "kind" in parsed &&
+      parsed.kind === "artistYears"
+    ) {
+      return {
+        ...parsed,
+        kind: "artistStacked"
+      } satisfies LiveLogShareSnapshot;
+    }
 
     if (parsed && typeof parsed === "object" && "version" in parsed && parsed.version === 1) {
       return parsed;

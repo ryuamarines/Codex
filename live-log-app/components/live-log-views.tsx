@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent, MutableRefObject, ReactNode, RefObject } from "react";
 import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordListTable } from "@/components/record-list-table";
-import { RecordToolsPanel, RecordUtilitiesPanel } from "@/components/record-tools-panel";
+import { RecordToolsPanel } from "@/components/record-tools-panel";
 import { YearlySummaryPanel, type YearlyAggregateKey } from "@/components/yearly-summary-panel";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { PositionedDashboardTile, AnalyticsTileId, TileHeight } from "@/lib/analytics-dashboard";
@@ -34,8 +34,6 @@ type TimelinePresentation = "cards" | "table";
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
 type TableColumn = "date" | "title" | ListColumn;
 type RecordVisibilityFilter = "all" | "withPhotos" | "withUnsyncedImages";
-type ActiveTool = "csv" | "bulk" | null;
-
 const LIST_COLUMN_OPTIONS: Array<{ key: ListColumn; label: string }> = [
   { key: "venue", label: "会場" },
   { key: "place", label: "地域" },
@@ -226,6 +224,7 @@ type TimelineGroup = {
 type TimelineViewProps = {
   summaryContent?: ReactNode;
   detailContent?: ReactNode;
+  utilityContent?: ReactNode;
   selectedYear: string;
   availableYears: string[];
   timelinePresentation: TimelinePresentation;
@@ -258,6 +257,7 @@ type TimelineViewProps = {
 export function LiveLogTimelineView({
   summaryContent,
   detailContent,
+  utilityContent,
   selectedYear,
   availableYears,
   timelinePresentation,
@@ -436,6 +436,7 @@ export function LiveLogTimelineView({
         </section>
         <div className="archiveTimelineDetailColumn">{detailContent}</div>
       </div>
+      {utilityContent ? <div className="archiveTimelineUtilityRow">{utilityContent}</div> : null}
     </section>
   );
 }
@@ -766,71 +767,41 @@ export function LiveLogVenuesView({
 }
 
 type AddViewProps = {
-  activeTool: ActiveTool;
-  query: string;
-  recordVisibilityFilter: RecordVisibilityFilter;
-  filteredEntryCount: number;
-  visibleSelectedCount: number;
-  csvMessage: string;
   imageMessage: string;
   manualForm: ManualEntryInput;
   photoForm: PhotoUploadInput;
-  bulkEdit: BulkEditInput;
   placeOptions: string[];
   genreOptions: string[];
   driveFolderLabel: string;
-  csvInputRef: RefObject<HTMLInputElement | null>;
   photoInputRef: RefObject<HTMLInputElement | null>;
   entries: LiveEntry[];
   imageService: ArchiveImageService;
-  onToggleTool(tool: Exclude<ActiveTool, null>): void;
-  onQueryChange(value: string): void;
-  onRecordVisibilityFilterChange(value: RecordVisibilityFilter): void;
   onManualSubmit(event: FormEvent<HTMLFormElement>): void;
-  onCsvImport(event: ChangeEvent<HTMLInputElement>): void;
   onPhotoImport(event: ChangeEvent<HTMLInputElement>): void;
   onUpdateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]): void;
   onUpdatePhotoForm<K extends keyof PhotoUploadInput>(
     key: K,
     value: PhotoUploadInput[K]
   ): void;
-  onUpdateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]): void;
-  onApplyBulkUpdate(): void;
-  onDeleteSelectedEntries(): void;
   onConfigureDriveFolder(): void;
   onBatchApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
   onLinkedToEntry(entryId: string): void;
 };
 
 export function LiveLogAddView({
-  activeTool,
-  query,
-  recordVisibilityFilter,
-  filteredEntryCount,
-  visibleSelectedCount,
-  csvMessage,
   imageMessage,
   manualForm,
   photoForm,
-  bulkEdit,
   placeOptions,
   genreOptions,
   driveFolderLabel,
-  csvInputRef,
   photoInputRef,
   entries,
   imageService,
-  onToggleTool,
-  onQueryChange,
-  onRecordVisibilityFilterChange,
   onManualSubmit,
-  onCsvImport,
   onPhotoImport,
   onUpdateForm,
   onUpdatePhotoForm,
-  onUpdateBulkEdit,
-  onApplyBulkUpdate,
-  onDeleteSelectedEntries,
   onConfigureDriveFolder,
   onBatchApply,
   onLinkedToEntry
@@ -850,23 +821,6 @@ export function LiveLogAddView({
         onUpdateForm={onUpdateForm}
         onUpdatePhotoForm={onUpdatePhotoForm}
         onConfigureDriveFolder={onConfigureDriveFolder}
-      />
-      <RecordUtilitiesPanel
-        activeTool={activeTool}
-        onToggleTool={onToggleTool}
-        query={query}
-        onQueryChange={onQueryChange}
-        recordVisibilityFilter={recordVisibilityFilter}
-        onRecordVisibilityFilterChange={onRecordVisibilityFilterChange}
-        filteredEntryCount={filteredEntryCount}
-        visibleSelectedCount={visibleSelectedCount}
-        csvMessage={csvMessage}
-        bulkEdit={bulkEdit}
-        csvInputRef={csvInputRef}
-        onCsvImport={onCsvImport}
-        onUpdateBulkEdit={onUpdateBulkEdit}
-        onApplyBulkUpdate={onApplyBulkUpdate}
-        onDeleteSelectedEntries={onDeleteSelectedEntries}
       />
       <BatchImportBoard
         entries={entries}
