@@ -226,7 +226,7 @@ export function RecordToolsPanel({
                   placeholder="出演者（あとで追加でもOK）"
                 />
                 <small className="importHint">
-                  複数入れるときは `UNISON SQUARE GARDEN / フレデリック / 04 Limited Sazabys` のように `/`
+                  複数入れるときは `UNISON SQUARE GARDEN / SUPER BEAVER / ASIAN KUNG-FU GENERATION` のように `/`
                   区切りで入力します。
                 </small>
               </label>
