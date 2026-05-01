@@ -36,7 +36,15 @@ export async function signInWithGoogle() {
     return;
   }
 
-  await signInWithPopup(auth, provider);
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    if (typeof error === "object" && error && "code" in error && String(error.code) === "auth/popup-blocked") {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function signOutFromFirebase() {

@@ -89,6 +89,8 @@ export function PlannerShell() {
     issues,
     undoStack,
     redoStack,
+    storageReady,
+    storageHasProject,
     updateProject,
     applyProjectUpdate,
     replaceProject,
@@ -179,7 +181,9 @@ export function PlannerShell() {
   } = useRoomPlanerCloud({
     project,
     loadProjectState,
-    parseProject: importProjectJson
+    parseProject: importProjectJson,
+    storageReady,
+    storageHasProject
   });
 
   const handleUndo = () => {

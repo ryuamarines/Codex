@@ -17,6 +17,8 @@ export function usePlannerProject() {
   const [project, setProject] = useState<PlannerProject>(sampleProject);
   const [authResolved, setAuthResolved] = useState(false);
   const [storageKey, setStorageKey] = useState(GUEST_STORAGE_KEY);
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageHasProject, setStorageHasProject] = useState(false);
   const [undoStack, setUndoStack] = useState<PlannerProject[]>([]);
   const [redoStack, setRedoStack] = useState<PlannerProject[]>([]);
   const projectRef = useRef(project);
@@ -34,20 +36,27 @@ export function usePlannerProject() {
 
   useEffect(() => {
     if (!authResolved) return;
+    setStorageReady(false);
     const raw = window.localStorage.getItem(storageKey);
     setUndoStack([]);
     setRedoStack([]);
 
     if (!raw) {
+      setStorageHasProject(false);
       setProject(sampleProject);
+      setStorageReady(true);
       return;
     }
 
     try {
+      setStorageHasProject(true);
       setProject(normalizeProject(JSON.parse(raw) as PlannerProject));
     } catch {
       window.localStorage.removeItem(storageKey);
+      setStorageHasProject(false);
       setProject(sampleProject);
+    } finally {
+      setStorageReady(true);
     }
   }, [authResolved, storageKey]);
 
@@ -123,6 +132,8 @@ export function usePlannerProject() {
     issues,
     undoStack,
     redoStack,
+    storageReady,
+    storageHasProject,
     updateProject,
     applyProjectUpdate,
     replaceProject,

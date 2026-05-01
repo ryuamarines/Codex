@@ -5,6 +5,7 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 
 const ROOMPLAN_COLLECTION = "roomPlans";
 const FIRESTORE_DOC_SOFT_LIMIT_BYTES = 900_000;
+const ROOMPLAN_SCHEMA_VERSION = 1;
 
 function buildCloudProject(project: PlannerProject) {
   return {
@@ -30,6 +31,15 @@ export class FirestoreRoomPlanRepository {
     }
 
     const data = snapshot.data();
+    if (!data || typeof data !== "object") {
+      return null;
+    }
+
+    const ownerUid = "owner" in data && data.owner && typeof data.owner === "object" ? (data.owner as { uid?: unknown }).uid : null;
+    if (ownerUid && ownerUid !== user.uid) {
+      throw new Error("Firestore の保存データ所有者が現在のユーザーと一致しません。");
+    }
+
     return (data.project ?? null) as PlannerProject | null;
   }
 
@@ -55,9 +65,12 @@ export class FirestoreRoomPlanRepository {
     await setDoc(
       doc(db, ROOMPLAN_COLLECTION, user.uid),
       {
+        schemaVersion: ROOMPLAN_SCHEMA_VERSION,
         project: cloudProject,
         updatedAt: serverTimestamp(),
+        updatedAtMs: Date.now(),
         owner: {
+          uid: user.uid,
           displayName: user.displayName ?? null,
           email: user.email ?? null
         }
