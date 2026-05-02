@@ -1005,11 +1005,12 @@ export function LiveLogPage() {
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
     void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
-      setActionNotice("追加は反映しました。クラウド保存は自動で再確認します。");
+      setActionNotice("追加は反映しました。タイムラインで確認でき、クラウド保存は自動で再確認します。");
     });
     setSelectedEntryId(nextEntry.id);
     setHighlightedEntryId(nextEntry.id);
-    setActionNotice(`「${nextEntry.title}」を追加しました。`);
+    setActionNotice(`「${nextEntry.title}」を追加しました。タイムラインで確認できます。`);
+    setActiveView("timeline");
     setIsDetailDrawerOpen(true);
     setActiveTool(null);
     setManualForm({
@@ -1142,16 +1143,17 @@ export function LiveLogPage() {
       setEntries(nextEntries);
       if (nextImages.length > 0) {
         void persistEntryToCloud(nextEntries, entryWithImages).catch(() => {
-          setImageMessage("写真付きの記録は追加しました。クラウド保存は自動で再確認します。");
+          setImageMessage("写真付きの記録は追加しました。タイムラインで確認でき、クラウド保存は自動で再確認します。");
         });
       }
       setSelectedEntryId(entryWithImages.id);
       setHighlightedEntryId(entryWithImages.id);
+      setActiveView("timeline");
       setIsDetailDrawerOpen(true);
       const importMessage =
         nextImages.length === 1
-          ? `「${entryWithImages.title}」を作成して写真を追加しました。`
-          : `「${entryWithImages.title}」を作成して写真を ${nextImages.length} 件追加しました。`;
+          ? `「${entryWithImages.title}」を作成して写真を追加しました。タイムラインで確認できます。`
+          : `「${entryWithImages.title}」を作成して写真を ${nextImages.length} 件追加しました。タイムラインで確認できます。`;
       setActionNotice(importMessage);
       setImageMessage(importMessage);
       setActiveTool(null);

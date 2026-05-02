@@ -312,7 +312,7 @@ export function RecordToolsPanel({
           <div className="archiveAddSubmitRow">
             <div className="archiveAddSubmitHint">
               <strong>この内容で新しい記録を作成します。</strong>
-              <small>写真を選んでいれば、そのまま同じ記録に添えて追加されます。</small>
+              <small>追加したあとはタイムラインでこの記録を開きます。写真を選んでいれば、そのまま同じ記録に添えて追加されます。</small>
             </div>
             <button className="actionButton" type="submit">
               記録を追加
