@@ -8,6 +8,10 @@ type UploadRequestBody = {
   image?: LiveEntryImage;
 };
 
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
+
 export async function POST(request: Request) {
   const session = await readDriveSession();
 
@@ -15,6 +19,15 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { message: "Google Drive 連携がありません。Drive連携を更新してください。" },
       { status: 401 }
+    );
+  }
+
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+
+  if (contentLength > MAX_REQUEST_BYTES) {
+    return NextResponse.json(
+      { message: "画像データが大きすぎます。8MB以下の画像で試してください。" },
+      { status: 413 }
     );
   }
 
@@ -38,6 +51,21 @@ export async function POST(request: Request) {
 
   try {
     const blob = dataUrlToBlob(image.src);
+
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(blob.type)) {
+      return NextResponse.json(
+        { message: "Google Drive に保存できる画像形式は JPEG / PNG / WebP / GIF です。" },
+        { status: 415 }
+      );
+    }
+
+    if (blob.buffer.byteLength > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        { message: "画像データが大きすぎます。8MB以下の画像で試してください。" },
+        { status: 413 }
+      );
+    }
+
     const fileName = sanitizeFileName(image.caption ?? "image", blob.type);
     const boundary = `live-log-${Math.random().toString(36).slice(2)}`;
     const metadata = { name: fileName, parents: [folderId] };
@@ -124,13 +152,20 @@ function buildMultipartBody(
 
 function sanitizeFileName(value: string, mimeType: string) {
   const base = value.replace(/\.[^.]+$/, "").replace(/\s+/g, "-").replace(/[^\w.-]/g, "") || "image";
-  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const extension =
+    mimeType === "image/png"
+      ? "png"
+      : mimeType === "image/webp"
+        ? "webp"
+        : mimeType === "image/gif"
+          ? "gif"
+          : "jpg";
   return `${base}.${extension}`;
 }
 
 async function readDriveErrorMessage(response: Response) {
   if (response.status === 401) {
-    return "Google Drive 連携が切れています。ホームで Drive連携更新 を押して、もう一度連携してください。";
+    return "Google Drive 連携が切れています。ログインと同期で Drive連携更新 を押して、もう一度連携してください。";
   }
 
   if (response.status === 403) {

@@ -78,12 +78,12 @@ export function useLiveCloudSync({
 
       const title =
         mode === "replace"
-          ? "この端末の内容をクラウドの内容で置き換えます。"
+          ? "クラウドの内容を読み込みます。"
           : "クラウドの内容を読み込みます。";
       const warning =
         "この端末の表示中データとクラウドの内容が違います。\n\n" +
-        "このまま続けると、この端末の未同期変更は表示上は消えます。\n" +
-        "最新のつもりのデータか確認してから進めてください。";
+        "続けると画面の内容をクラウド側の内容で更新します。\n" +
+        "最新のデータか確認してから進めてください。";
 
       return window.confirm(`${title}\n\n${warning}`);
     },
@@ -668,7 +668,7 @@ export function useLiveCloudSync({
 
   async function handleForceCloudReplace() {
     if (!firebaseUser) {
-      showAuthMessage("この端末をクラウドで置き換えるには Google ログインが必要です。");
+      showAuthMessage("クラウドの内容を読み込むには Google ログインが必要です。");
       return;
     }
 
@@ -686,7 +686,7 @@ export function useLiveCloudSync({
       }
 
       if (!confirmCloudReplace(cloudEntries, "replace")) {
-        showAuthMessage("クラウドでの置き換えをキャンセルしました。");
+        showAuthMessage("クラウド読込をキャンセルしました。");
         return;
       }
 
@@ -698,12 +698,12 @@ export function useLiveCloudSync({
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
-      showAuthMessage("この端末をクラウド同期データで置き換えました。");
+      showAuthMessage("クラウドの内容を読み込みました。");
     } catch (error) {
       showAuthMessage(
         error instanceof Error
           ? error.message
-          : "クラウドでの置き換えに失敗しました。Firebase 設定を確認してください。",
+          : "クラウド読込に失敗しました。Firebase 設定を確認してください。",
         7000
       );
     }

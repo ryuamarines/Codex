@@ -79,8 +79,8 @@ export function LiveLogAddView({
         <div className="archiveSectionHeader">
           <div>
             <p className="eyebrow">Batch Import</p>
-            <h2>画像をまとめて整理する</h2>
-            <p>大量に入れるときだけ使う補助フローです。通常の追加とは分けて扱います。</p>
+            <h2>写真から候補を作る</h2>
+            <p>チケットや看板写真が多いときに、候補化してからタイムラインへ反映します。</p>
           </div>
         </div>
         <BatchImportBoard

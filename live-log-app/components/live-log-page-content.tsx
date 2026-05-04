@@ -171,7 +171,7 @@ type LiveLogPageContentProps = {
   onUpdateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]): void;
   onApplyBulkUpdate(): void;
   onDeleteSelectedEntries(): void;
-  onConfigureDriveFolder(): void;
+  onConfigureDriveFolder(value: string): void;
   onBatchApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
   onLinkedToEntry(entryId: string): void;
   onGoogleSignIn(): void;
@@ -519,7 +519,7 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
           onPhotoImport={onPhotoImport}
           onUpdateForm={onUpdateForm}
           onUpdatePhotoForm={onUpdatePhotoForm}
-          onConfigureDriveFolder={onConfigureDriveFolder}
+          onConfigureDriveFolder={() => onSetActiveView("sync")}
           onBatchApply={onBatchApply}
           onLinkedToEntry={(entryId) => {
             onSetQuery("");

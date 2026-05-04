@@ -194,7 +194,9 @@ export function LiveLogTimelineView({
                     {group.items.map((entry) => (
                       <button
                         key={entry.id}
-                        className={`archiveTimelineCard ${selectedEntryId === entry.id ? "archiveTimelineCardActive" : ""}`}
+                        className={`archiveTimelineCard ${
+                          selectedEntryId === entry.id ? "archiveTimelineCardActive" : ""
+                        } ${highlightedEntryId === entry.id ? "archiveTimelineCardNew" : ""}`.trim()}
                         type="button"
                         onClick={() => onSelectEntry(entry.id)}
                       >

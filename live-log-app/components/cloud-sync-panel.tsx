@@ -1,5 +1,6 @@
 "use client";
 
+import { FormEvent, useEffect, useState } from "react";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 
 type CloudSyncPanelProps = {
@@ -13,7 +14,7 @@ type CloudSyncPanelProps = {
   isDriveAccessStale: boolean;
   onGoogleSignIn(): void;
   onGoogleSignOut(): void;
-  onConfigureDriveFolder(): void;
+  onConfigureDriveFolder(value: string): void;
   onSaveCurrentToCloud(): void;
   onCloudLoad(): void;
   onForceCloudReplace(): void;
@@ -35,6 +36,17 @@ export function CloudSyncPanel({
   onCloudLoad,
   onForceCloudReplace
 }: CloudSyncPanelProps) {
+  const [driveFolderInput, setDriveFolderInput] = useState(driveFolderId);
+
+  useEffect(() => {
+    setDriveFolderInput(driveFolderId);
+  }, [driveFolderId]);
+
+  function handleDriveFolderSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onConfigureDriveFolder(driveFolderInput);
+  }
+
   return (
     <section className="panel cloudSyncPanel">
       <div className="cloudSyncPanelHeader">
@@ -78,6 +90,33 @@ export function CloudSyncPanel({
             {" / "}
             {driveFolderId ? "保存先設定済み" : "保存先未設定"}
           </p>
+          <form className="driveFolderForm" onSubmit={handleDriveFolderSubmit}>
+            <label>
+              <span>Drive 保存先フォルダ</span>
+              <input
+                value={driveFolderInput}
+                onChange={(event) => setDriveFolderInput(event.target.value)}
+                placeholder="フォルダURL または フォルダID"
+                disabled={!isLoggedIn}
+              />
+            </label>
+            <div className="cloudSyncActions cloudSyncActionsCompact">
+              <button className="toolButton compactToolButton" type="submit" disabled={!isLoggedIn}>
+                保存先を反映
+              </button>
+              <button
+                className="toolButton compactToolButton"
+                type="button"
+                onClick={() => {
+                  setDriveFolderInput("");
+                  onConfigureDriveFolder("");
+                }}
+                disabled={!isLoggedIn || !driveFolderId}
+              >
+                保存先を解除
+              </button>
+            </div>
+          </form>
           <div className="cloudSyncActions cloudSyncActionsCompact">
             <button
               className="toolButton compactToolButton"
@@ -86,14 +125,6 @@ export function CloudSyncPanel({
               disabled={!isFirebaseConfigured()}
             >
               {isLoggedIn ? "Google / Drive 連携更新" : "Googleでログイン"}
-            </button>
-            <button
-              className="toolButton compactToolButton"
-              type="button"
-              onClick={onConfigureDriveFolder}
-              disabled={!isLoggedIn}
-            >
-              {driveFolderId ? "Drive保存先変更" : "Drive保存先設定"}
             </button>
             {isLoggedIn ? (
               <button className="toolButton compactToolButton" type="button" onClick={onGoogleSignOut}>
@@ -107,7 +138,7 @@ export function CloudSyncPanel({
           <div className="cloudSyncCardHeader">
             <h3>クラウド反映</h3>
           </div>
-          <p className="cloudSyncCompactNote">保存・読込・置き換えをここで切り替えます。</p>
+          <p className="cloudSyncCompactNote">この端末とクラウドの保存内容をここで更新します。</p>
           <div className="cloudSyncActions cloudSyncActionsCompact">
             <button className="toolButton compactToolButton" type="button" onClick={onSaveCurrentToCloud} disabled={!isLoggedIn}>
               この端末をクラウドへ保存
@@ -116,7 +147,7 @@ export function CloudSyncPanel({
               クラウド同期
             </button>
             <button className="toolButton compactToolButton" type="button" onClick={onForceCloudReplace} disabled={!isLoggedIn}>
-              この端末をクラウドで置き換え
+              クラウド版を再読込
             </button>
           </div>
         </article>

@@ -39,6 +39,19 @@ import {
   extractYear
 } from "@/lib/live-analytics";
 import {
+  createArtistArchive,
+  createAvailableYears,
+  createSortedEntries,
+  createTimelineGroups,
+  createVenueArchive,
+  createYearlyArchiveCards,
+  filterEntriesForTimeline,
+  formatDay,
+  formatWeekday,
+  getLeadArtist,
+  type RecordVisibilityFilter
+} from "@/lib/live-log-view-model";
+import {
   buildShareSnapshotUrl,
   type LiveLogShareSnapshot
 } from "@/lib/live-log-share-snapshot";
@@ -73,8 +86,10 @@ import {
   saveColumnWidths,
   saveThemeMode
 } from "@/lib/live-ui-preferences";
+import {
+  saveRestorePoint
+} from "@/lib/live-restore-points";
 import { useLiveCloudSync } from "@/hooks/use-live-cloud-sync";
-import { countRenderableImages, hasUnsyncedImages } from "@/lib/live-image-state";
 import type { LiveEntry } from "@/lib/types";
 
 type PhotoUploadInput = PhotoImportInput;
@@ -90,16 +105,10 @@ type ActiveTool = "csv" | "bulk" | null;
 type TimelinePresentation = "cards" | "table";
 type ListColumn = "venue" | "place" | "artists" | "year" | "genre" | "photos";
 type TableColumn = "date" | "title" | ListColumn;
-type RecordVisibilityFilter = "all" | "withPhotos" | "withUnsyncedImages";
-
-const LIST_COLUMN_OPTIONS: Array<{ key: ListColumn; label: string }> = [
-  { key: "venue", label: "会場" },
-  { key: "place", label: "地域" },
-  { key: "artists", label: "出演者" },
-  { key: "year", label: "年" },
-  { key: "genre", label: "形式" },
-  { key: "photos", label: "写真" }
-];
+type DeleteUndoState = {
+  previousEntries: LiveEntry[];
+  deletedEntries: LiveEntry[];
+};
 
 const DEFAULT_COLUMN_WIDTHS: Record<TableColumn, number> = {
   date: 132,
@@ -116,32 +125,6 @@ const FIXED_TILE_HEIGHTS: Partial<Record<AnalyticsTileId, TileHeight>> = {};
 
 const FIXED_TILE_SIZES: Partial<Record<AnalyticsTileId, TileSize>> = {};
 const ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY = "live-log-artist-analytics-wide-v2";
-
-function matches(entry: LiveEntry, query: string) {
-  const normalized = query.trim().toLowerCase();
-
-  if (!normalized) {
-    return true;
-  }
-
-  return [
-    entry.title,
-    entry.date,
-    entry.place,
-    entry.venue,
-    entry.artists.join(" "),
-    extractYear(entry.date),
-    entry.genre,
-    entry.memo
-  ]
-    .join(" ")
-    .toLowerCase()
-    .includes(normalized);
-}
-
-function getLeadArtist(entry: LiveEntry) {
-  return entry.artists.find((artist) => artist.trim()) ?? "未設定";
-}
 
 export function LiveLogPage() {
   const [entries, setEntries] = useState<LiveEntry[]>(sampleEntries);
@@ -211,6 +194,7 @@ export function LiveLogPage() {
   const yearlySummaryRef = useRef<HTMLDivElement | null>(null);
   const yearlyAggregateRefs = useRef<Partial<Record<YearlyAggregateKey, HTMLDivElement | null>>>({});
   const entriesRef = useRef<LiveEntry[]>(sampleEntries);
+  const restorePointThrottleRef = useRef<Record<string, number>>({});
   const resizeStateRef = useRef<{ column: TableColumn; startX: number; startWidth: number } | null>(
     null
   );
@@ -218,6 +202,7 @@ export function LiveLogPage() {
   const pendingEntryPersistTimeoutsRef = useRef<Record<string, number>>({});
   const [shareMessage, setShareMessage] = useState("");
   const [actionNotice, setActionNotice] = useState("");
+  const [deleteUndoState, setDeleteUndoState] = useState<DeleteUndoState | null>(null);
   const [highlightedEntryId, setHighlightedEntryId] = useState("");
   const {
     firebaseUser,
@@ -360,30 +345,10 @@ export function LiveLogPage() {
     saveListDensity(window.localStorage, listDensity);
   }, [listDensity]);
 
-  const filteredEntries = useMemo(() => {
-    const next = entries.filter((entry) => {
-      if (!matches(entry, query)) {
-        return false;
-      }
-
-      if (recordVisibilityFilter === "withPhotos") {
-        return countRenderableImages(entry.images) > 0;
-      }
-
-      if (recordVisibilityFilter === "withUnsyncedImages") {
-        return hasUnsyncedImages(entry.images);
-      }
-
-      return true;
-    });
-
-    next.sort((left, right) => {
-      const diff = parseDateValue(left.date) - parseDateValue(right.date);
-      return dateSortOrder === "asc" ? diff : -diff;
-    });
-
-    return next;
-  }, [entries, query, dateSortOrder, recordVisibilityFilter]);
+  const filteredEntries = useMemo(
+    () => filterEntriesForTimeline(entries, query, dateSortOrder, recordVisibilityFilter),
+    [dateSortOrder, entries, query, recordVisibilityFilter]
+  );
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.id === selectedEntryId) ?? null,
     [entries, selectedEntryId]
@@ -394,24 +359,15 @@ export function LiveLogPage() {
   const aggregates = useMemo(() => createAggregateSummary(entries), [entries]);
   const trends = useMemo(() => createTrendSummary(entries), [entries]);
   const overview = useMemo(() => createOverview(entries), [entries]);
-  const availableYears = useMemo(
-    () =>
-      Array.from(new Set(entries.map((entry) => extractYear(entry.date)).filter(Boolean))).sort((left, right) =>
-        right.localeCompare(left, "ja")
-      ),
-    [entries]
-  );
+  const availableYears = useMemo(() => createAvailableYears(entries), [entries]);
+  const effectiveSelectedYear = selectedYear || availableYears[0] || "";
   const yearEntries = useMemo(
-    () => entries.filter((entry) => extractYear(entry.date) === selectedYear),
-    [entries, selectedYear]
+    () => entries.filter((entry) => extractYear(entry.date) === effectiveSelectedYear),
+    [effectiveSelectedYear, entries]
   );
   const yearAggregates = useMemo(() => createAggregateSummary(yearEntries), [yearEntries]);
   const yearOverview = useMemo(() => createOverview(yearEntries), [yearEntries]);
-  const sortedEntries = useMemo(() => {
-    const next = [...entries];
-    next.sort((left, right) => parseDateValue(right.date) - parseDateValue(left.date));
-    return next;
-  }, [entries]);
+  const sortedEntries = useMemo(() => createSortedEntries(entries), [entries]);
   const currentYear = availableYears[0] ?? "";
   const currentMonthKey = useMemo(
     () =>
@@ -433,90 +389,19 @@ export function LiveLogPage() {
   );
   const recentEntries = useMemo(() => sortedEntries.slice(0, 3), [sortedEntries]);
   const yearlyArchiveCards = useMemo(
-    () =>
-      availableYears.slice(0, 4).map((year) => {
-        const items = sortedEntries.filter((entry) => extractYear(entry.date) === year);
-        const topArtist = createAggregateSummary(items).focusArtists[0]?.label ?? "記録なし";
-        return {
-          year,
-          count: items.length,
-          topArtist
-        };
-      }),
+    () => createYearlyArchiveCards(availableYears, sortedEntries),
     [availableYears, sortedEntries]
   );
-  const timelineGroups = useMemo(() => {
-    const groups = new Map<string, LiveEntry[]>();
-
-    for (const entry of filteredEntries) {
-      if (extractYear(entry.date) !== selectedYear) {
-        continue;
-      }
-
-      const monthKey = entry.date.slice(0, 7);
-      const bucket = groups.get(monthKey) ?? [];
-      bucket.push(entry);
-      groups.set(monthKey, bucket);
-    }
-
-    return Array.from(groups.entries())
-      .sort((left, right) => right[0].localeCompare(left[0], "ja"))
-      .map(([monthKey, items]) => ({
-        monthKey,
-        monthLabel: formatMonthLabel(monthKey),
-        items: items.sort((left, right) => parseDateValue(right.date) - parseDateValue(left.date))
-      }));
-  }, [filteredEntries, selectedYear]);
-  const timelineEntries = useMemo(
-    () => filteredEntries.filter((entry) => extractYear(entry.date) === selectedYear),
-    [filteredEntries, selectedYear]
+  const timelineGroups = useMemo(
+    () => createTimelineGroups(filteredEntries, effectiveSelectedYear),
+    [effectiveSelectedYear, filteredEntries]
   );
-  const artistArchive = useMemo(() => {
-    const countsByArtist = new Map<string, LiveEntry[]>();
-
-    for (const entry of sortedEntries) {
-      const artists = entry.artists.length > 0 ? entry.artists : ["未設定"];
-
-      for (const artist of artists) {
-        const key = artist.trim() || "未設定";
-        const bucket = countsByArtist.get(key) ?? [];
-        bucket.push(entry);
-        countsByArtist.set(key, bucket);
-      }
-    }
-
-    return Array.from(countsByArtist.entries())
-      .map(([artist, items]) => ({
-        artist,
-        entries: items,
-        count: items.length,
-        firstDate: items[items.length - 1]?.date ?? "",
-        lastDate: items[0]?.date ?? "",
-        years: createTrendSummary(items).byYear
-      }))
-      .sort((left, right) => right.count - left.count || left.artist.localeCompare(right.artist, "ja"));
-  }, [sortedEntries]);
-  const venueArchive = useMemo(() => {
-    const countsByVenue = new Map<string, LiveEntry[]>();
-
-    for (const entry of sortedEntries) {
-      const key = entry.venue.trim() || "未設定";
-      const bucket = countsByVenue.get(key) ?? [];
-      bucket.push(entry);
-      countsByVenue.set(key, bucket);
-    }
-
-    return Array.from(countsByVenue.entries())
-      .map(([venue, items]) => ({
-        venue,
-        entries: items,
-        count: items.length,
-        place: items[0]?.place ?? "",
-        lastDate: items[0]?.date ?? "",
-        firstDate: items[items.length - 1]?.date ?? ""
-      }))
-      .sort((left, right) => right.count - left.count || left.venue.localeCompare(right.venue, "ja"));
-  }, [sortedEntries]);
+  const timelineEntries = useMemo(
+    () => filteredEntries.filter((entry) => extractYear(entry.date) === effectiveSelectedYear),
+    [effectiveSelectedYear, filteredEntries]
+  );
+  const artistArchive = useMemo(() => createArtistArchive(sortedEntries), [sortedEntries]);
+  const venueArchive = useMemo(() => createVenueArchive(sortedEntries), [sortedEntries]);
   const selectedArtistArchive = useMemo(
     () => artistArchive.find((item) => item.artist === selectedArtistName) ?? artistArchive[0] ?? null,
     [artistArchive, selectedArtistName]
@@ -610,17 +495,18 @@ export function LiveLogPage() {
   }, [filteredEntries, selectedEntryId]);
 
   useEffect(() => {
-    if (!actionNotice && !highlightedEntryId) {
+    if ((!actionNotice || deleteUndoState) && !highlightedEntryId) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
       setActionNotice("");
       setHighlightedEntryId("");
+      setDeleteUndoState(null);
     }, 4200);
 
     return () => window.clearTimeout(timeoutId);
-  }, [actionNotice, highlightedEntryId]);
+  }, [actionNotice, deleteUndoState, highlightedEntryId]);
 
   useEffect(() => {
     return () => {
@@ -641,6 +527,22 @@ export function LiveLogPage() {
 
   function updateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]) {
     setBulkEdit((current) => ({ ...current, [key]: value }));
+  }
+
+  function createRestorePoint(label: string, targetEntries = entriesRef.current, throttleMs = 0) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const now = Date.now();
+    const lastSavedAt = restorePointThrottleRef.current[label] ?? 0;
+
+    if (throttleMs > 0 && now - lastSavedAt < throttleMs) {
+      return;
+    }
+
+    restorePointThrottleRef.current[label] = now;
+    saveRestorePoint(window.localStorage, label, targetEntries);
   }
 
   function toggleTool(tool: Exclude<ActiveTool, null>) {
@@ -843,12 +745,12 @@ export function LiveLogPage() {
   async function shareYearlySummary() {
     const panelElement = yearlySummaryRef.current;
 
-    if (!panelElement || !selectedYear) {
+    if (!panelElement || !effectiveSelectedYear) {
       setShareMessage("共有画像を作れませんでした。");
       return;
     }
 
-    await captureAndShareElement(panelElement, `${selectedYear}年別まとめ`);
+    await captureAndShareElement(panelElement, `${effectiveSelectedYear}年別まとめ`);
   }
 
   async function shareYearlyAggregate(key: YearlyAggregateKey, label: string) {
@@ -872,10 +774,10 @@ export function LiveLogPage() {
           className="tileActionButton"
           type="button"
           onClick={() => {
-            if (selectedYear) {
+            if (effectiveSelectedYear) {
               void shareSnapshotLink(
-                createYearlySnapshot(selectedYear, yearOverview, yearAggregates),
-                `${selectedYear}年別まとめ`
+                createYearlySnapshot(effectiveSelectedYear, yearOverview, yearAggregates),
+                `${effectiveSelectedYear}年別まとめ`
               );
             }
           }}
@@ -901,7 +803,7 @@ export function LiveLogPage() {
         <button
           className="tileActionButton"
           type="button"
-          onClick={() => void shareSnapshotLink(createYearlyAggregateSnapshot(selectedYear, label, items), label)}
+          onClick={() => void shareSnapshotLink(createYearlyAggregateSnapshot(effectiveSelectedYear, label, items), label)}
         >
           URL
         </button>
@@ -1001,6 +903,7 @@ export function LiveLogPage() {
       return;
     }
 
+    createRestorePoint("追加前");
     const nextEntries = [nextEntry, ...entriesRef.current];
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
@@ -1009,6 +912,7 @@ export function LiveLogPage() {
     });
     setSelectedEntryId(nextEntry.id);
     setHighlightedEntryId(nextEntry.id);
+    setDeleteUndoState(null);
     setActionNotice(`「${nextEntry.title}」を追加しました。タイムラインで確認できます。`);
     setActiveView("timeline");
     setIsDetailDrawerOpen(true);
@@ -1040,6 +944,7 @@ export function LiveLogPage() {
         return;
       }
 
+      createRestorePoint("CSV取り込み前");
       const nextEntries = [...result.entries, ...entriesRef.current];
       entriesRef.current = nextEntries;
       setEntries(nextEntries);
@@ -1086,6 +991,11 @@ export function LiveLogPage() {
       }
 
       const mergedImages = mergeImagesWithDedup(currentEntry.images, nextImages);
+
+      if (mergedImages.addedCount > 0) {
+        createRestorePoint("写真追加前");
+      }
+
       const nextEntries = entriesRef.current.map((entry) =>
         entry.id === entryId ? { ...entry, images: mergedImages.images } : entry
       );
@@ -1137,6 +1047,7 @@ export function LiveLogPage() {
         return;
       }
 
+      createRestorePoint("写真付き追加前");
       const entryWithImages = { ...nextEntry, images: nextImages };
       const nextEntries = [entryWithImages, ...entriesRef.current];
       entriesRef.current = nextEntries;
@@ -1177,6 +1088,7 @@ export function LiveLogPage() {
     key: keyof Omit<LiveEntry, "id" | "images">,
     value: string
   ) {
+    createRestorePoint("修正前", entriesRef.current, 10_000);
     const nextEntries = updateEntryFieldValue(entriesRef.current, entryId, key, value);
     const nextEntry = nextEntries.find((entry) => entry.id === entryId);
     entriesRef.current = nextEntries;
@@ -1222,6 +1134,47 @@ export function LiveLogPage() {
     setSelectedEntryIds([]);
   }
 
+  function rememberDeletedEntries(previousEntries: LiveEntry[], deletedIds: string[]) {
+    const deletedEntries = previousEntries.filter((entry) => deletedIds.includes(entry.id));
+
+    if (deletedEntries.length === 0) {
+      setDeleteUndoState(null);
+      return;
+    }
+
+    setDeleteUndoState({
+      previousEntries,
+      deletedEntries
+    });
+  }
+
+  function restoreDeletedEntries() {
+    if (!deleteUndoState) {
+      return;
+    }
+
+    const deletedById = new Map(deleteUndoState.deletedEntries.map((entry) => [entry.id, entry]));
+    const currentById = new Map(entriesRef.current.map((entry) => [entry.id, entry]));
+    const restoredEntries = deleteUndoState.previousEntries
+      .map((entry) => currentById.get(entry.id) ?? deletedById.get(entry.id))
+      .filter((entry): entry is LiveEntry => Boolean(entry));
+    const restoredIds = new Set(restoredEntries.map((entry) => entry.id));
+    const nextEntries = [
+      ...restoredEntries,
+      ...entriesRef.current.filter((entry) => !restoredIds.has(entry.id))
+    ];
+
+    entriesRef.current = nextEntries;
+    setEntries(nextEntries);
+    setSelectedEntryId(deleteUndoState.deletedEntries[0]?.id ?? nextEntries[0]?.id ?? "");
+    setHighlightedEntryId(deleteUndoState.deletedEntries[0]?.id ?? "");
+    setActionNotice("削除を取り消しました。");
+    setDeleteUndoState(null);
+    void persistEntriesToCloud(nextEntries).catch(() => {
+      setActionNotice("削除は取り消しました。クラウド保存は自動で再確認します。");
+    });
+  }
+
   function applyBulkUpdate() {
     const nextEntries = applyBulkEditToEntries(entriesRef.current, selectedEntryIds, bulkEdit);
 
@@ -1229,6 +1182,7 @@ export function LiveLogPage() {
       return;
     }
 
+    createRestorePoint("一括修正前");
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
     void persistEntriesToCloud(nextEntries).catch(() => {
@@ -1247,11 +1201,15 @@ export function LiveLogPage() {
       return;
     }
 
-    const nextEntries = deleteEntriesById(entriesRef.current, selectedEntryIds);
+    const previousEntries = entriesRef.current;
+    const deletedIds = [...selectedEntryIds];
+    const nextEntries = deleteEntriesById(previousEntries, deletedIds);
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
-    if (selectedEntryIds.length === 1) {
-      void deleteEntryFromCloud(nextEntries, selectedEntryIds[0]).catch(() => {
+    rememberDeletedEntries(previousEntries, deletedIds);
+    createRestorePoint("一括削除前", previousEntries);
+    if (deletedIds.length === 1) {
+      void deleteEntryFromCloud(nextEntries, deletedIds[0]).catch(() => {
         setActionNotice("削除は反映しました。クラウド保存は自動で再確認します。");
       });
     } else {
@@ -1260,12 +1218,16 @@ export function LiveLogPage() {
       });
     }
     setSelectedEntryIds([]);
+    setActionNotice(`${deletedIds.length}件を削除しました。`);
   }
 
   function deleteSingleEntry(entryId: string) {
-    const nextEntries = deleteEntriesById(entriesRef.current, [entryId]);
+    const previousEntries = entriesRef.current;
+    const nextEntries = deleteEntriesById(previousEntries, [entryId]);
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
+    rememberDeletedEntries(previousEntries, [entryId]);
+    createRestorePoint("削除前", previousEntries);
     void deleteEntryFromCloud(nextEntries, entryId).catch(() => {
       setActionNotice("削除は反映しました。クラウド保存は自動で再確認します。");
     });
@@ -1274,6 +1236,7 @@ export function LiveLogPage() {
       setSelectedEntryId(nextEntries[0]?.id ?? "");
       setIsDetailDrawerOpen(nextEntries.length > 0);
     }
+    setActionNotice("1件を削除しました。");
   }
 
   function handleBatchApply(nextEntriesOrUpdater: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])) {
@@ -1284,6 +1247,7 @@ export function LiveLogPage() {
 
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
+    createRestorePoint("画像ロット取り込み前");
     void persistEntriesToCloud(nextEntries).catch(() => {
       setActionNotice("画像ロット取り込みは反映しました。クラウド保存は自動で再確認します。");
     });
@@ -1363,6 +1327,7 @@ export function LiveLogPage() {
       activeView={activeView}
       shareMessage={shareMessage}
       actionNotice={actionNotice}
+      actionNoticeAction={deleteUndoState ? { label: "元に戻す", onClick: restoreDeletedEntries } : undefined}
       themeModeLabel={getThemeModeLabel(themeMode)}
       onSelectView={setActiveView}
       onExportCsv={handleCsvExport}
@@ -1373,7 +1338,7 @@ export function LiveLogPage() {
         selectedEntry={selectedEntry}
         isDetailDrawerOpen={isDetailDrawerOpen}
         detailPhotoInputRef={detailPhotoInputRef}
-        selectedYear={selectedYear}
+        selectedYear={effectiveSelectedYear}
         availableYears={availableYears}
         currentYear={currentYear}
         currentYearEntriesCount={currentYearEntries.length}
@@ -1474,8 +1439,14 @@ export function LiveLogPage() {
         }}
         onGoogleSignIn={handleGoogleSignIn}
         onGoogleSignOut={handleGoogleSignOut}
-        onCloudLoad={handleCloudLoad}
-        onForceCloudReplace={handleForceCloudReplace}
+        onCloudLoad={() => {
+          createRestorePoint("クラウド同期前");
+          void handleCloudLoad();
+        }}
+        onForceCloudReplace={() => {
+          createRestorePoint("クラウド再読込前");
+          void handleForceCloudReplace();
+        }}
         onSaveCurrentToCloud={() => {
           void handleSaveCurrentToCloud();
         }}
@@ -1494,47 +1465,4 @@ export function LiveLogPage() {
       />
     </LiveLogShell>
   );
-}
-
-function formatMonthLabel(value: string) {
-  const [year, month] = value.split("-");
-
-  if (!year || !month) {
-    return value;
-  }
-
-  return `${Number(month)}月`;
-}
-
-function formatDay(value: string) {
-  const matched = value.match(/\d{4}-(\d{2})-(\d{2})/);
-  return matched ? matched[2] : value.slice(-2);
-}
-
-function formatWeekday(value: string) {
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat("ja-JP", { weekday: "short" }).format(parsed).toUpperCase();
-}
-
-function parseDateValue(value: string) {
-  const normalized = value.trim().replace(/\//g, "-");
-  const parsed = Date.parse(normalized);
-
-  if (!Number.isNaN(parsed)) {
-    return parsed;
-  }
-
-  const matched = value.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
-
-  if (!matched) {
-    return 0;
-  }
-
-  const [, year, month, day] = matched;
-  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
 }

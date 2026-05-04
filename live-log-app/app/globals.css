@@ -256,6 +256,23 @@ select {
   font-size: 0.85rem;
 }
 
+.driveFolderForm {
+  display: grid;
+  gap: 8px;
+}
+
+.driveFolderForm label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.driveFolderForm input {
+  width: 100%;
+}
+
 .cloudSyncBadge {
   display: inline-flex;
   align-items: center;
@@ -307,6 +324,21 @@ select {
 .statusBadgeSuccess {
   background: color-mix(in srgb, #4ca070 16%, transparent);
   color: #4ca070;
+}
+
+.statusBadgeWithAction {
+  gap: 8px;
+  padding-right: 6px;
+}
+
+.statusBadgeWithAction button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, #4ca070 18%, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
 .headerCluster {
@@ -2117,6 +2149,10 @@ select {
 .archiveEntityItemActive {
   border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
   background: color-mix(in srgb, var(--accent-soft) 50%, var(--panel-strong));
+}
+
+.archiveTimelineCardNew {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #4ca070 24%, transparent);
 }
 
 .archiveTimelineDate {

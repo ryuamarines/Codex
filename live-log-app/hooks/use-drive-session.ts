@@ -149,25 +149,16 @@ export function useDriveSession({
     onDriveFolderIdChange?.("");
   }, [onDriveFolderIdChange]);
 
-  const handleConfigureDriveFolder = useCallback(() => {
+  const handleConfigureDriveFolder = useCallback((value: string) => {
     if (typeof window === "undefined") {
       return;
     }
 
-    const nextValue = window.prompt(
-      "Google Drive の保存先フォルダURLかフォルダIDを入れてください。",
-      driveFolderId
-    );
-
-    if (nextValue === null) {
-      return;
-    }
-
-    const saved = saveDriveFolderId(window.localStorage, nextValue);
+    const saved = saveDriveFolderId(window.localStorage, value);
     setDriveFolderId(saved);
     onDriveFolderIdChange?.(saved);
     showMessage(saved ? "Google Drive の保存先を更新しました。" : "Google Drive の保存先を解除しました。");
-  }, [driveFolderId, onDriveFolderIdChange, showMessage]);
+  }, [onDriveFolderIdChange, showMessage]);
 
   return {
     driveFolderId,

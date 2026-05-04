@@ -9,6 +9,10 @@ type LiveLogShellProps = {
   activeView: ActiveView;
   shareMessage: string;
   actionNotice: string;
+  actionNoticeAction?: {
+    label: string;
+    onClick(): void;
+  };
   themeModeLabel: string;
   onSelectView(view: ActiveView): void;
   onExportCsv(): void;
@@ -54,6 +58,7 @@ export function LiveLogShell({
   activeView,
   shareMessage,
   actionNotice,
+  actionNoticeAction,
   themeModeLabel,
   onSelectView,
   onExportCsv,
@@ -129,7 +134,16 @@ export function LiveLogShell({
           </div>
           <div className="archiveMainMeta">
             {shareMessage ? <span className="statusBadge statusBadgeSoft">{shareMessage}</span> : null}
-            {actionNotice ? <span className="statusBadge statusBadgeSuccess">{actionNotice}</span> : null}
+            {actionNotice ? (
+              <span className="statusBadge statusBadgeSuccess statusBadgeWithAction">
+                {actionNotice}
+                {actionNoticeAction ? (
+                  <button type="button" onClick={actionNoticeAction.onClick}>
+                    {actionNoticeAction.label}
+                  </button>
+                ) : null}
+              </span>
+            ) : null}
           </div>
         </header>
 
