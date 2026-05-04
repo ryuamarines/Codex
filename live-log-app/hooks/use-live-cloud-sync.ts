@@ -63,8 +63,8 @@ export function useLiveCloudSync({
   const imageSyncWarningKeyRef = useRef("");
   const lastSavedDriveFolderIdRef = useRef("");
 
-  const confirmCloudReplace = useCallback(
-    (cloudEntries: LiveEntry[], mode: "sync" | "replace") => {
+  const confirmCloudSync = useCallback(
+    (cloudEntries: LiveEntry[]) => {
       if (typeof window === "undefined") {
         return true;
       }
@@ -76,13 +76,10 @@ export function useLiveCloudSync({
         return true;
       }
 
-      const title =
-        mode === "replace"
-          ? "クラウドの内容を読み込みます。"
-          : "クラウドの内容を読み込みます。";
+      const title = "クラウドの内容を同期します。";
       const warning =
         "この端末の表示中データとクラウドの内容が違います。\n\n" +
-        "続けると画面の内容をクラウド側の内容で更新します。\n" +
+        "続けると画面の内容をクラウド側の内容に合わせます。\n" +
         "最新のデータか確認してから進めてください。";
 
       return window.confirm(`${title}\n\n${warning}`);
@@ -501,7 +498,7 @@ export function useLiveCloudSync({
         const sampleHash = hashEntries(sampleEntries);
 
         if (currentHash !== cloudHash && currentHash !== sampleHash) {
-          showAuthMessage("この端末の内容とクラウドが異なります。必要なら手動でクラウド同期してください。", 7000);
+          showAuthMessage("この端末の内容とクラウドが異なります。同期タブで内容を確認してから更新してください。", 7000);
           return;
         }
 
@@ -644,7 +641,7 @@ export function useLiveCloudSync({
         return;
       }
 
-      if (!confirmCloudReplace(cloudEntries, "sync")) {
+      if (!confirmCloudSync(cloudEntries)) {
         showAuthMessage("クラウド同期をキャンセルしました。");
         return;
       }
@@ -666,49 +663,6 @@ export function useLiveCloudSync({
     }
   }
 
-  async function handleForceCloudReplace() {
-    if (!firebaseUser) {
-      showAuthMessage("クラウドの内容を読み込むには Google ログインが必要です。");
-      return;
-    }
-
-    try {
-      const cloudArchive = await loadCloudEntries(firebaseUser);
-      const cloudEntries = cloudArchive.entries;
-
-      if (!cloudEntries) {
-        return;
-      }
-
-      if (cloudEntries.length === 0) {
-        showAuthMessage("クラウド上にまだ保存データはありません。");
-        return;
-      }
-
-      if (!confirmCloudReplace(cloudEntries, "replace")) {
-        showAuthMessage("クラウド読込をキャンセルしました。");
-        return;
-      }
-
-      suppressCloudSyncEffectRef.current = true;
-      setEntries(cloudEntries);
-      setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
-      lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
-      cloudRevisionRef.current = cloudArchive.revision;
-      lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
-      updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
-
-      showAuthMessage("クラウドの内容を読み込みました。");
-    } catch (error) {
-      showAuthMessage(
-        error instanceof Error
-          ? error.message
-          : "クラウド読込に失敗しました。Firebase 設定を確認してください。",
-        7000
-      );
-    }
-  }
-
   return {
     firebaseUser,
     authMessage,
@@ -723,7 +677,6 @@ export function useLiveCloudSync({
     handleGoogleSignIn,
     handleGoogleSignOut,
     handleCloudLoad,
-    handleForceCloudReplace,
     handleSaveCurrentToCloud,
     handleRetryImageSync,
     handleRetryEntryImageSync,

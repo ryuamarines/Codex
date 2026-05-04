@@ -217,7 +217,6 @@ export function LiveLogPage() {
     handleGoogleSignIn,
     handleGoogleSignOut,
     handleCloudLoad,
-    handleForceCloudReplace,
     handleSaveCurrentToCloud,
     handleDeleteImage,
     handleRetryImageSync,
@@ -724,8 +723,7 @@ export function LiveLogPage() {
         return;
       }
 
-      window.prompt("共有URLをコピーしてください。", url);
-      setShareMessage(`${label} の共有URLを作成しました。`);
+      setShareMessage("このブラウザでは共有URLをコピーできませんでした。");
     } catch {
       setShareMessage("共有URLを作れませんでした。");
     }
@@ -1442,10 +1440,6 @@ export function LiveLogPage() {
         onCloudLoad={() => {
           createRestorePoint("クラウド同期前");
           void handleCloudLoad();
-        }}
-        onForceCloudReplace={() => {
-          createRestorePoint("クラウド再読込前");
-          void handleForceCloudReplace();
         }}
         onSaveCurrentToCloud={() => {
           void handleSaveCurrentToCloud();

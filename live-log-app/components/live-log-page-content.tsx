@@ -177,7 +177,6 @@ type LiveLogPageContentProps = {
   onGoogleSignIn(): void;
   onGoogleSignOut(): void;
   onCloudLoad(): void;
-  onForceCloudReplace(): void;
   onSaveCurrentToCloud(): void;
   onOpenPhotoPicker(): void;
   onCloseDrawer(): void;
@@ -292,7 +291,6 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
     onGoogleSignIn,
     onGoogleSignOut,
     onCloudLoad,
-    onForceCloudReplace,
     onSaveCurrentToCloud,
     onOpenPhotoPicker,
     onCloseDrawer,
@@ -358,7 +356,6 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
             onConfigureDriveFolder={onConfigureDriveFolder}
             onSaveCurrentToCloud={onSaveCurrentToCloud}
             onCloudLoad={onCloudLoad}
-            onForceCloudReplace={onForceCloudReplace}
           />
           <section className="panel archiveSectionCard">
             <div className="archiveSectionHeader">

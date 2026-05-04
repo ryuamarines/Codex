@@ -17,7 +17,6 @@ type CloudSyncPanelProps = {
   onConfigureDriveFolder(value: string): void;
   onSaveCurrentToCloud(): void;
   onCloudLoad(): void;
-  onForceCloudReplace(): void;
 };
 
 export function CloudSyncPanel({
@@ -33,8 +32,7 @@ export function CloudSyncPanel({
   onGoogleSignOut,
   onConfigureDriveFolder,
   onSaveCurrentToCloud,
-  onCloudLoad,
-  onForceCloudReplace
+  onCloudLoad
 }: CloudSyncPanelProps) {
   const [driveFolderInput, setDriveFolderInput] = useState(driveFolderId);
 
@@ -138,16 +136,13 @@ export function CloudSyncPanel({
           <div className="cloudSyncCardHeader">
             <h3>クラウド反映</h3>
           </div>
-          <p className="cloudSyncCompactNote">この端末とクラウドの保存内容をここで更新します。</p>
+          <p className="cloudSyncCompactNote">この端末とクラウドの保存内容を確認しながら更新します。</p>
           <div className="cloudSyncActions cloudSyncActionsCompact">
             <button className="toolButton compactToolButton" type="button" onClick={onSaveCurrentToCloud} disabled={!isLoggedIn}>
               この端末をクラウドへ保存
             </button>
             <button className="toolButton compactToolButton" type="button" onClick={onCloudLoad} disabled={!isLoggedIn}>
               クラウド同期
-            </button>
-            <button className="toolButton compactToolButton" type="button" onClick={onForceCloudReplace} disabled={!isLoggedIn}>
-              クラウド版を再読込
             </button>
           </div>
         </article>
