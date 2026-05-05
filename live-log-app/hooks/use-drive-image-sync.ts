@@ -18,12 +18,62 @@ type UseDriveImageSyncParams = {
   onPersistEntries?(entries: LiveEntry[]): Promise<void>;
 };
 
+type PendingDriveDeletion = {
+  fileId: string;
+  entryTitle: string;
+  queuedAt: string;
+};
+
+const PENDING_DRIVE_DELETIONS_KEY = "live-log.pending-drive-deletions";
+
 function isDriveSessionExpiredError(error: unknown) {
   return (
     error instanceof Error &&
     (error.message.includes("Drive 連携が切れています") ||
       error.message.includes("invalid authentication credentials"))
   );
+}
+
+function loadPendingDriveDeletions(storage: Storage): PendingDriveDeletion[] {
+  try {
+    const parsed = JSON.parse(storage.getItem(PENDING_DRIVE_DELETIONS_KEY) ?? "[]") as PendingDriveDeletion[];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter((item) => typeof item.fileId === "string" && item.fileId.trim());
+  } catch {
+    storage.removeItem(PENDING_DRIVE_DELETIONS_KEY);
+    return [];
+  }
+}
+
+function savePendingDriveDeletions(storage: Storage, items: PendingDriveDeletion[]) {
+  const uniqueItems = Array.from(new Map(items.map((item) => [item.fileId, item])).values());
+  storage.setItem(PENDING_DRIVE_DELETIONS_KEY, JSON.stringify(uniqueItems.slice(-50)));
+}
+
+function queueDriveDeletion(fileId: string, entryTitle: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const storage = window.localStorage;
+  const items = loadPendingDriveDeletions(storage);
+
+  if (items.some((item) => item.fileId === fileId)) {
+    return;
+  }
+
+  savePendingDriveDeletions(storage, [
+    ...items,
+    {
+      fileId,
+      entryTitle,
+      queuedAt: new Date().toISOString()
+    }
+  ]);
 }
 
 function updateImageInEntries(
@@ -70,6 +120,51 @@ export function useDriveImageSync({
   useEffect(() => {
     entriesRef.current = entries;
   }, [entries]);
+
+  useEffect(() => {
+    if (!hasDriveSession || typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function flushPendingDriveDeletions() {
+      const storage = window.localStorage;
+      const queuedItems = loadPendingDriveDeletions(storage);
+
+      if (queuedItems.length === 0) {
+        return;
+      }
+
+      const remainingItems: PendingDriveDeletion[] = [];
+      let deletedCount = 0;
+
+      for (const item of queuedItems) {
+        try {
+          await deleteDriveImage(item.fileId);
+          deletedCount += 1;
+        } catch {
+          remainingItems.push(item);
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      savePendingDriveDeletions(storage, remainingItems);
+
+      if (deletedCount > 0) {
+        showMessage(`保留中だった Drive 画像 ${deletedCount} 件を削除しました。`);
+      }
+    }
+
+    void flushPendingDriveDeletions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasDriveSession, showMessage]);
 
   async function syncEntryImageToDrive(
     user: Pick<User, "uid">,
@@ -271,7 +366,11 @@ export function useDriveImageSync({
     setEntries(nextEntries);
 
     if (onPersistEntries) {
-      await onPersistEntries(nextEntries);
+      try {
+        await onPersistEntries(nextEntries);
+      } catch {
+        showMessage("画像は記録から削除しました。クラウド保存は自動で再確認します。", 7000);
+      }
     }
 
     if (!targetImage.driveFileId) {
@@ -280,6 +379,7 @@ export function useDriveImageSync({
     }
 
     if (!hasDriveSession) {
+      queueDriveDeletion(targetImage.driveFileId, targetEntry.title);
       showMessage("記録からは削除しましたが、Drive 側を消すには Drive 連携を更新してください。");
       return;
     }
@@ -288,10 +388,11 @@ export function useDriveImageSync({
       await deleteDriveImage(targetImage.driveFileId);
       showMessage(`「${targetEntry.title}」の画像を記録と Google Drive から削除しました。`);
     } catch (error) {
+      queueDriveDeletion(targetImage.driveFileId, targetEntry.title);
       showMessage(
         error instanceof Error
-          ? `記録からは削除しましたが、Drive 側の削除に失敗しました: ${error.message}`
-          : "記録からは削除しましたが、Drive 側の削除に失敗しました。",
+          ? `記録からは削除しました。Drive 側の削除は次回連携時に再試行します: ${error.message}`
+          : "記録からは削除しました。Drive 側の削除は次回連携時に再試行します。",
         7000
       );
     }

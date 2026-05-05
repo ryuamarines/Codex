@@ -20,6 +20,7 @@ import {
   createManualEntry,
   deleteEntriesById,
   importEntriesFromCsvContent,
+  mergeImportedEntriesWithDedup,
   mergeImagesWithDedup,
   updateEntryFieldValue
 } from "@/lib/live-entry-actions";
@@ -87,6 +88,7 @@ import {
   saveThemeMode
 } from "@/lib/live-ui-preferences";
 import {
+  loadRestorePoints,
   saveRestorePoint
 } from "@/lib/live-restore-points";
 import { useLiveCloudSync } from "@/hooks/use-live-cloud-sync";
@@ -109,6 +111,12 @@ type DeleteUndoState = {
   previousEntries: LiveEntry[];
   deletedEntries: LiveEntry[];
 };
+
+declare global {
+  interface Window {
+    liveLogEmergencyExport?: () => string;
+  }
+}
 
 const DEFAULT_COLUMN_WIDTHS: Record<TableColumn, number> = {
   date: 132,
@@ -271,9 +279,41 @@ export function LiveLogPage() {
   }, []);
 
   useEffect(() => {
-    repositoryRef.current?.save(entries).catch(() => undefined);
     entriesRef.current = entries;
-  }, [entries]);
+
+    if (!localEntriesReady) {
+      return;
+    }
+
+    repositoryRef.current?.save(entries).catch(() => undefined);
+  }, [entries, localEntriesReady]);
+
+  useEffect(() => {
+    if (!localEntriesReady || typeof window === "undefined") {
+      return;
+    }
+
+    window.liveLogEmergencyExport = () => {
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        entries: entriesRef.current,
+        restorePoints: loadRestorePoints(window.localStorage)
+      };
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `live-log-emergency-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      return json;
+    };
+
+    return () => {
+      delete window.liveLogEmergencyExport;
+    };
+  }, [localEntriesReady]);
 
   useEffect(() => {
     saveColumnWidths(window.localStorage, columnWidths);
@@ -942,20 +982,30 @@ export function LiveLogPage() {
         return;
       }
 
-      createRestorePoint("CSV取り込み前");
-      const nextEntries = [...result.entries, ...entriesRef.current];
+      const mergeResult = mergeImportedEntriesWithDedup(entriesRef.current, result.entries);
+      const nextEntries = mergeResult.entries;
+      const importMessage =
+        mergeResult.duplicateCount > 0
+          ? `${mergeResult.addedCount} 件を取り込み、重複候補 ${mergeResult.duplicateCount} 件はスキップしました。`
+          : result.message;
+
+      if (mergeResult.addedCount > 0) {
+        createRestorePoint("CSV取り込み前");
+      }
       entriesRef.current = nextEntries;
       setEntries(nextEntries);
-      setSelectedEntryId(result.entries[0]?.id ?? "");
-      if (result.entries[0]) {
-        setHighlightedEntryId(result.entries[0].id);
+      setSelectedEntryId(nextEntries[0]?.id ?? "");
+      if (mergeResult.addedCount > 0 && nextEntries[0]) {
+        setHighlightedEntryId(nextEntries[0].id);
       }
-      setActionNotice(result.message);
+      setActionNotice(importMessage);
       setActiveView("timeline");
-      setIsDetailDrawerOpen(true);
-      setCsvMessage(result.message);
+      setIsDetailDrawerOpen(nextEntries.length > 0);
+      setCsvMessage(importMessage);
       setActiveTool(null);
-      void handleSaveCurrentToCloud(nextEntries);
+      if (mergeResult.addedCount > 0) {
+        void handleSaveCurrentToCloud(nextEntries);
+      }
       event.target.value = "";
     } catch {
       setCsvMessage("CSV の読み込みに失敗しました。UTF-8 の CSV を確認してください。");

@@ -1,6 +1,8 @@
 import type { LiveEntry } from "@/lib/types";
 import { sanitizeEntries, STORAGE_KEY } from "@/lib/live-entry-utils";
 
+const CORRUPT_BACKUP_PREFIX = `${STORAGE_KEY}.corrupt`;
+
 export interface LiveEntryRepository {
   load(fallbackEntries: LiveEntry[]): Promise<LiveEntry[]>;
   save(entries: LiveEntry[]): Promise<void>;
@@ -33,6 +35,7 @@ export function loadEntriesFromStorage(storage: Storage, fallbackEntries: LiveEn
     const parsed = JSON.parse(saved) as LiveEntry[];
     return sanitizeEntries(parsed);
   } catch {
+    preserveCorruptStorageValue(storage, saved);
     storage.removeItem(STORAGE_KEY);
     return sanitizeEntries(fallbackEntries);
   }
@@ -40,6 +43,15 @@ export function loadEntriesFromStorage(storage: Storage, fallbackEntries: LiveEn
 
 export function saveEntriesToStorage(storage: Storage, entries: LiveEntry[]) {
   storage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+function preserveCorruptStorageValue(storage: Storage, value: string) {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    storage.setItem(`${CORRUPT_BACKUP_PREFIX}.${timestamp}`, value);
+  } catch {
+    // If storage is full or unavailable, fall back to resetting the active key.
+  }
 }
 
 export function exportEntriesToCsv(entries: LiveEntry[]) {

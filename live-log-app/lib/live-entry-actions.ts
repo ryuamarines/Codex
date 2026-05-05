@@ -119,6 +119,56 @@ export function importEntriesFromCsvContent(content: string) {
   };
 }
 
+export function mergeImportedEntriesWithDedup(
+  currentEntries: LiveEntry[],
+  importedEntries: LiveEntry[]
+) {
+  const seenKeys = new Set(currentEntries.map(getEntryDuplicateKey).filter(Boolean));
+  const accepted: LiveEntry[] = [];
+  let duplicateCount = 0;
+
+  for (const entry of importedEntries) {
+    const duplicateKey = getEntryDuplicateKey(entry);
+
+    if (duplicateKey && seenKeys.has(duplicateKey)) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    if (duplicateKey) {
+      seenKeys.add(duplicateKey);
+    }
+
+    accepted.push(entry);
+  }
+
+  return {
+    entries: [...accepted, ...currentEntries],
+    addedCount: accepted.length,
+    duplicateCount
+  };
+}
+
+function getEntryDuplicateKey(entry: LiveEntry) {
+  const date = entry.date.trim();
+  const title = normalizeDuplicateValue(entry.title);
+  const venue = normalizeDuplicateValue(entry.venue);
+
+  if (!date || !title || !venue) {
+    return "";
+  }
+
+  return `${date}:${title}:${venue}`;
+}
+
+function normalizeDuplicateValue(value: string) {
+  return value
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 export function appendImagesToEntry(
   entries: LiveEntry[],
   entryId: string,

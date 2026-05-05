@@ -35,6 +35,7 @@ export function CloudSyncPanel({
   onCloudLoad
 }: CloudSyncPanelProps) {
   const [driveFolderInput, setDriveFolderInput] = useState(driveFolderId);
+  const syncGuidance = getSyncGuidance(syncStatus);
 
   useEffect(() => {
     setDriveFolderInput(driveFolderId);
@@ -137,6 +138,7 @@ export function CloudSyncPanel({
             <h3>クラウド反映</h3>
           </div>
           <p className="cloudSyncCompactNote">この端末とクラウドの保存内容を確認しながら更新します。</p>
+          <p className="cloudSyncCompactNote">{syncGuidance}</p>
           <div className="cloudSyncActions cloudSyncActionsCompact">
             <button className="toolButton compactToolButton" type="button" onClick={onSaveCurrentToCloud} disabled={!isLoggedIn}>
               この端末をクラウドへ保存
@@ -149,4 +151,20 @@ export function CloudSyncPanel({
       </div>
     </section>
   );
+}
+
+function getSyncGuidance(syncStatus: string) {
+  if (syncStatus === "未同期の変更あり" || syncStatus === "クラウド保存失敗" || syncStatus === "クラウド競合") {
+    return "この端末の内容を残したい場合は、先に「この端末をクラウドへ保存」を押してください。";
+  }
+
+  if (syncStatus === "Drive連携待ち" || syncStatus === "Drive保存先未設定" || syncStatus === "画像同期待ち") {
+    return "写真の同期には Google / Drive 連携と保存先フォルダの設定が必要です。";
+  }
+
+  if (syncStatus === "クラウド同期済み") {
+    return "同期済みです。別端末の更新を確認したい場合だけ「クラウド同期」を使います。";
+  }
+
+  return "ログイン後は変更が自動でクラウド保存されます。必要なときだけ手動で更新できます。";
 }
