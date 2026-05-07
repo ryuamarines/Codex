@@ -5,6 +5,7 @@ import {
   canonicalizeVenueName,
   createEntityNormalizationIndex,
   createEntitySearchText,
+  type EntityNormalizationPreferences,
   type EntityNormalizationIndex
 } from "@/lib/live-name-normalization";
 import type { LiveEntry } from "@/lib/types";
@@ -63,9 +64,10 @@ export function filterEntriesForTimeline(
   entries: LiveEntry[],
   query: string,
   dateSortOrder: "desc" | "asc",
-  recordVisibilityFilter: RecordVisibilityFilter
+  recordVisibilityFilter: RecordVisibilityFilter,
+  preferences?: EntityNormalizationPreferences
 ) {
-  const normalizationIndex = createEntityNormalizationIndex(entries);
+  const normalizationIndex = createEntityNormalizationIndex(entries, preferences);
   const next = entries.filter((entry) => {
     if (!entryMatchesQuery(entry, query, normalizationIndex)) {
       return false;
@@ -125,8 +127,8 @@ export function createTimelineGroups(entries: LiveEntry[], selectedYear: string)
     }));
 }
 
-export function createArtistArchive(sortedEntries: LiveEntry[]) {
-  const normalizationIndex = createEntityNormalizationIndex(sortedEntries);
+export function createArtistArchive(sortedEntries: LiveEntry[], preferences?: EntityNormalizationPreferences) {
+  const normalizationIndex = createEntityNormalizationIndex(sortedEntries, preferences);
   const countsByArtist = new Map<string, LiveEntry[]>();
 
   for (const entry of sortedEntries) {
@@ -152,13 +154,13 @@ export function createArtistArchive(sortedEntries: LiveEntry[]) {
       count: items.length,
       firstDate: items[items.length - 1]?.date ?? "",
       lastDate: items[0]?.date ?? "",
-      years: createTrendSummary(items).byYear
+      years: createTrendSummary(items, preferences).byYear
     }))
     .sort((left, right) => right.count - left.count || left.artist.localeCompare(right.artist, "ja"));
 }
 
-export function createVenueArchive(sortedEntries: LiveEntry[]) {
-  const normalizationIndex = createEntityNormalizationIndex(sortedEntries);
+export function createVenueArchive(sortedEntries: LiveEntry[], preferences?: EntityNormalizationPreferences) {
+  const normalizationIndex = createEntityNormalizationIndex(sortedEntries, preferences);
   const countsByVenue = new Map<string, LiveEntry[]>();
 
   for (const entry of sortedEntries) {
@@ -195,10 +197,14 @@ function collectEntityAliases(values: string[], canonicalName: string, canonical
   ).sort((left, right) => left.localeCompare(right, "ja"));
 }
 
-export function createYearlyArchiveCards(availableYears: string[], sortedEntries: LiveEntry[]) {
+export function createYearlyArchiveCards(
+  availableYears: string[],
+  sortedEntries: LiveEntry[],
+  preferences?: EntityNormalizationPreferences
+) {
   return availableYears.slice(0, 4).map((year) => {
     const items = sortedEntries.filter((entry) => extractYear(entry.date) === year);
-    const topArtist = createAggregateSummary(items).focusArtists[0]?.label ?? "記録なし";
+    const topArtist = createAggregateSummary(items, preferences).focusArtists[0]?.label ?? "記録なし";
     return {
       year,
       count: items.length,

@@ -4,6 +4,7 @@ import {
   canonicalizeArtistName,
   canonicalizeVenueName,
   createEntityNormalizationIndex,
+  type EntityNormalizationPreferences,
   type EntityNormalizationIndex
 } from "@/lib/live-name-normalization";
 
@@ -23,8 +24,8 @@ export type ArtistYearTrend = {
   total: number;
 };
 
-export function createAggregateSummary(entries: LiveEntry[]) {
-  const normalizationIndex = createEntityNormalizationIndex(entries);
+export function createAggregateSummary(entries: LiveEntry[], preferences?: EntityNormalizationPreferences) {
+  const normalizationIndex = createEntityNormalizationIndex(entries, preferences);
 
   return {
     focusArtists: aggregateArtistsTopN(entries, normalizationIndex),
@@ -34,8 +35,8 @@ export function createAggregateSummary(entries: LiveEntry[]) {
   };
 }
 
-export function createTrendSummary(entries: LiveEntry[]) {
-  const normalizationIndex = createEntityNormalizationIndex(entries);
+export function createTrendSummary(entries: LiveEntry[], preferences?: EntityNormalizationPreferences) {
+  const normalizationIndex = createEntityNormalizationIndex(entries, preferences);
 
   return {
     byYear: aggregateTimeline(entries, (entry) => extractYear(entry.date)),
@@ -43,8 +44,8 @@ export function createTrendSummary(entries: LiveEntry[]) {
   };
 }
 
-export function createOverview(entries: LiveEntry[]) {
-  const normalizationIndex = createEntityNormalizationIndex(entries);
+export function createOverview(entries: LiveEntry[], preferences?: EntityNormalizationPreferences) {
+  const normalizationIndex = createEntityNormalizationIndex(entries, preferences);
   const artistCount = new Set(
     entries.flatMap((entry) =>
       entry.artists

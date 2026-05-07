@@ -151,6 +151,8 @@ type LiveLogPageContentProps = {
   onSelectEntry(entryId: string): void;
   onSelectArtist(artist: string): void;
   onSelectVenue(venue: string): void;
+  onAddEntityAlias(kind: "artist" | "venue", alias: string, canonicalName: string): void;
+  onSeparateEntityAlias(kind: "artist" | "venue", alias: string): void;
   onSetActiveView(view: ActiveView): void;
   onSetSelectedYear(year: string): void;
   onSetQuery(value: string): void;
@@ -265,6 +267,8 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
     onSelectEntry,
     onSelectArtist,
     onSelectVenue,
+    onAddEntityAlias,
+    onSeparateEntityAlias,
     onSetActiveView,
     onSetSelectedYear,
     onSetQuery,
@@ -470,6 +474,8 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
             }
             onSetActiveView("timeline");
           }}
+          onAddAlias={(alias, canonicalName) => onAddEntityAlias("artist", alias, canonicalName)}
+          onSeparateAlias={(alias) => onSeparateEntityAlias("artist", alias)}
           getLeadArtist={getLeadArtist}
           analyticsTileRefs={analyticsTileRefs}
           resolvedAnalyticsTileHeights={resolvedAnalyticsTileHeights}
@@ -494,6 +500,8 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
             onSelectEntry(entryId);
             onSetActiveView("timeline");
           }}
+          onAddAlias={(alias, canonicalName) => onAddEntityAlias("venue", alias, canonicalName)}
+          onSeparateAlias={(alias) => onSeparateEntityAlias("venue", alias)}
           getLeadArtist={getLeadArtist}
           venueTiles={venueTiles}
           analyticsTileRefs={analyticsTileRefs}

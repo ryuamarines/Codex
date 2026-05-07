@@ -80,6 +80,7 @@ import {
   type ListDensity,
   type ThemeMode,
   loadUiPreferences,
+  saveEntityNormalizationPreferences,
   saveListDensity,
   saveAnalyticsHeights,
   saveAnalyticsOrder,
@@ -87,6 +88,12 @@ import {
   saveColumnWidths,
   saveThemeMode
 } from "@/lib/live-ui-preferences";
+import {
+  EMPTY_ENTITY_NORMALIZATION_PREFERENCES,
+  normalizeEntityPreferences,
+  type EntityKind,
+  type EntityNormalizationPreferences
+} from "@/lib/live-name-normalization";
 import {
   loadRestorePoints,
   saveRestorePoint
@@ -143,8 +150,12 @@ export function LiveLogPage() {
   const [dateSortOrder, setDateSortOrder] = useState<"desc" | "asc">("desc");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [listDensity, setListDensity] = useState<ListDensity>("comfortable");
+  const [entityNormalization, setEntityNormalization] = useState<EntityNormalizationPreferences>(
+    EMPTY_ENTITY_NORMALIZATION_PREFERENCES
+  );
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [localEntriesReady, setLocalEntriesReady] = useState(false);
+  const [uiPreferencesReady, setUiPreferencesReady] = useState(false);
   const [activeTool, setActiveTool] = useState<ActiveTool>(null);
   const [selectedEntryId, setSelectedEntryId] = useState<string>("");
   const [selectedArtistName, setSelectedArtistName] = useState("");
@@ -276,6 +287,9 @@ export function LiveLogPage() {
     if (savedPreferences.listDensity) {
       setListDensity(savedPreferences.listDensity);
     }
+
+    setEntityNormalization(savedPreferences.entityNormalization);
+    setUiPreferencesReady(true);
   }, []);
 
   useEffect(() => {
@@ -384,9 +398,17 @@ export function LiveLogPage() {
     saveListDensity(window.localStorage, listDensity);
   }, [listDensity]);
 
+  useEffect(() => {
+    if (!uiPreferencesReady) {
+      return;
+    }
+
+    saveEntityNormalizationPreferences(window.localStorage, entityNormalization);
+  }, [entityNormalization, uiPreferencesReady]);
+
   const filteredEntries = useMemo(
-    () => filterEntriesForTimeline(entries, query, dateSortOrder, recordVisibilityFilter),
-    [dateSortOrder, entries, query, recordVisibilityFilter]
+    () => filterEntriesForTimeline(entries, query, dateSortOrder, recordVisibilityFilter, entityNormalization),
+    [dateSortOrder, entries, entityNormalization, query, recordVisibilityFilter]
   );
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.id === selectedEntryId) ?? null,
@@ -395,17 +417,20 @@ export function LiveLogPage() {
   const visibleSelectedCount = selectedEntryIds.filter((id) =>
     filteredEntries.some((entry) => entry.id === id)
   ).length;
-  const aggregates = useMemo(() => createAggregateSummary(entries), [entries]);
-  const trends = useMemo(() => createTrendSummary(entries), [entries]);
-  const overview = useMemo(() => createOverview(entries), [entries]);
+  const aggregates = useMemo(() => createAggregateSummary(entries, entityNormalization), [entries, entityNormalization]);
+  const trends = useMemo(() => createTrendSummary(entries, entityNormalization), [entries, entityNormalization]);
+  const overview = useMemo(() => createOverview(entries, entityNormalization), [entries, entityNormalization]);
   const availableYears = useMemo(() => createAvailableYears(entries), [entries]);
   const effectiveSelectedYear = selectedYear || availableYears[0] || "";
   const yearEntries = useMemo(
     () => entries.filter((entry) => extractYear(entry.date) === effectiveSelectedYear),
     [effectiveSelectedYear, entries]
   );
-  const yearAggregates = useMemo(() => createAggregateSummary(yearEntries), [yearEntries]);
-  const yearOverview = useMemo(() => createOverview(yearEntries), [yearEntries]);
+  const yearAggregates = useMemo(
+    () => createAggregateSummary(yearEntries, entityNormalization),
+    [entityNormalization, yearEntries]
+  );
+  const yearOverview = useMemo(() => createOverview(yearEntries, entityNormalization), [entityNormalization, yearEntries]);
   const sortedEntries = useMemo(() => createSortedEntries(entries), [entries]);
   const currentYear = availableYears[0] ?? "";
   const currentMonthKey = useMemo(
@@ -428,8 +453,8 @@ export function LiveLogPage() {
   );
   const recentEntries = useMemo(() => sortedEntries.slice(0, 3), [sortedEntries]);
   const yearlyArchiveCards = useMemo(
-    () => createYearlyArchiveCards(availableYears, sortedEntries),
-    [availableYears, sortedEntries]
+    () => createYearlyArchiveCards(availableYears, sortedEntries, entityNormalization),
+    [availableYears, entityNormalization, sortedEntries]
   );
   const timelineGroups = useMemo(
     () => createTimelineGroups(filteredEntries, effectiveSelectedYear),
@@ -439,8 +464,14 @@ export function LiveLogPage() {
     () => filteredEntries.filter((entry) => extractYear(entry.date) === effectiveSelectedYear),
     [effectiveSelectedYear, filteredEntries]
   );
-  const artistArchive = useMemo(() => createArtistArchive(sortedEntries), [sortedEntries]);
-  const venueArchive = useMemo(() => createVenueArchive(sortedEntries), [sortedEntries]);
+  const artistArchive = useMemo(
+    () => createArtistArchive(sortedEntries, entityNormalization),
+    [entityNormalization, sortedEntries]
+  );
+  const venueArchive = useMemo(
+    () => createVenueArchive(sortedEntries, entityNormalization),
+    [entityNormalization, sortedEntries]
+  );
   const selectedArtistArchive = useMemo(
     () => artistArchive.find((item) => item.artist === selectedArtistName) ?? artistArchive[0] ?? null,
     [artistArchive, selectedArtistName]
@@ -1175,6 +1206,32 @@ export function LiveLogPage() {
     );
   }
 
+  function updateEntityAlias(kind: EntityKind, alias: string, canonicalName: string) {
+    const normalizedAlias = alias.trim();
+    const normalizedCanonicalName = canonicalName.trim();
+
+    if (!normalizedAlias || !normalizedCanonicalName) {
+      return;
+    }
+
+    setEntityNormalization((current) => {
+      const normalizedCurrent = normalizeEntityPreferences(current);
+      const key = kind === "artist" ? "artistAliases" : "venueAliases";
+
+      return {
+        ...normalizedCurrent,
+        [key]: {
+          ...normalizedCurrent[key],
+          [normalizedAlias]: normalizedCanonicalName
+        }
+      };
+    });
+  }
+
+  function separateEntityAlias(kind: EntityKind, alias: string) {
+    updateEntityAlias(kind, alias, alias);
+  }
+
   function toggleVisibleEntries(checked: boolean) {
     if (checked) {
       setSelectedEntryIds(Array.from(new Set(filteredEntries.map((entry) => entry.id))));
@@ -1459,6 +1516,8 @@ export function LiveLogPage() {
         onSelectEntry={handleSelectEntry}
         onSelectArtist={setSelectedArtistName}
         onSelectVenue={setSelectedVenueName}
+        onAddEntityAlias={updateEntityAlias}
+        onSeparateEntityAlias={separateEntityAlias}
         onSetActiveView={setActiveView}
         onSetSelectedYear={setSelectedYear}
         onSetQuery={setQuery}

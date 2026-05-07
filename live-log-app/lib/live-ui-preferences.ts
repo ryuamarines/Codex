@@ -6,6 +6,10 @@ import {
   type TileHeight,
   type TileSize
 } from "@/lib/analytics-dashboard";
+import {
+  normalizeEntityPreferences,
+  type EntityNormalizationPreferences
+} from "@/lib/live-name-normalization";
 
 type TableColumn = "date" | "title" | "venue" | "place" | "artists" | "year" | "genre" | "photos";
 export type ThemeMode = "system" | "light" | "dark";
@@ -17,6 +21,7 @@ const ANALYTICS_SIZES_KEY = "live-log-analytics-sizes";
 const ANALYTICS_HEIGHTS_KEY = "live-log-analytics-heights";
 const THEME_MODE_KEY = "live-log-theme-mode";
 const LIST_DENSITY_KEY = "live-log-list-density";
+const ENTITY_NORMALIZATION_KEY = "live-log-entity-normalization";
 
 function normalizeAnalyticsTileId(value: unknown): AnalyticsTileId | null {
   if (value === "artistTopChart") {
@@ -37,7 +42,10 @@ export function loadUiPreferences(storage: Storage) {
       readJson<Record<string, TileHeight>>(storage, ANALYTICS_HEIGHTS_KEY)
     ),
     themeMode: readThemeMode(storage),
-    listDensity: readListDensity(storage)
+    listDensity: readListDensity(storage),
+    entityNormalization: normalizeEntityPreferences(
+      readJson<Partial<EntityNormalizationPreferences>>(storage, ENTITY_NORMALIZATION_KEY)
+    )
   };
 }
 
@@ -63,6 +71,10 @@ export function saveThemeMode(storage: Storage, value: ThemeMode) {
 
 export function saveListDensity(storage: Storage, value: ListDensity) {
   storage.setItem(LIST_DENSITY_KEY, value);
+}
+
+export function saveEntityNormalizationPreferences(storage: Storage, value: EntityNormalizationPreferences) {
+  storage.setItem(ENTITY_NORMALIZATION_KEY, JSON.stringify(normalizeEntityPreferences(value)));
 }
 
 function readAnalyticsOrder(storage: Storage) {

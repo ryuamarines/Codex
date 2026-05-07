@@ -23,6 +23,8 @@ type ArtistsViewProps = {
   onSelectArtist(artist: string): void;
   onSelectEntry(entryId: string): void;
   onBrowseArtistHistory(artist: string, year?: string): void;
+  onAddAlias(alias: string, canonicalName: string): void;
+  onSeparateAlias(alias: string): void;
   getLeadArtist(entry: LiveEntry): string;
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
   resolvedAnalyticsTileHeights: Record<AnalyticsTileId, TileHeight>;
@@ -35,12 +37,15 @@ export function LiveLogArtistsView({
   onSelectArtist,
   onSelectEntry,
   onBrowseArtistHistory,
+  onAddAlias,
+  onSeparateAlias,
   getLeadArtist,
   analyticsTileRefs,
   resolvedAnalyticsTileHeights,
   renderArtistTrendTile
 }: ArtistsViewProps) {
   const [artistQuery, setArtistQuery] = useState("");
+  const [artistAliasInput, setArtistAliasInput] = useState("");
   const [selectedArtistYear, setSelectedArtistYear] = useState<string>("");
   const normalizedArtistQuery = artistQuery.trim().toLowerCase();
   const filteredArtists = useMemo(() => {
@@ -135,10 +140,34 @@ export function LiveLogArtistsView({
                 <p className="eyebrow">Artist Detail</p>
                 <h2>{selectedArtist.label}</h2>
                 {selectedArtist.aliases && selectedArtist.aliases.length > 0 ? (
-                  <p className="archiveEntityAliases">まとめた表記: {selectedArtist.aliases.join(" / ")}</p>
+                  <div className="archiveEntityAliasList">
+                    <span>まとめた表記</span>
+                    {selectedArtist.aliases.map((alias) => (
+                      <button key={alias} type="button" onClick={() => onSeparateAlias(alias)}>
+                        {alias} を別に扱う
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
               </div>
             </div>
+            <form
+              className="archiveEntityAliasForm"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onAddAlias(artistAliasInput, selectedArtist.label);
+                setArtistAliasInput("");
+              }}
+            >
+              <input
+                value={artistAliasInput}
+                onChange={(event) => setArtistAliasInput(event.target.value)}
+                placeholder="同じ扱いにする別表記"
+              />
+              <button className="toolButton compactToolButton" type="submit" disabled={!artistAliasInput.trim()}>
+                同じ扱いにする
+              </button>
+            </form>
             <div className="archiveEntityStats">
               <article className="archiveStat">
                 <span>総ライブ回数</span>
@@ -222,6 +251,8 @@ type VenuesViewProps = {
   selectedVenueLabel: string;
   onSelectVenue(venue: string): void;
   onSelectEntry(entryId: string): void;
+  onAddAlias(alias: string, canonicalName: string): void;
+  onSeparateAlias(alias: string): void;
   getLeadArtist(entry: LiveEntry): string;
   venueTiles: PositionedDashboardTile[];
   analyticsTileRefs: MutableRefObject<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>;
@@ -235,6 +266,8 @@ export function LiveLogVenuesView({
   selectedVenueLabel,
   onSelectVenue,
   onSelectEntry,
+  onAddAlias,
+  onSeparateAlias,
   getLeadArtist,
   venueTiles,
   analyticsTileRefs,
@@ -242,6 +275,7 @@ export function LiveLogVenuesView({
   tileMap,
   dashboardRowCount
 }: VenuesViewProps) {
+  const [venueAliasInput, setVenueAliasInput] = useState("");
   const selectedVenue = venues.find((item) => item.label === selectedVenueLabel) ?? venues[0] ?? null;
 
   return (
@@ -276,10 +310,34 @@ export function LiveLogVenuesView({
                 <p className="eyebrow">Venue Detail</p>
                 <h2>{selectedVenue.label}</h2>
                 {selectedVenue.aliases && selectedVenue.aliases.length > 0 ? (
-                  <p className="archiveEntityAliases">まとめた表記: {selectedVenue.aliases.join(" / ")}</p>
+                  <div className="archiveEntityAliasList">
+                    <span>まとめた表記</span>
+                    {selectedVenue.aliases.map((alias) => (
+                      <button key={alias} type="button" onClick={() => onSeparateAlias(alias)}>
+                        {alias} を別に扱う
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
               </div>
             </div>
+            <form
+              className="archiveEntityAliasForm"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onAddAlias(venueAliasInput, selectedVenue.label);
+                setVenueAliasInput("");
+              }}
+            >
+              <input
+                value={venueAliasInput}
+                onChange={(event) => setVenueAliasInput(event.target.value)}
+                placeholder="同じ扱いにする別表記"
+              />
+              <button className="toolButton compactToolButton" type="submit" disabled={!venueAliasInput.trim()}>
+                同じ扱いにする
+              </button>
+            </form>
             <div className="archiveEntityStats">
               <article className="archiveStat">
                 <span>訪問回数</span>

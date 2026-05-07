@@ -7,6 +7,11 @@ export type EntityNormalizationIndex = {
   venues: Map<string, string>;
 };
 
+export type EntityNormalizationPreferences = {
+  artistAliases: Record<string, string>;
+  venueAliases: Record<string, string>;
+};
+
 type EntityVariant = {
   label: string;
   count: number;
@@ -15,10 +20,25 @@ type EntityVariant = {
 
 const UNSET_LABEL = "未設定";
 
-export function createEntityNormalizationIndex(entries: LiveEntry[]): EntityNormalizationIndex {
+export const EMPTY_ENTITY_NORMALIZATION_PREFERENCES: EntityNormalizationPreferences = {
+  artistAliases: {},
+  venueAliases: {}
+};
+
+export function normalizeEntityPreferences(value: Partial<EntityNormalizationPreferences> | null | undefined) {
   return {
-    artists: buildEntityIndex(collectArtistVariants(entries), "artist"),
-    venues: buildEntityIndex(collectVenueVariants(entries), "venue")
+    artistAliases: normalizeAliasMap(value?.artistAliases),
+    venueAliases: normalizeAliasMap(value?.venueAliases)
+  };
+}
+
+export function createEntityNormalizationIndex(
+  entries: LiveEntry[],
+  preferences: EntityNormalizationPreferences = EMPTY_ENTITY_NORMALIZATION_PREFERENCES
+): EntityNormalizationIndex {
+  return {
+    artists: buildEntityIndex(collectArtistVariants(entries), "artist", preferences.artistAliases),
+    venues: buildEntityIndex(collectVenueVariants(entries), "venue", preferences.venueAliases)
   };
 }
 
@@ -73,7 +93,19 @@ function collectVenueVariants(entries: LiveEntry[]) {
   return entries.map((entry) => entry.venue || UNSET_LABEL);
 }
 
-function buildEntityIndex(values: string[], kind: EntityKind) {
+function normalizeAliasMap(value: Record<string, string> | undefined) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([alias, canonical]) => [alias.trim(), canonical.trim()] as const)
+      .filter(([alias, canonical]) => alias && canonical)
+  );
+}
+
+function buildEntityIndex(values: string[], kind: EntityKind, manualAliases: Record<string, string>) {
   const variantsByLabel = new Map<string, EntityVariant>();
   const labelsByKey = new Map<string, string[]>();
   const parentByLabel = new Map<string, string>();
@@ -134,7 +166,17 @@ function buildEntityIndex(values: string[], kind: EntityKind) {
     }
   }
 
+  applyManualAliases(aliasMap, manualAliases, kind);
+
   return aliasMap;
+}
+
+function applyManualAliases(aliasMap: Map<string, string>, manualAliases: Record<string, string>, kind: EntityKind) {
+  for (const [alias, canonicalName] of Object.entries(manualAliases)) {
+    for (const key of createEntityKeys(alias, kind)) {
+      aliasMap.set(key, canonicalName);
+    }
+  }
 }
 
 function findLabelRoot(parentByLabel: Map<string, string>, label: string): string {

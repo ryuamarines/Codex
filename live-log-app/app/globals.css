@@ -2022,9 +2022,32 @@ select {
   font-size: 0.8rem;
 }
 
-.archiveEntityAliases {
-  margin-top: 6px;
+.archiveEntityAliasList,
+.archiveEntityAliasForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.archiveEntityAliasList span {
+  color: var(--muted);
   font-size: 0.86rem;
+}
+
+.archiveEntityAliasList button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
+.archiveEntityAliasForm input {
+  min-width: min(260px, 100%);
+  flex: 1;
 }
 
 .archiveMiniTrendBar {
