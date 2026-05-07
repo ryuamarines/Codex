@@ -2022,6 +2022,11 @@ select {
   font-size: 0.8rem;
 }
 
+.archiveEntityAliases {
+  margin-top: 6px;
+  font-size: 0.86rem;
+}
+
 .archiveMiniTrendBar {
   display: grid;
   gap: 4px;

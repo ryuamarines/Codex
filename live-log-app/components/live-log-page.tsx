@@ -456,6 +456,7 @@ export function LiveLogPage() {
         count: item.count,
         firstDate: item.firstDate,
         lastDate: item.lastDate,
+        aliases: item.aliases,
         years: item.years,
         entries: item.entries
       })),
@@ -469,6 +470,7 @@ export function LiveLogPage() {
         firstDate: item.firstDate,
         lastDate: item.lastDate,
         place: item.place,
+        aliases: item.aliases,
         entries: item.entries
       })),
     [venueArchive]

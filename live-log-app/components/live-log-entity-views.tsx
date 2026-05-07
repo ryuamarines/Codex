@@ -12,6 +12,7 @@ type EntityArchive = {
   firstDate: string;
   lastDate: string;
   place?: string;
+  aliases?: string[];
   years?: TrendBucket[];
   entries: LiveEntry[];
 };
@@ -133,6 +134,9 @@ export function LiveLogArtistsView({
               <div>
                 <p className="eyebrow">Artist Detail</p>
                 <h2>{selectedArtist.label}</h2>
+                {selectedArtist.aliases && selectedArtist.aliases.length > 0 ? (
+                  <p className="archiveEntityAliases">まとめた表記: {selectedArtist.aliases.join(" / ")}</p>
+                ) : null}
               </div>
             </div>
             <div className="archiveEntityStats">
@@ -271,6 +275,9 @@ export function LiveLogVenuesView({
               <div>
                 <p className="eyebrow">Venue Detail</p>
                 <h2>{selectedVenue.label}</h2>
+                {selectedVenue.aliases && selectedVenue.aliases.length > 0 ? (
+                  <p className="archiveEntityAliases">まとめた表記: {selectedVenue.aliases.join(" / ")}</p>
+                ) : null}
               </div>
             </div>
             <div className="archiveEntityStats">

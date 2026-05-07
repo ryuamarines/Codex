@@ -1,5 +1,11 @@
 import type { LiveEntry } from "@/lib/types";
 import { countRenderableImages } from "@/lib/live-image-state";
+import {
+  canonicalizeArtistName,
+  canonicalizeVenueName,
+  createEntityNormalizationIndex,
+  type EntityNormalizationIndex
+} from "@/lib/live-name-normalization";
 
 export type AggregateBucket = {
   label: string;
@@ -18,24 +24,34 @@ export type ArtistYearTrend = {
 };
 
 export function createAggregateSummary(entries: LiveEntry[]) {
+  const normalizationIndex = createEntityNormalizationIndex(entries);
+
   return {
-    focusArtists: aggregateArtistsTopN(entries),
-    venues: aggregateTopN(entries, (entry) => entry.venue || "未設定"),
+    focusArtists: aggregateArtistsTopN(entries, normalizationIndex),
+    venues: aggregateTopN(entries, (entry) => canonicalizeVenueName(entry.venue || "未設定", normalizationIndex)),
     places: aggregateTopN(entries, (entry) => entry.place || "未設定"),
     genres: aggregateTopN(entries, (entry) => entry.genre || "未設定")
   };
 }
 
 export function createTrendSummary(entries: LiveEntry[]) {
+  const normalizationIndex = createEntityNormalizationIndex(entries);
+
   return {
     byYear: aggregateTimeline(entries, (entry) => extractYear(entry.date)),
-    artistYears: aggregateArtistYearTrends(entries)
+    artistYears: aggregateArtistYearTrends(entries, normalizationIndex)
   };
 }
 
 export function createOverview(entries: LiveEntry[]) {
-  const artistCount = new Set(entries.flatMap((entry) => entry.artists.map((artist) => artist.trim()).filter(Boolean)))
-    .size;
+  const normalizationIndex = createEntityNormalizationIndex(entries);
+  const artistCount = new Set(
+    entries.flatMap((entry) =>
+      entry.artists
+        .map((artist) => canonicalizeArtistName(artist, normalizationIndex))
+        .filter((artist) => artist && artist !== "未設定")
+    )
+  ).size;
   const imageCount = entries.reduce((sum, entry) => sum + countRenderableImages(entry.images), 0);
 
   return {
@@ -69,14 +85,14 @@ function aggregateTopN(entries: LiveEntry[], pick: (entry: LiveEntry) => string,
   return sorted.slice(0, limit);
 }
 
-function aggregateArtistsTopN(entries: LiveEntry[], limit = 10) {
+function aggregateArtistsTopN(entries: LiveEntry[], normalizationIndex: EntityNormalizationIndex, limit = 10) {
   const counts = new Map<string, number>();
 
   for (const entry of entries) {
     const artists = entry.artists.length > 0 ? entry.artists : ["未設定"];
 
     for (const artist of artists) {
-      const key = artist.trim() || "未設定";
+      const key = canonicalizeArtistName(artist, normalizationIndex);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   }
@@ -110,7 +126,7 @@ function aggregateTimeline(entries: LiveEntry[], pick: (entry: LiveEntry) => str
     .sort((left, right) => left.label.localeCompare(right.label, "ja"));
 }
 
-function aggregateArtistYearTrends(entries: LiveEntry[], limit = 20) {
+function aggregateArtistYearTrends(entries: LiveEntry[], normalizationIndex: EntityNormalizationIndex, limit = 20) {
   const years = Array.from(
     new Set(entries.map((entry) => extractYear(entry.date)).filter(Boolean))
   ).sort((left, right) => left.localeCompare(right, "ja"));
@@ -128,7 +144,7 @@ function aggregateArtistYearTrends(entries: LiveEntry[], limit = 20) {
     const artists = entry.artists.length > 0 ? entry.artists : ["未設定"];
 
     for (const rawArtist of artists) {
-      const artist = rawArtist.trim() || "未設定";
+      const artist = canonicalizeArtistName(rawArtist, normalizationIndex);
       const current = counts.get(artist) ?? {};
       current[year] = (current[year] ?? 0) + 1;
       counts.set(artist, current);
