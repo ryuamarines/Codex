@@ -58,6 +58,9 @@ const TYPE_LABELS: Record<BatchImageType, string> = {
   other: "その他"
 };
 
+const MAX_OCR_FILE_SIZE = 8_000_000;
+const MAX_BATCH_OCR_COUNT = 6;
+
 export function BatchImportBoard({
   entries,
   imageService,
@@ -69,7 +72,7 @@ export function BatchImportBoard({
   const [itemActionStates, setItemActionStates] = useState<Record<string, ItemActionState>>({});
   const [bulkReviewState, setBulkReviewState] = useState<BatchReviewState>("existing_match");
   const [message, setMessage] = useState(
-    "複数画像を投入すると、仮分類・候補抽出・既存公演との照合を一覧で整理できます。Google / Drive の設定は上の「ログインと同期」で行います。"
+    "複数画像を投入すると、仮分類・候補抽出・既存公演との照合を一覧で整理できます。OCR は端末内で実行し、結果は確認用にだけ使います。"
   );
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -153,6 +156,15 @@ export function BatchImportBoard({
       return;
     }
 
+    if (target.file.size > MAX_OCR_FILE_SIZE) {
+      updateItem(itemId, (current) => ({
+        ...current,
+        ocrStatus: "error",
+        ocrError: "OCR は 8MB 以下の画像で実行してください。"
+      }));
+      return;
+    }
+
     updateItem(itemId, (current) => ({
       ...current,
       ocrStatus: "processing",
@@ -206,6 +218,11 @@ export function BatchImportBoard({
 
     if (targets.length === 0) {
       setMessage("OCR を実行する画像を選んでください。");
+      return;
+    }
+
+    if (targets.length > MAX_BATCH_OCR_COUNT) {
+      setMessage(`OCR は一度に ${MAX_BATCH_OCR_COUNT} 件まで実行できます。件数を絞ってください。`);
       return;
     }
 
@@ -467,6 +484,9 @@ export function BatchImportBoard({
           <p className="eyebrow">Batch Import</p>
           <h2>画像ロット取り込み</h2>
           <p>{message}</p>
+          <p className="importHint">
+            OCR は画像を外部OCRサービスへ送らず、このブラウザ上で処理します。整理番号や座席などのチケット固有情報は記録メモへ自動保存しません。
+          </p>
         </div>
         <div className="batchToolbar">
           <div className="batchToolbarPrimary">
@@ -688,7 +708,7 @@ export function BatchImportBoard({
                 {item.ocrText ? (
                   <details className="batchOcrText">
                     <summary>OCR テキストを確認</summary>
-                    <pre>{item.ocrText.slice(0, 2400)}</pre>
+                    <pre>{redactSensitiveOcrText(item.ocrText).slice(0, 2400)}</pre>
                   </details>
                 ) : null}
 
@@ -774,12 +794,10 @@ export function BatchImportBoard({
 }
 
 function buildImportMemo(item: BatchImportBoardItem) {
-  const ticketDetails = extractTicketDetailFragments(item.ocrText);
   const fragments = [
     `画像ロット取込みから作成: ${item.fileName}`,
     item.extracted.openTimeCandidate ? `開場候補 ${item.extracted.openTimeCandidate}` : "",
-    item.extracted.startTimeCandidate ? `開演候補 ${item.extracted.startTimeCandidate}` : "",
-    ...ticketDetails
+    item.extracted.startTimeCandidate ? `開演候補 ${item.extracted.startTimeCandidate}` : ""
   ].filter(Boolean);
 
   return fragments.join(" / ");
@@ -801,35 +819,14 @@ function mergeExtractedCandidates(
   };
 }
 
-function extractTicketDetailFragments(ocrText: string) {
+function redactSensitiveOcrText(ocrText: string) {
   if (!ocrText) {
-    return [];
+    return "";
   }
 
-  const fragments: string[] = [];
-  const normalized = ocrText.replace(/\s+/g, " ");
-
-  const serial = normalized.match(/(?:整理番号|整理No\.?|No\.?)\s*[:：]?\s*([A-Z]?-?\d{1,4})/i);
-
-  if (serial?.[1]) {
-    fragments.push(`整理番号 ${serial[1]}`);
-  }
-
-  const seat = normalized.match(
-    /(?:席種|座席|seat)\s*[:：]?\s*([A-Z0-9一-龠ぁ-んァ-ヶー\s\-\/]{2,30})/i
-  );
-
-  if (seat?.[1]) {
-    fragments.push(`座席 ${seat[1].trim()}`);
-  }
-
-  const quantity = normalized.match(/(\d+)\s*(?:枚|tickets?)/i);
-
-  if (quantity?.[1]) {
-    fragments.push(`枚数 ${quantity[1]}`);
-  }
-
-  return fragments;
+  return ocrText
+    .replace(/((?:整理番号|整理No\.?|No\.?)\s*[:：]?\s*)([A-Z]?-?\d{1,6})/gi, "$1[非表示]")
+    .replace(/((?:席種|座席|seat)\s*[:：]?\s*)([A-Z0-9一-龠ぁ-んァ-ヶー\s\-\/]{2,30})/gi, "$1[非表示]");
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
