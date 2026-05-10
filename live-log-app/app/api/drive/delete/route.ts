@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { readDriveSession } from "@/lib/server/drive-session";
+import { isSafeGoogleDriveId, rejectCrossOriginRequest } from "@/lib/server/request-security";
 
 export async function POST(request: Request) {
+  const rejected = rejectCrossOriginRequest(request);
+
+  if (rejected) {
+    return rejected;
+  }
+
   const session = await readDriveSession();
 
   if (!session.accessToken) {
@@ -14,11 +21,11 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { fileId?: string } | null;
   const fileId = body?.fileId?.trim() ?? "";
 
-  if (!fileId) {
+  if (!fileId || !isSafeGoogleDriveId(fileId)) {
     return NextResponse.json({ message: "削除対象の Drive ファイル ID がありません。" }, { status: 400 });
   }
 
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${session.accessToken}`

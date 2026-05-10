@@ -9,6 +9,8 @@ let workerPromise: Promise<{
   recognize(file: File): Promise<{ data: { text: string; confidence: number } }>;
 }> | null = null;
 
+const TESSERACT_ASSET_PATH = "/tesseract";
+
 export async function runImageOcr(file: File, imageType: BatchImageType): Promise<OcrResult> {
   const worker = await getWorker();
   const preparedVariants = await prepareFilesForOcr(file, imageType);
@@ -34,7 +36,15 @@ export async function runImageOcr(file: File, imageType: BatchImageType): Promis
 
 async function getWorker() {
   if (!workerPromise) {
-    workerPromise = import("tesseract.js").then(({ createWorker }) => createWorker("jpn+eng"));
+    workerPromise = import("tesseract.js").then(({ createWorker }) =>
+      createWorker("jpn+eng", 1, {
+        corePath: `${TESSERACT_ASSET_PATH}/core`,
+        langPath: `${TESSERACT_ASSET_PATH}/lang`,
+        workerPath: `${TESSERACT_ASSET_PATH}/worker.min.js`,
+        workerBlobURL: false,
+        gzip: true
+      })
+    );
   }
 
   return workerPromise;

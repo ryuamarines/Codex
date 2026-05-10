@@ -42,6 +42,12 @@ export async function writeDriveSession(accessToken: string) {
 
 export async function clearDriveSession() {
   const cookieStore = await cookies();
-  cookieStore.delete(DRIVE_ACCESS_TOKEN_COOKIE);
-  cookieStore.delete(DRIVE_ACCESS_TOKEN_SAVED_AT_COOKIE);
+  cookieStore.set(DRIVE_ACCESS_TOKEN_COOKIE, "", {
+    ...baseCookieOptions(),
+    maxAge: 0
+  });
+  cookieStore.set(DRIVE_ACCESS_TOKEN_SAVED_AT_COOKIE, "", {
+    ...baseCookieOptions(),
+    maxAge: 0
+  });
 }

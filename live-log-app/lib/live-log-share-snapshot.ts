@@ -1,5 +1,7 @@
 import type { AggregateBucket, ArtistYearTrend, TrendBucket } from "@/lib/live-analytics";
 
+const MAX_SHARE_SNAPSHOT_PAYLOAD_LENGTH = 60_000;
+
 export type ShareSnapshotMetric = {
   label: string;
   value: string | number;
@@ -60,6 +62,10 @@ export function encodeShareSnapshot(snapshot: LiveLogShareSnapshot) {
 }
 
 export function decodeShareSnapshot(payload: string) {
+  if (payload.length > MAX_SHARE_SNAPSHOT_PAYLOAD_LENGTH) {
+    return null;
+  }
+
   try {
     const parsed = JSON.parse(decodeURIComponent(payload)) as LiveLogShareSnapshot;
 

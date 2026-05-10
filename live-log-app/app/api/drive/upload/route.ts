@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createImage } from "@/lib/live-entry-utils";
 import type { LiveEntryImage } from "@/lib/types";
 import { readDriveSession } from "@/lib/server/drive-session";
+import { isSafeGoogleDriveId, rejectCrossOriginRequest } from "@/lib/server/request-security";
 
 type UploadRequestBody = {
   folderId?: string;
@@ -13,6 +14,12 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  const rejected = rejectCrossOriginRequest(request);
+
+  if (rejected) {
+    return rejected;
+  }
+
   const session = await readDriveSession();
 
   if (!session.accessToken) {
@@ -35,7 +42,7 @@ export async function POST(request: Request) {
   const folderId = body?.folderId?.trim() ?? "";
   const image = body?.image;
 
-  if (!folderId) {
+  if (!folderId || !isSafeGoogleDriveId(folderId)) {
     return NextResponse.json(
       { message: "Google Drive の保存先フォルダが未設定です。Drive保存先を設定してください。" },
       { status: 400 }
@@ -127,7 +134,13 @@ function dataUrlToBlob(dataUrl: string) {
     throw new Error("画像データの形式が不正です。");
   }
 
-  const [, mimeType, base64] = match;
+  const [, rawMimeType, base64] = match;
+  const mimeType = rawMimeType.toLowerCase();
+
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length % 4 !== 0) {
+    throw new Error("画像データの形式が不正です。");
+  }
+
   return {
     type: mimeType,
     buffer: Buffer.from(base64, "base64")

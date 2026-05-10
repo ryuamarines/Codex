@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { clearDriveSession, readDriveSession, writeDriveSession } from "@/lib/server/drive-session";
+import { isReasonableAccessToken, rejectCrossOriginRequest } from "@/lib/server/request-security";
 
 export async function GET() {
   const session = await readDriveSession();
@@ -10,10 +11,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const rejected = rejectCrossOriginRequest(request);
+
+  if (rejected) {
+    return rejected;
+  }
+
   const body = (await request.json().catch(() => null)) as { accessToken?: string } | null;
   const accessToken = body?.accessToken?.trim() ?? "";
 
-  if (!accessToken) {
+  if (!isReasonableAccessToken(accessToken)) {
     return NextResponse.json({ message: "Drive セッション作成に必要な accessToken がありません。" }, { status: 400 });
   }
 
@@ -21,7 +28,13 @@ export async function POST(request: Request) {
   return NextResponse.json({ connected: true, savedAt });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const rejected = rejectCrossOriginRequest(request);
+
+  if (rejected) {
+    return rejected;
+  }
+
   await clearDriveSession();
   return NextResponse.json({ connected: false });
 }
