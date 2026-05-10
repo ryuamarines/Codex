@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 const GOOGLE_DRIVE_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/;
+const MIN_ACCESS_TOKEN_LENGTH = 20;
 const MAX_ACCESS_TOKEN_LENGTH = 4096;
 
 export function rejectCrossOriginRequest(request: Request) {
@@ -30,5 +31,5 @@ export function isSafeGoogleDriveId(value: string) {
 }
 
 export function isReasonableAccessToken(value: string) {
-  return value.length > 0 && value.length <= MAX_ACCESS_TOKEN_LENGTH && !/[\s]/.test(value);
+  return value.length >= MIN_ACCESS_TOKEN_LENGTH && value.length <= MAX_ACCESS_TOKEN_LENGTH && !/[\s]/.test(value);
 }
