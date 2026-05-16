@@ -768,7 +768,11 @@ export function LiveLogPage() {
       anchor.click();
       URL.revokeObjectURL(url);
       setShareMessage(`${label} をPNGで保存しました。`);
-    } catch {
+    } catch (error) {
+      if (isShareAbortError(error)) {
+        return;
+      }
+
       setShareMessage("共有画像を作れませんでした。");
     } finally {
       element.classList.remove("shareCaptureTile");
@@ -797,7 +801,11 @@ export function LiveLogPage() {
       }
 
       setShareMessage("このブラウザでは共有URLをコピーできませんでした。");
-    } catch {
+    } catch (error) {
+      if (isShareAbortError(error)) {
+        return;
+      }
+
       setShareMessage("共有URLを作れませんでした。");
     }
   }
@@ -839,7 +847,7 @@ export function LiveLogPage() {
     return (
       <div className="tileActions" data-share-exclude="true">
         <button className="tileActionButton" type="button" onClick={() => void shareYearlySummary()}>
-          PNG
+          共有
         </button>
         <button
           className="tileActionButton"
@@ -853,10 +861,14 @@ export function LiveLogPage() {
             }
           }}
         >
-          URL
+          リンク
         </button>
       </div>
     );
+  }
+
+  function isShareAbortError(error: unknown) {
+    return error instanceof DOMException && error.name === "AbortError";
   }
 
   function renderYearlyAggregateActions(key: YearlyAggregateKey, label: string) {
@@ -869,14 +881,14 @@ export function LiveLogPage() {
           type="button"
           onClick={() => void shareYearlyAggregate(key, label)}
         >
-          PNG
+          共有
         </button>
         <button
           className="tileActionButton"
           type="button"
           onClick={() => void shareSnapshotLink(createYearlyAggregateSnapshot(effectiveSelectedYear, label, items), label)}
         >
-          URL
+          リンク
         </button>
       </div>
     );
@@ -926,7 +938,7 @@ export function LiveLogPage() {
           type="button"
           onClick={() => shareAnalyticsTile(tileId, label)}
         >
-          PNG
+          共有
         </button>
         <button
           className="tileActionButton"
@@ -938,7 +950,7 @@ export function LiveLogPage() {
             )
           }
         >
-          URL
+          リンク
         </button>
         {!isHeightFixed ? (
           <button
