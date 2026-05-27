@@ -1,11 +1,13 @@
 import { normalizeEvent } from "./models.js";
 import { resolveDataBackend } from "./app-config.js";
 import { parseEventsCsv, serializeEventsToCsv } from "./csv-transfer.js";
+import { FIRESTORE_ACCESS_MODE } from "./firebase-config.js";
 import {
   auth,
   authReadyPromise,
   db,
   eventHubDoc,
+  getMemberDoc,
   getDoc,
   runTransaction,
   serializeAuthUser,
@@ -47,6 +49,23 @@ function normalizeEvents(events) {
   return events.map((event) => normalizeEvent(event));
 }
 
+function createRepositoryError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function getCurrentUserHint() {
+  const user = auth.currentUser;
+
+  if (!user) {
+    return "";
+  }
+
+  const email = user.email ? ` / email: ${user.email}` : "";
+  return ` UID: ${user.uid}${email}`;
+}
+
 function toAuthRepositoryError(error) {
   if (typeof error === "object" && error !== null && "code" in error) {
     if (error.code === "auth/popup-closed-by-user") {
@@ -58,7 +77,7 @@ function toAuthRepositoryError(error) {
     }
   }
 
-  return new Error("Google ログインに失敗しました。Firebase Authentication の設定を確認してください。");
+  return createRepositoryError("Google ログインに失敗しました。Firebase Authentication の設定を確認してください。", "auth-failed");
 }
 
 function toFirestoreRepositoryError(action, error) {
@@ -66,34 +85,58 @@ function toFirestoreRepositoryError(action, error) {
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    error.code === "permission-denied"
+    error.code === "revision-conflict"
   ) {
-    return new Error(
-      auth.currentUser
-        ? action === "read"
-          ? "Google ログインは通っていますが、Firestore Rules が eventHub/appState の読込を許可していません。Rules を確認してください。"
-          : "Google ログインは通っていますが、Firestore Rules が eventHub/appState の保存を許可していません。Rules を確認してください。"
-        : "Google アカウントでログインしてから、もう一度お試しください。"
+    return createRepositoryError("他の端末や別タブの更新が先に保存されました。画面を開き直してから、もう一度変更を反映してください。", "revision-conflict");
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "access-not-allowed"
+  ) {
+    return createRepositoryError(
+      `この Google アカウントには Event Hub の閲覧権限がありません。Firestore に eventHubMembers/{uid} を作成し、active: true を設定してください。${getCurrentUserHint()}`,
+      "access-not-allowed"
     );
   }
 
-  if (typeof error === "object" && error !== null && "code" in error && error.code === "unauthenticated") {
-    return new Error("Google アカウントでログインしてから、もう一度お試しください。");
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "permission-denied"
+  ) {
+    const message = auth.currentUser
+      ? action === "read"
+        ? `Google ログインは通っていますが、Firestore Rules が読込を許可していません。Rules が request.auth != null を許可しているか確認してください。${getCurrentUserHint()}`
+        : `Google ログインは通っていますが、Firestore Rules が保存を許可していません。Rules が request.auth != null を許可しているか確認してください。${getCurrentUserHint()}`
+      : "Google アカウントでログインしてから、もう一度お試しください。";
+
+    return createRepositoryError(message, "permission-denied");
   }
 
-  return new Error(
+  if (typeof error === "object" && error !== null && "code" in error && error.code === "unauthenticated") {
+    return createRepositoryError("Google アカウントでログインしてから、もう一度お試しください。", "unauthenticated");
+  }
+
+  return createRepositoryError(
     action === "read"
       ? "Firestore からの読込に失敗しました。接続設定かルールを確認してください。"
       : "Firestore への保存に失敗しました。接続設定かルールを確認してください。"
+    ,
+    action === "read" ? "firestore-read-failed" : "firestore-write-failed"
   );
 }
 
-function createSessionPayload(user) {
+function createSessionPayload(user, isAllowed = Boolean(user)) {
   return {
     authRequired: true,
     backendLabel: "Firestore / Vercel",
     user: serializeAuthUser(user),
-    isAllowed: Boolean(user)
+    isAllowed,
+    accessMode: FIRESTORE_ACCESS_MODE
   };
 }
 
@@ -101,10 +144,33 @@ async function requireSignedInUser() {
   await authReadyPromise;
 
   if (!auth.currentUser) {
-    throw new Error("Google アカウントでログインしてください。");
+    throw createRepositoryError("Google アカウントでログインしてください。", "unauthenticated");
   }
 
   return auth.currentUser;
+}
+
+async function isMemberAllowed(user) {
+  if (!user) {
+    return false;
+  }
+
+  if (FIRESTORE_ACCESS_MODE !== "member-doc") {
+    return true;
+  }
+
+  const snapshot = await getDoc(getMemberDoc(user.uid));
+  return snapshot.exists() && snapshot.data()?.active === true;
+}
+
+async function requireAuthorizedUser() {
+  const user = await requireSignedInUser();
+
+  if (!(await isMemberAllowed(user))) {
+    throw createRepositoryError("この Google アカウントには Event Hub の閲覧権限がありません。", "access-not-allowed");
+  }
+
+  return user;
 }
 
 export function createApiEventRepository() {
@@ -179,15 +245,49 @@ async function loadSeedEvents() {
 }
 
 export function createFirestoreEventRepository() {
+  let knownRevision = null;
+  let accessCache = {
+    uid: null,
+    isAllowed: false
+  };
+
+  function rememberRevision(revision) {
+    knownRevision = Number.isFinite(revision) ? revision : null;
+  }
+
+  async function buildSession(user) {
+    if (!user) {
+      accessCache = { uid: null, isAllowed: false };
+      return createSessionPayload(null, false);
+    }
+
+    if (accessCache.uid === user.uid) {
+      return createSessionPayload(user, accessCache.isAllowed);
+    }
+
+    const isAllowed = await isMemberAllowed(user);
+    accessCache = { uid: user.uid, isAllowed };
+    return createSessionPayload(user, isAllowed);
+  }
+
   return {
     key: "firestore",
     async getSession() {
-      const user = await authReadyPromise;
-      return createSessionPayload(user);
+      try {
+        const user = await authReadyPromise;
+        return await buildSession(user);
+      } catch (error) {
+        throw toFirestoreRepositoryError("read", error);
+      }
     },
     subscribeSession(listener) {
-      return subscribeAuthSession((user) => {
-        listener(createSessionPayload(user));
+      return subscribeAuthSession(async (user) => {
+        try {
+          listener(await buildSession(user));
+        } catch (error) {
+          console.error(error);
+          listener(createSessionPayload(user, false));
+        }
       });
     },
     async signInWithGoogle() {
@@ -198,11 +298,14 @@ export function createFirestoreEventRepository() {
       }
     },
     async signOut() {
+      rememberRevision(null);
+      accessCache = { uid: null, isAllowed: false };
       await signOut(auth);
     },
     async load() {
       try {
-        await requireSignedInUser();
+        const user = await requireAuthorizedUser();
+        accessCache = { uid: user.uid, isAllowed: true };
         const snapshot = await getDoc(eventHubDoc);
 
         if (!snapshot.exists()) {
@@ -212,10 +315,12 @@ export function createFirestoreEventRepository() {
             updatedAt: new Date().toISOString(),
             events: seedEvents
           });
+          rememberRevision(1);
           return normalizeEvents(seedEvents);
         }
 
         const payload = snapshot.data();
+        rememberRevision(Number(payload?.revision || 0));
         return normalizeEvents(Array.isArray(payload?.events) ? payload.events : []);
       } catch (error) {
         throw toFirestoreRepositoryError("read", error);
@@ -225,17 +330,27 @@ export function createFirestoreEventRepository() {
       const normalizedEvents = normalizeEvents(events);
 
       try {
-        await requireSignedInUser();
+        const user = await requireAuthorizedUser();
+        accessCache = { uid: user.uid, isAllowed: true };
+        let nextRevision = null;
         await runTransaction(db, async (transaction) => {
           const snapshot = await transaction.get(eventHubDoc);
           const currentRevision = snapshot.exists() ? Number(snapshot.data()?.revision || 0) : 0;
 
+          if (knownRevision !== null && currentRevision !== knownRevision) {
+            const conflictError = new Error("Remote document revision changed");
+            conflictError.code = "revision-conflict";
+            throw conflictError;
+          }
+
+          nextRevision = currentRevision + 1;
           transaction.set(eventHubDoc, {
-            revision: currentRevision + 1,
+            revision: nextRevision,
             updatedAt: new Date().toISOString(),
             events: normalizedEvents
           });
         });
+        rememberRevision(nextRevision);
       } catch (error) {
         throw toFirestoreRepositoryError("write", error);
       }

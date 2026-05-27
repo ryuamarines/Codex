@@ -125,6 +125,8 @@ export function getFilteredFinanceLines(lines, financeFilter) {
         return line.settlementStatus === "未精算";
       case "advanced":
         return Boolean(line.advanceBy);
+      case "received":
+        return Boolean(line.receivedBy);
       case "actualMissing":
         return Number(line.plannedAmount || 0) > 0 && Number(line.actualAmount || 0) === 0;
       case "all":

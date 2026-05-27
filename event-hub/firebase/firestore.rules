@@ -7,9 +7,8 @@ service cloud.firestore {
     }
 
     match /eventHub/appState {
-      // event-hub は共有の単一ドキュメントを全員で使うため、
-      // RoomPlaner のような request.auth.uid == userId ではなく、
-      // まずは「Google ログイン済みなら read / write 可」にする。
+      // Event Hub はリンク共有先のチームメンバーが Google ログインして使う運用。
+      // メンバー個別の allowlist はアプリ設定を "member-doc" に戻すときに使う。
       allow read, write: if signedIn();
     }
   }

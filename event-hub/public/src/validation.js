@@ -87,6 +87,12 @@ export function validateEntity(kind, payload) {
     throw new Error("参加者名は必須です。");
   }
 
+  if (kind === "member") {
+    if (!String(payload.name || "").trim()) {
+      throw new Error("メンバー名は必須です。");
+    }
+  }
+
   if (kind === "asset") {
     if (!String(payload.label || "").trim()) {
       throw new Error("画像リンク名は必須です。");

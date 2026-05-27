@@ -5,6 +5,7 @@ import {
   FINANCE_TYPE_OPTIONS,
   LUMA_STATUS_OPTIONS,
   PARTICIPANT_IMPORT_STATUS_OPTIONS,
+  PREP_TASK_TEMPLATES,
   SETTLEMENT_STATUS_OPTIONS,
   TAB_OPTIONS,
   TASK_CATEGORY_OPTIONS,
@@ -54,7 +55,8 @@ const app = document.getElementById("app");
 let persistedEvents = [];
 let queuedSnapshot = null;
 let saveInFlight = false;
-const LOCAL_BACKUP_KEY = "event-hub:last-known-events";
+const LOCAL_BACKUP_KEY_PREFIX = "event-hub:last-known-events";
+const CUSTOM_PREP_TEMPLATE_KEY = "event-hub:custom-prep-templates";
 
 const state = {
   events: [],
@@ -68,16 +70,22 @@ const state = {
   eventStageFilter: "進行中",
   prepFilter: "all",
   prepAssigneeFilter: "all",
+  selectedPrepTemplateId: "default",
+  customPrepTemplates: [],
   financeFilter: "all",
   taskBoardFilter: "open",
   taskBoardAssigneeFilter: "all",
+  revealCompletedForEventId: null,
   modal: null,
   mobileSidebarOpen: false,
   backendLabel: "Local JSON / Node",
   authRequired: false,
   authUser: null,
+  authAllowed: true,
+  accessMode: "authenticated",
   isLoading: true,
   error: "",
+  info: "",
   saveState: "idle",
   lastSavedAt: ""
 };
@@ -121,10 +129,16 @@ function cloneEventsSnapshot(events) {
   return events.map((event) => normalizeEvent(event)).sort(sortEvents);
 }
 
+function getLocalBackupKey() {
+  return state.authRequired && state.authUser?.uid
+    ? `${LOCAL_BACKUP_KEY_PREFIX}:${state.authUser.uid}`
+    : `${LOCAL_BACKUP_KEY_PREFIX}:local`;
+}
+
 function writeLocalBackup(events) {
   try {
     window.localStorage.setItem(
-      LOCAL_BACKUP_KEY,
+      getLocalBackupKey(),
       JSON.stringify({
         updatedAt: new Date().toISOString(),
         events: cloneEventsSnapshot(events)
@@ -137,7 +151,7 @@ function writeLocalBackup(events) {
 
 function readLocalBackup() {
   try {
-    const raw = window.localStorage.getItem(LOCAL_BACKUP_KEY);
+    const raw = window.localStorage.getItem(getLocalBackupKey());
 
     if (!raw) {
       return [];
@@ -151,6 +165,40 @@ function readLocalBackup() {
   }
 }
 
+function readCustomPrepTemplates() {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_PREP_TEMPLATE_KEY);
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isValidPrepTemplate) : [];
+  } catch (error) {
+    console.warn("custom prep templates read failed", error);
+    return [];
+  }
+}
+
+function writeCustomPrepTemplates(templates) {
+  try {
+    window.localStorage.setItem(CUSTOM_PREP_TEMPLATE_KEY, JSON.stringify(templates.filter(isValidPrepTemplate)));
+  } catch (error) {
+    console.warn("custom prep templates write failed", error);
+  }
+}
+
+function isValidPrepTemplate(template) {
+  return (
+    template &&
+    typeof template === "object" &&
+    typeof template.id === "string" &&
+    typeof template.label === "string" &&
+    Array.isArray(template.tasks)
+  );
+}
+
 function applyLoadedEvents(events) {
   state.events = cloneEventsSnapshot(events);
   persistedEvents = cloneEventsSnapshot(events);
@@ -160,6 +208,23 @@ function applyLoadedEvents(events) {
 
 function isMobileLayout() {
   return typeof window !== "undefined" && window.innerWidth <= 1080;
+}
+
+function isLocalApiRuntime() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
+function isInAppBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const ua = navigator.userAgent || "";
+  return /Line\/|FBAN|FBAV|Instagram|MicroMessenger|Twitter|TikTok|KAKAOTALK/i.test(ua);
 }
 
 function getVisibleEvents() {
@@ -257,7 +322,7 @@ function render() {
     return;
   }
 
-  if (state.authRequired && !state.authUser) {
+  if (state.authRequired && (!state.authUser || !state.authAllowed)) {
     app.innerHTML = renderAuthGate();
     return;
   }
@@ -270,8 +335,10 @@ function render() {
       ${mobileLayout ? renderMobileTopbar(selectedEvent) : renderDesktopSidebar()}
       <main class="main workspace-main ${mobileLayout ? "mobile-main" : ""}">
         ${state.error ? `<div class="app-banner error">${escapeHtml(state.error)}</div>` : ""}
+        ${state.info ? `<div class="app-banner info">${escapeHtml(state.info)}</div>` : ""}
         ${renderWorkspace(selectedEvent)}
       </main>
+      ${mobileLayout && state.mobileSidebarOpen ? renderMobileSidebar() : ""}
       ${mobileLayout ? renderMobileBottomNav() : ""}
     </div>
     ${state.modal ? renderModal() : ""}
@@ -280,16 +347,34 @@ function render() {
 }
 
 function renderAuthGate() {
+  const needsLogin = !state.authUser;
+  const inAppBrowser = isInAppBrowser();
+  const title = needsLogin ? "Googleでログイン" : "アクセス権限がありません";
+  const description = needsLogin
+    ? "Vercel 公開版は Firestore に保存します。まず Google アカウントでログインしてください。"
+    : "この Google アカウントは Event Hub の共有メンバーに入っていません。管理者が Firestore の eventHubMembers に追加すると利用できます。";
+
   return `
     <div class="loading-view">
       <div class="loading-card auth-card">
         <p class="eyebrow">${escapeHtml(APP_TITLE)}</p>
-        <h1>Googleでログイン</h1>
-        <p class="subtle">Vercel 公開版は Firestore に保存します。まず Google アカウントでログインしてください。</p>
+        <h1>${escapeHtml(title)}</h1>
+        <p class="subtle">${escapeHtml(description)}</p>
         <p class="subtle">保存先: ${escapeHtml(state.backendLabel)}</p>
+        ${
+          inAppBrowser
+            ? `<div class="app-banner error">LINEなどのアプリ内ブラウザでは Google ログインが失敗することがあります。右上メニューから Chrome / Safari で開いてください。</div>`
+            : ""
+        }
         ${state.error ? `<div class="app-banner error">${escapeHtml(state.error)}</div>` : ""}
+        ${state.info ? `<div class="app-banner info">${escapeHtml(state.info)}</div>` : ""}
         <div class="auth-actions">
-          <button class="button button-primary" data-action="sign-in-google">Googleでログイン</button>
+          ${
+            needsLogin
+              ? `<button class="button button-primary" data-action="sign-in-google">Googleでログイン</button>`
+              : `<button class="button button-ghost" data-action="sign-out">別の Google アカウントに切り替える</button>`
+          }
+          <button class="button button-ghost" data-action="copy-current-url">URLをコピー</button>
         </div>
       </div>
     </div>
@@ -298,7 +383,9 @@ function renderAuthGate() {
 
 function getStorageHint() {
   if (state.authRequired) {
-    return "Vercel 公開版では Google ログイン後に Firestore を使います。CSV は退避と復元用に使えます。";
+    return state.accessMode === "member-doc"
+      ? "Vercel 公開版では Google ログイン後に Firestore を使います。eventHubMembers に追加されたメンバーだけが共有データを開けます。"
+      : "Vercel 公開版では Google ログイン後に Firestore を使います。CSV は退避と復元用に使えます。";
   }
 
   return "ローカルでは `/api` 経由で JSON に保存します。CSV は退避と復元用に使えます。";
@@ -349,6 +436,7 @@ function renderWorkspaceNavItems() {
     { id: "dashboard", label: "ダッシュボード", count: buildDashboardSnapshot(state.events).activeEvents },
     { id: "events", label: "イベント", count: state.events.length },
     { id: "tasks", label: "タスク", count: buildGlobalTaskItems(state.events, { mode: "open", assignee: "all" }).length },
+    { id: "members", label: "メンバー", count: buildGlobalMemberSummary(state.events).length },
     { id: "finance", label: "収支", count: state.events.filter((event) => event.finance.lines.length > 0).length }
   ];
 
@@ -369,6 +457,7 @@ function renderMobileTopbar(selectedEvent) {
     dashboard: "ダッシュボード",
     events: "イベント",
     tasks: "タスク",
+    members: "メンバー",
     finance: "収支",
     detail: selectedEvent?.name || "イベント詳細"
   };
@@ -394,6 +483,7 @@ function renderMobileBottomNav() {
     { id: "dashboard", label: "ホーム" },
     { id: "events", label: "イベント" },
     { id: "tasks", label: "タスク" },
+    { id: "members", label: "チーム" },
     { id: "finance", label: "収支" }
   ];
 
@@ -412,12 +502,45 @@ function renderMobileBottomNav() {
   `;
 }
 
+function renderMobileSidebar() {
+  return `
+    <button class="sidebar-scrim" data-action="close-mobile-sidebar" aria-label="一覧を閉じる"></button>
+    <aside class="mobile-sidebar open">
+      <div class="panel workspace-panel">
+        <div class="panel-head compact">
+          <div>
+            <p class="eyebrow">Events</p>
+            <h3>イベント一覧</h3>
+          </div>
+          <button class="icon-button" data-action="close-mobile-sidebar">閉じる</button>
+        </div>
+        <label class="search-field compact-search">
+          <span>検索</span>
+          <input type="search" data-action="search-events" placeholder="イベント名・会場・担当で検索" value="${escapeAttr(state.searchQuery)}" />
+        </label>
+        <div class="segmented-row mobile-segmented-row">
+          ${renderStageFilterChip("進行中")}
+          ${renderStageFilterChip("予定")}
+          ${renderStageFilterChip("終了")}
+        </div>
+        <div class="mobile-card-list">
+          ${getStageScopedEvents(state.eventStageFilter).length
+            ? getStageScopedEvents(state.eventStageFilter).map((event) => renderMobileEventCard(event)).join("")
+            : `<div class="empty-panel small">この条件のイベントはありません。</div>`}
+        </div>
+      </div>
+    </aside>
+  `;
+}
+
 function renderWorkspace(selectedEvent) {
   switch (state.activeView) {
     case "events":
       return renderEventsWorkspace();
     case "tasks":
       return renderTasksWorkspace();
+    case "members":
+      return renderMembersWorkspace();
     case "finance":
       return renderFinanceWorkspace();
     case "detail":
@@ -429,6 +552,10 @@ function renderWorkspace(selectedEvent) {
 }
 
 function renderDashboardView() {
+  if (isMobileLayout()) {
+    return renderMobileDashboardView();
+  }
+
   const dashboard = buildDashboardSnapshot(state.events);
   const spotlightEvents = getStageScopedEvents("進行中").slice(0, 4);
   const todayTasks = buildGlobalTaskItems(state.events, { mode: "today", assignee: "all" }).slice(0, 6);
@@ -505,6 +632,70 @@ function renderDashboardView() {
   `;
 }
 
+function renderMobileDashboardView() {
+  const dashboard = buildDashboardSnapshot(state.events);
+  const urgentEvents = getStageScopedEvents("進行中").slice(0, 3);
+  const todayTasks = buildGlobalTaskItems(state.events, { mode: "today", assignee: "all" }).slice(0, 5);
+
+  return `
+    <section class="workspace-section mobile-workspace">
+      <div class="mobile-screen-head">
+        <div>
+          <p class="eyebrow">Overview</p>
+          <h2>いま動かすこと</h2>
+          <p class="subtle">スマホでは状況確認とタスク更新を優先します。</p>
+        </div>
+        <button class="button button-primary button-block-mobile" data-action="open-create-event">新規イベント</button>
+      </div>
+
+      <section class="mobile-summary-grid">
+        ${renderMobileSummaryTile("進行中", dashboard.activeEvents, "公開準備中 / 募集中")}
+        ${renderMobileSummaryTile("未完了", dashboard.openTasks, `期限超過 ${dashboard.overdueTasks}`)}
+        ${renderMobileSummaryTile("申込数", dashboard.totalRegistrations, "Luma 手入力合計")}
+        ${renderMobileSummaryTile("収支", formatSignedCurrency(dashboard.totalProfit), dashboard.totalProfit >= 0 ? "全体で黒字" : "全体で赤字")}
+      </section>
+
+      <section class="panel workspace-panel mobile-section-panel">
+        <div class="panel-head compact">
+          <h3>優先イベント</h3>
+          <button class="button button-ghost compact-button" data-action="set-view" data-view="events">一覧へ</button>
+        </div>
+        <div class="mobile-card-list">
+          ${
+            urgentEvents.length
+              ? urgentEvents.map((event) => renderMobileEventCard(event)).join("")
+              : `<div class="empty-panel small">進行中イベントはまだありません。</div>`
+          }
+        </div>
+      </section>
+
+      <section class="panel workspace-panel mobile-section-panel">
+        <div class="panel-head compact">
+          <h3>今日やること</h3>
+          <button class="button button-ghost compact-button" data-action="set-view" data-view="tasks">全部見る</button>
+        </div>
+        <div class="global-task-list">
+          ${
+            todayTasks.length
+              ? todayTasks.map((item) => renderGlobalTaskRow(item, true)).join("")
+              : `<div class="empty-panel small">今日優先したいタスクはありません。</div>`
+          }
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderMobileSummaryTile(label, value, detail) {
+  return `
+    <article class="mobile-summary-tile">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </article>
+  `;
+}
+
 function renderDashboardMetric(label, value, detail) {
   return `
     <article class="metric-card">
@@ -516,6 +707,10 @@ function renderDashboardMetric(label, value, detail) {
 }
 
 function renderEventsWorkspace() {
+  if (isMobileLayout()) {
+    return renderMobileEventsWorkspace();
+  }
+
   const stageEvents = getStageScopedEvents(state.eventStageFilter);
 
   return `
@@ -551,12 +746,77 @@ function renderEventsWorkspace() {
   `;
 }
 
+function renderMobileEventsWorkspace() {
+  const stageEvents = getStageScopedEvents(state.eventStageFilter);
+
+  return `
+    <section class="workspace-section mobile-workspace">
+      <div class="mobile-screen-head">
+        <div>
+          <p class="eyebrow">Events</p>
+          <h2>イベント</h2>
+          <p class="subtle">詳細に入る前に、状態と危険度だけを先に見ます。</p>
+        </div>
+      </div>
+
+      <label class="search-field compact-search mobile-search-field">
+        <span>検索</span>
+        <input type="search" data-action="search-events" placeholder="イベント名・会場・担当で検索" value="${escapeAttr(state.searchQuery)}" />
+      </label>
+
+      <div class="segmented-row mobile-segmented-row">
+        ${renderStageFilterChip("進行中")}
+        ${renderStageFilterChip("予定")}
+        ${renderStageFilterChip("終了")}
+      </div>
+
+      <section class="mobile-card-list">
+        ${
+          stageEvents.length
+            ? stageEvents.map((event) => renderMobileEventCard(event)).join("")
+            : `<div class="empty-panel">この条件のイベントはまだありません。</div>`
+        }
+      </section>
+    </section>
+  `;
+}
+
 function renderStageFilterChip(value) {
   const count = getStageScopedEvents(value).length;
   return `
     <button class="filter-chip ${state.eventStageFilter === value ? "active" : ""}" data-action="set-event-stage" data-stage="${value}">
       <span>${escapeHtml(value)}</span>
       <span class="chip-count">${count}</span>
+    </button>
+  `;
+}
+
+function renderMobileEventCard(event) {
+  const progress = getTaskProgress(event.tasks);
+  const completionRate = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const finance = calculateFinance(event);
+  const ops = buildOperationalSummary(event);
+  const registrationCount = Number(event.lumaRegistrationCount || 0);
+  const schedule = buildScheduleStatus(event);
+
+  return `
+    <button class="mobile-event-card" data-action="open-event-detail" data-event-id="${event.id}">
+      <div class="mobile-event-card-top">
+        <span class="status-badge">${escapeHtml(event.status)}</span>
+        <span class="mini-pill ${schedule.tone}">${escapeHtml(schedule.shortLabel)}</span>
+      </div>
+      <strong>${escapeHtml(event.name || "名称未設定")}</strong>
+      <p>${escapeHtml(event.venue || "会場未設定")}</p>
+      <div class="mobile-event-metrics">
+        <div><span>申込</span><strong>${registrationCount}</strong></div>
+        <div><span>進捗</span><strong>${completionRate}%</strong></div>
+        <div><span>収支</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong></div>
+      </div>
+      <div class="progress-track"><span style="width:${completionRate}%"></span></div>
+      <div class="mobile-event-foot">
+        <span class="mini-pill warning">未完了 ${progress.total - progress.done}</span>
+        ${ops.overdueTasks.length ? `<span class="mini-pill warning">期限超過 ${ops.overdueTasks.length}</span>` : ""}
+      </div>
     </button>
   `;
 }
@@ -596,6 +856,10 @@ function renderEventStateCard(event, context) {
 }
 
 function renderEventDetailWorkspace(event) {
+  if (isMobileLayout()) {
+    return renderMobileEventDetailWorkspace(event);
+  }
+
   const finance = calculateFinance(event);
   const progress = getTaskProgress(event.tasks);
   const completionRate = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
@@ -709,7 +973,9 @@ function renderEventDetailWorkspace(event) {
                 : `<div class="empty-panel small">未完了タスクはありません。</div>`
             }
           </div>
-          <details class="collapsible-panel" ${completedTasks.length && openTasks.length === 0 ? "open" : ""}>
+          <details class="collapsible-panel" ${
+            completedTasks.length && (openTasks.length === 0 || state.revealCompletedForEventId === event.id) ? "open" : ""
+          }>
             <summary>完了済みタスク ${completedTasks.length}件</summary>
             <div class="operational-task-list muted-list">
               ${
@@ -755,7 +1021,7 @@ function renderEventDetailWorkspace(event) {
           <div class="mini-breakdown-list">
             ${
               categoryBreakdown.length
-                ? categoryBreakdown.slice(0, 4).map((item) => `<div class="finance-row"><span>${escapeHtml(item.category)}</span><strong>${formatCurrency(item.actual)}</strong></div>`).join("")
+                ? categoryBreakdown.slice(0, 4).map((item) => `<div class="finance-row"><span>${escapeHtml(item.category)}</span><strong>${formatCurrency(item.actualAmount)}</strong></div>`).join("")
                 : `<p class="subtle">収支明細はまだありません。</p>`
             }
           </div>
@@ -764,13 +1030,37 @@ function renderEventDetailWorkspace(event) {
         <div id="detail-team" class="panel workspace-panel">
           <div class="panel-head compact">
             <h3>チーム</h3>
-            <span class="count-pill">${event.runbook.roles.length}役割</span>
+            <div class="inline-actions">
+              <span class="count-pill">${event.members.length}人 / ${event.runbook.roles.length}役割</span>
+              <button class="button button-secondary" data-action="open-member-modal" data-event-id="${event.id}">メンバー追加</button>
+            </div>
           </div>
           <div class="team-list">
             <div class="team-item">
               <span>担当メンバー</span>
               <strong>${escapeHtml(event.owners || "未設定")}</strong>
             </div>
+            ${
+              event.members.length
+                ? event.members
+                    .map(
+                      (member) => `
+                        <div class="team-item team-item-editable">
+                          <div>
+                            <span>${escapeHtml(member.role || "メンバー")}</span>
+                            <strong>${escapeHtml(member.name || "名前未設定")}</strong>
+                            <p>${escapeHtml(member.note || "メモなし")}</p>
+                          </div>
+                          <div class="inline-actions">
+                            <button class="icon-button" type="button" data-action="edit-member" data-event-id="${event.id}" data-item-id="${member.id}">編集</button>
+                            <button class="icon-button danger" type="button" data-action="delete-member" data-event-id="${event.id}" data-item-id="${member.id}">削除</button>
+                          </div>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<p class="subtle">イベントメンバーはまだありません。</p>`
+            }
             ${
               event.runbook.roles.length
                 ? event.runbook.roles
@@ -849,6 +1139,183 @@ function renderEventDetailWorkspace(event) {
   `;
 }
 
+function renderMobileEventDetailWorkspace(event) {
+  const finance = calculateFinance(event);
+  const progress = getTaskProgress(event.tasks);
+  const completionRate = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  const audience = buildAudienceSnapshot(event);
+  const financeTone = getFinanceTone(event);
+  const openTasks = event.tasks.slice().sort(sortTasks).filter((task) => task.status !== "完了");
+  const completedTasks = event.tasks.filter((task) => task.status === "完了");
+  const categoryBreakdown = buildFinanceCategoryBreakdown(event.finance.lines);
+  const followUps = event.participantHub.touchedParticipants.filter((item) => item.followUp);
+  const schedule = buildScheduleStatus(event);
+
+  return `
+    <section class="workspace-section mobile-workspace mobile-detail-workspace">
+      <div class="mobile-detail-backbar">
+        <button class="button button-ghost compact-button" data-action="set-view" data-view="events">一覧へ戻る</button>
+        ${event.lumaUrl ? `<a class="button button-secondary compact-button" href="${escapeAttr(event.lumaUrl)}" target="_blank" rel="noreferrer">Luma</a>` : ""}
+        <button class="button button-primary compact-button" data-action="open-task-modal" data-event-id="${event.id}">タスク追加</button>
+      </div>
+
+      <section class="detail-summary-card mobile-detail-summary-card">
+        <div class="detail-summary-main">
+          <p class="eyebrow">Event Detail</p>
+          <div class="detail-title-row">
+            <div>
+              <h2>${escapeHtml(event.name || "名称未設定")}</h2>
+              <p class="subtle">${escapeHtml(event.venue || "会場未設定")} / ${escapeHtml(formatDateTime(event.startsAt))}</p>
+            </div>
+            <div class="detail-header-tags">
+              <span class="status-badge">${escapeHtml(event.status)}</span>
+              <span class="finance-badge ${financeTone.tone}">${financeTone.label}</span>
+            </div>
+          </div>
+          <div class="detail-summary-grid mobile-detail-kpis">
+            <div><span>申込</span><strong>${audience.registrations}</strong><small>${escapeHtml(schedule.shortLabel)}</small></div>
+            <div><span>進捗</span><strong>${completionRate}%</strong><small>${progress.done}/${progress.total} 完了</small></div>
+            <div><span>収支</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong><small>見込みベース</small></div>
+          </div>
+          <div class="progress-track large"><span style="width:${completionRate}%"></span></div>
+        </div>
+      </section>
+
+      <div class="mobile-sticky-section-nav">
+        <a href="#mobile-detail-tasks" class="mini-pill">タスク</a>
+        <a href="#mobile-detail-status" class="mini-pill">状況</a>
+        <a href="#mobile-detail-finance" class="mini-pill">収支</a>
+        <a href="#mobile-detail-team" class="mini-pill">チーム</a>
+      </div>
+
+      <details id="mobile-detail-tasks" class="mobile-detail-section" open>
+        <summary>タスク ${openTasks.length}件</summary>
+        <div class="mobile-detail-section-body">
+          <div class="operational-task-list">
+            ${
+              openTasks.length
+                ? openTasks.slice(0, 10).map((task) => renderOperationalTaskRow(event.id, task)).join("")
+                : `<div class="empty-panel small">未完了タスクはありません。</div>`
+            }
+          </div>
+          <details class="collapsible-panel" ${
+            completedTasks.length && (openTasks.length === 0 || state.revealCompletedForEventId === event.id) ? "open" : ""
+          }>
+            <summary>完了済みタスク ${completedTasks.length}件</summary>
+            <div class="operational-task-list muted-list">
+              ${
+                completedTasks.length
+                  ? completedTasks.map((task) => renderOperationalTaskRow(event.id, task)).join("")
+                  : `<div class="empty-panel small">完了済みタスクはありません。</div>`
+              }
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details id="mobile-detail-status" class="mobile-detail-section">
+        <summary>状況確認</summary>
+        <div class="mobile-detail-section-body">
+          <div class="mobile-status-grid">
+            <div class="mobile-status-card"><span>会場</span><strong>${escapeHtml(event.venue || "未設定")}</strong></div>
+            <div class="mobile-status-card"><span>担当</span><strong>${escapeHtml(event.owners || "未設定")}</strong></div>
+            <div class="mobile-status-card"><span>Luma</span><strong>${escapeHtml(event.lumaStatus || "未設定")}</strong></div>
+            <div class="mobile-status-card"><span>参加見込み</span><strong>${audience.expectedLabel}</strong></div>
+          </div>
+          <div class="reflection-grid compact-reflection-grid">
+            <div><span>概要</span><p>${escapeHtml(event.summary || "未入力")}</p></div>
+            <div><span>集客メモ</span><p>${escapeHtml(event.lumaNotes || "未入力")}</p></div>
+            <div><span>受付メモ</span><p>${escapeHtml(event.runbook.receptionMemo || "未入力")}</p></div>
+          </div>
+        </div>
+      </details>
+
+      <details id="mobile-detail-finance" class="mobile-detail-section">
+        <summary>収支</summary>
+        <div class="mobile-detail-section-body">
+          <div class="finance-summary-stack">
+            <div class="finance-row"><span>売上</span><strong>${formatCurrency(finance.revenueActual)}</strong></div>
+            <div class="finance-row"><span>支出</span><strong>${formatCurrency(finance.expenseActual)}</strong></div>
+            <div class="finance-row total"><span>利益</span><strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong></div>
+          </div>
+          <div class="mini-breakdown-list">
+            ${
+              categoryBreakdown.length
+                ? categoryBreakdown.slice(0, 5).map((item) => `<div class="finance-row"><span>${escapeHtml(item.category)}</span><strong>${formatCurrency(item.actualAmount)}</strong></div>`).join("")
+                : `<p class="subtle">収支明細はまだありません。</p>`
+            }
+          </div>
+        </div>
+      </details>
+
+      <details id="mobile-detail-team" class="mobile-detail-section">
+        <summary>チーム</summary>
+        <div class="mobile-detail-section-body">
+          <div class="panel-head compact">
+            <h3>担当とメンバー</h3>
+            <button class="button button-secondary compact-button" data-action="open-member-modal" data-event-id="${event.id}">追加</button>
+          </div>
+          <div class="team-list">
+            <div class="team-item">
+              <span>担当メンバー</span>
+              <strong>${escapeHtml(event.owners || "未設定")}</strong>
+            </div>
+            ${
+              event.members.length
+                ? event.members
+                    .map(
+                      (member) => `
+                        <div class="team-item team-item-editable">
+                          <div>
+                            <span>${escapeHtml(member.role || "メンバー")}</span>
+                            <strong>${escapeHtml(member.name || "名前未設定")}</strong>
+                            <p>${escapeHtml(member.note || "メモなし")}</p>
+                          </div>
+                          <div class="inline-actions">
+                            <button class="icon-button" type="button" data-action="edit-member" data-event-id="${event.id}" data-item-id="${member.id}">編集</button>
+                            <button class="icon-button danger" type="button" data-action="delete-member" data-event-id="${event.id}" data-item-id="${member.id}">削除</button>
+                          </div>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<p class="subtle">イベントメンバーはまだありません。</p>`
+            }
+          </div>
+        </div>
+      </details>
+
+      <details class="mobile-detail-section">
+        <summary>振り返り</summary>
+        <div class="mobile-detail-section-body">
+          <div class="reflection-grid compact-reflection-grid">
+            <div><span>良かった点</span><p>${escapeHtml(event.result.wentWell || "未入力")}</p></div>
+            <div><span>問題点</span><p>${escapeHtml(event.result.improvements || "未入力")}</p></div>
+            <div><span>次回改善</span><p>${escapeHtml(event.result.nextMemo || "未入力")}</p></div>
+            <div><span>フォロー候補</span><p>${followUps.length ? `${followUps.length}件` : "なし"}</p></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="mobile-detail-section">
+        <summary>詳細編集</summary>
+        <div class="mobile-detail-section-body">
+          <div class="tabs mobile-editor-tabs">
+            ${TAB_OPTIONS.map(
+              (tab) => `
+                <button class="tab-button ${state.activeTab === tab ? "active" : ""}" data-action="set-tab" data-tab="${escapeAttr(tab)}">
+                  ${escapeHtml(tab)}
+                </button>
+              `
+            ).join("")}
+          </div>
+          <div class="tab-panel">${renderTabContent(event)}</div>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
 function renderOperationalTaskRow(eventId, task) {
   const overdue = getOverdueTasks([task]).length > 0;
   const dueSoon = !overdue && getDueSoonTasks([task]).length > 0;
@@ -914,10 +1381,10 @@ function renderTasksWorkspace() {
   });
   const assigneeOptions = Array.from(
     new Set(
-      state.events
-        .flatMap((event) => event.tasks)
-        .map((task) => task.assignee?.trim())
-        .filter(Boolean)
+      [
+        ...buildGlobalMemberSummary(state.events).map((member) => member.name),
+        ...state.events.flatMap((event) => event.tasks).map((task) => task.assignee?.trim())
+      ].filter(Boolean)
     )
   ).sort((a, b) => a.localeCompare(b, "ja"));
 
@@ -969,6 +1436,149 @@ function renderTasksWorkspace() {
   `;
 }
 
+function renderMembersWorkspace() {
+  const members = buildGlobalMemberSummary(state.events);
+  const financeSummary = buildMemberFinanceSummary(state.events).filter(
+    (item) => item.advancedTotal > 0 || item.unsettledTotal > 0 || item.receivedTotal > 0
+  );
+
+  return `
+    <section class="workspace-section">
+      <div class="workspace-header">
+        <div>
+          <p class="eyebrow">Members</p>
+          <h2>メンバー</h2>
+          <p class="subtle">ここをメンバー表の正本にします。イベント、タスク、役割、収支ではこの表から複数選択します。</p>
+        </div>
+      </div>
+
+      <section class="panel workspace-panel">
+        <div class="panel-head">
+          <div>
+            <h3>メンバー追加</h3>
+            <p class="subtle">ここで追加すると、既存イベントすべての選択候補に入ります。</p>
+          </div>
+        </div>
+        <form class="stack-form compact-form" data-form="global-member">
+          <div class="section-grid two-column">
+            ${renderField("名前", `<input name="name" required placeholder="りゅー" />`)}
+            ${renderField("役割", `<input name="role" placeholder="主催 / 受付 / 司会 など" />`)}
+          </div>
+          ${renderField("メモ", `<textarea name="note" rows="3"></textarea>`)}
+          <div class="form-actions">
+            <button class="button button-primary" type="submit">全イベントに追加</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="workspace-split">
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>メンバー一覧</h3>
+            <span class="count-pill">${members.length}名</span>
+          </div>
+          <div class="member-summary-list">
+            ${
+              members.length
+                ? members.map((member) => renderMemberSummaryCard(member)).join("")
+                : `<div class="empty-panel small">メンバーはまだありません。</div>`
+            }
+          </div>
+        </div>
+
+        <div class="panel workspace-panel">
+          <div class="panel-head compact">
+            <h3>メンバー別収支</h3>
+            <span class="count-pill">${financeSummary.length}名</span>
+          </div>
+          <div class="member-summary-list">
+            ${
+              financeSummary.length
+                ? financeSummary.map((item) => renderMemberFinanceCard(item)).join("")
+                : `<div class="empty-panel small">立替や未精算はまだありません。</div>`
+            }
+          </div>
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderMemberSummaryCard(member) {
+  return `
+    <article class="member-summary-card">
+      <div>
+        <strong>${escapeHtml(member.name)}</strong>
+        <p>${escapeHtml(member.roles.join(" / ") || "役割未設定")}</p>
+      </div>
+      <div class="member-summary-side">
+        <div class="member-summary-grid">
+          <span>参加 ${member.eventCount}件</span>
+          <span>未完了 ${member.openTasks}件</span>
+          <span>完了 ${member.doneTasks}件</span>
+          <span>当日役割 ${member.runbookRoles}件</span>
+        </div>
+        <div class="inline-actions member-card-actions">
+          <button class="icon-button" type="button" data-action="rename-global-member" data-member-name="${escapeAttr(member.name)}">名前変更</button>
+          <button class="icon-button danger" type="button" data-action="delete-global-member" data-member-name="${escapeAttr(member.name)}">全体から削除</button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderMemberFinanceCard(item) {
+  return `
+    <article class="member-summary-card">
+      <div>
+        <strong>${escapeHtml(item.name)}</strong>
+        <p>受取 ${item.receiveLineCount}件 / 立替中 ${item.unsettledCount}件 / 支払い ${item.lineCount}件</p>
+      </div>
+      <div class="finance-summary-stack compact-finance-stack">
+        <div class="finance-row"><span>受取合計</span><strong>${formatCurrency(item.receivedTotal)}</strong></div>
+        <div class="finance-row"><span>支払合計</span><strong>${formatCurrency(item.advancedTotal)}</strong></div>
+        <div class="finance-row"><span>立替中</span><strong>${formatCurrency(item.unsettledTotal)}</strong></div>
+        <div class="finance-row total"><span>差引保持</span><strong class="${item.cashPosition >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(item.cashPosition)}</strong></div>
+      </div>
+    </article>
+  `;
+}
+
+function renderMemberFinanceTable(items) {
+  return `
+    <div class="finance-table-wrap">
+      <table class="finance-table member-finance-table">
+        <thead>
+          <tr>
+            <th>メンバー</th>
+            <th>受取</th>
+            <th>支払</th>
+            <th>立替中</th>
+            <th>差引保持</th>
+            <th>件数</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items
+            .map(
+              (item) => `
+                <tr>
+                  <td><strong>${escapeHtml(item.name)}</strong></td>
+                  <td>${formatCurrency(item.receivedTotal)}</td>
+                  <td>${formatCurrency(item.advancedTotal)}</td>
+                  <td>${formatCurrency(item.unsettledTotal)}</td>
+                  <td><span class="${item.cashPosition >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(item.cashPosition)}</span></td>
+                  <td>受取 ${item.receiveLineCount} / 立替中 ${item.unsettledCount}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderTaskBoardFilterChip(value, label) {
   return `
     <button class="filter-chip ${state.taskBoardFilter === value ? "active" : ""}" data-action="set-task-board-filter" data-task-filter="${value}">
@@ -1015,6 +1625,422 @@ function buildGlobalTaskItems(events, { mode = "open", assignee = "all" } = {}) 
     });
 }
 
+function normalizeMemberKey(value) {
+  return String(value || "").trim().toLocaleLowerCase("ja-JP");
+}
+
+function splitMemberNames(value) {
+  return String(value || "")
+    .split(/[、,／/・\n]+/u)
+    .map((name) => name.trim())
+    .filter((name) => name && !isPlaceholderMemberName(name));
+}
+
+function isPlaceholderMemberName(value) {
+  const name = String(value || "").trim();
+  return !name || ["-", "未設定", "担当未設定", "立替者未設定", "名前未設定", "メンバー未設定"].includes(name);
+}
+
+function collectMemberNamesFromEvent(event) {
+  return event.members.map((member) => member.name).flatMap(splitMemberNames).filter(Boolean);
+}
+
+function getRegisteredMemberNames(event = null) {
+  const names = new Map();
+
+  state.events.forEach((item) => {
+    collectMemberNamesFromEvent(item).forEach((name) => {
+      const key = normalizeMemberKey(name);
+      if (key && !names.has(key)) {
+        names.set(key, name);
+      }
+    });
+  });
+
+  if (event?.members) {
+    collectMemberNamesFromEvent(event).forEach((name) => {
+      const key = normalizeMemberKey(name);
+      if (key) {
+        names.set(key, name);
+      }
+    });
+  }
+
+  return [...names.values()].sort((a, b) => a.localeCompare(b, "ja"));
+}
+
+function getSuggestedMembersForEvent(event) {
+  return getRegisteredMemberNames(event);
+}
+
+function addMemberNamesToEvent(event, names, fallbackRole = "メンバー") {
+  const normalizedEvent = normalizeEvent(event);
+  const existing = new Set(normalizedEvent.members.map((member) => normalizeMemberKey(member.name)));
+  const nextMembers = [...normalizedEvent.members];
+
+  names.flatMap(splitMemberNames).forEach((name) => {
+    const key = normalizeMemberKey(name);
+    if (!key || existing.has(key)) {
+      return;
+    }
+
+    nextMembers.push({
+      id: createId("member"),
+      name,
+      role: fallbackRole,
+      note: ""
+    });
+    existing.add(key);
+  });
+
+  return {
+    ...normalizedEvent,
+    members: nextMembers
+  };
+}
+
+function getDraftMemberNames(kind, draft) {
+  if (kind === "task") {
+    return [draft.assignee];
+  }
+  if (kind === "timeline" || kind === "role") {
+    return [draft.owner];
+  }
+  if (kind === "finance") {
+    return [draft.advanceBy, draft.receivedBy];
+  }
+  if (kind === "member") {
+    return [draft.name];
+  }
+  return [];
+}
+
+function replaceMemberNameInText(value, fromName, toName = "") {
+  const currentNames = splitMemberNames(value);
+  const fromKey = normalizeMemberKey(fromName);
+  const nextNames = currentNames
+    .map((name) => (normalizeMemberKey(name) === fromKey ? String(toName || "").trim() : name))
+    .filter((name) => name && !isPlaceholderMemberName(name));
+
+  return [...new Set(nextNames)].join("、");
+}
+
+function applyGlobalMemberRename(event, fromName, toName) {
+  const fromKey = normalizeMemberKey(fromName);
+  const toKey = normalizeMemberKey(toName);
+  const normalizedEvent = normalizeEvent(event);
+  const renamedMembers = normalizedEvent.members
+    .map((member) =>
+      normalizeMemberKey(member.name) === fromKey
+        ? {
+            ...member,
+            name: toName
+          }
+        : member
+    )
+    .filter((member, index, members) => {
+      const key = normalizeMemberKey(member.name);
+      return key && members.findIndex((item) => normalizeMemberKey(item.name) === key) === index;
+    });
+
+  const hasRenamedMember = renamedMembers.some((member) => normalizeMemberKey(member.name) === toKey);
+  const nextMembers = hasRenamedMember
+    ? renamedMembers
+    : [
+        ...renamedMembers,
+        {
+          id: createId("member"),
+          name: toName,
+          role: "メンバー",
+          note: ""
+        }
+      ];
+
+  return {
+    ...normalizedEvent,
+    owners: replaceMemberNameInText(normalizedEvent.owners, fromName, toName),
+    members: nextMembers,
+    tasks: normalizedEvent.tasks.map((task) => ({
+      ...task,
+      assignee: replaceMemberNameInText(task.assignee, fromName, toName)
+    })),
+    runbook: {
+      ...normalizedEvent.runbook,
+      timetable: normalizedEvent.runbook.timetable.map((item) => ({
+        ...item,
+        owner: replaceMemberNameInText(item.owner, fromName, toName)
+      })),
+      roles: normalizedEvent.runbook.roles.map((item) => ({
+        ...item,
+        owner: replaceMemberNameInText(item.owner, fromName, toName)
+      }))
+    },
+    finance: {
+      ...normalizedEvent.finance,
+      lines: normalizedEvent.finance.lines.map((line) => ({
+        ...line,
+        advanceBy: replaceMemberNameInText(line.advanceBy, fromName, toName),
+        receivedBy: replaceMemberNameInText(line.receivedBy, fromName, toName)
+      }))
+    }
+  };
+}
+
+function applyGlobalMemberDelete(event, memberName) {
+  const memberKey = normalizeMemberKey(memberName);
+  const normalizedEvent = normalizeEvent(event);
+
+  return {
+    ...normalizedEvent,
+    owners: replaceMemberNameInText(normalizedEvent.owners, memberName, ""),
+    members: normalizedEvent.members.filter((member) => normalizeMemberKey(member.name) !== memberKey),
+    tasks: normalizedEvent.tasks.map((task) => ({
+      ...task,
+      assignee: replaceMemberNameInText(task.assignee, memberName, "")
+    })),
+    runbook: {
+      ...normalizedEvent.runbook,
+      timetable: normalizedEvent.runbook.timetable.map((item) => ({
+        ...item,
+        owner: replaceMemberNameInText(item.owner, memberName, "")
+      })),
+      roles: normalizedEvent.runbook.roles.map((item) => ({
+        ...item,
+        owner: replaceMemberNameInText(item.owner, memberName, "")
+      }))
+    },
+    finance: {
+      ...normalizedEvent.finance,
+      lines: normalizedEvent.finance.lines.map((line) => ({
+        ...line,
+        advanceBy: replaceMemberNameInText(line.advanceBy, memberName, ""),
+        receivedBy: replaceMemberNameInText(line.receivedBy, memberName, "")
+      }))
+    }
+  };
+}
+
+function buildGlobalMemberSummary(events) {
+  const grouped = new Map();
+
+  const ensureMember = (name) => {
+    const key = normalizeMemberKey(name);
+    if (!key) {
+      return null;
+    }
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        name: String(name).trim(),
+        roles: new Set(),
+        eventIds: new Set(),
+        openTasks: 0,
+        doneTasks: 0,
+        runbookRoles: 0
+      });
+    }
+
+    return grouped.get(key);
+  };
+
+  events.forEach((event) => {
+    event.members.forEach((member) => {
+      const summary = ensureMember(member.name);
+      if (!summary) {
+        return;
+      }
+      summary.eventIds.add(event.id);
+      if (member.role) {
+        summary.roles.add(member.role);
+      }
+    });
+  });
+
+  events.forEach((event) => {
+    splitMemberNames(event.owners).forEach((name) => {
+      const summary = grouped.get(normalizeMemberKey(name));
+      if (summary) {
+        summary.eventIds.add(event.id);
+        summary.roles.add("主催 / 担当");
+      }
+    });
+
+    event.tasks.forEach((task) => {
+      splitMemberNames(task.assignee).forEach((name) => {
+        const summary = grouped.get(normalizeMemberKey(name));
+        if (!summary) {
+          return;
+        }
+        summary.eventIds.add(event.id);
+        if (task.status === "完了") {
+          summary.doneTasks += 1;
+        } else {
+          summary.openTasks += 1;
+        }
+      });
+    });
+
+    event.runbook.timetable.forEach((item) => {
+      splitMemberNames(item.owner).forEach((name) => {
+        const summary = grouped.get(normalizeMemberKey(name));
+        if (summary) {
+          summary.eventIds.add(event.id);
+          summary.roles.add("当日工程");
+        }
+      });
+    });
+
+    event.runbook.roles.forEach((item) => {
+      splitMemberNames(item.owner).forEach((name) => {
+        const summary = grouped.get(normalizeMemberKey(name));
+        if (!summary) {
+          return;
+        }
+        summary.eventIds.add(event.id);
+        summary.roles.add(item.role || "当日役割");
+        summary.runbookRoles += 1;
+      });
+    });
+
+    event.finance.lines.forEach((line) => {
+      splitMemberNames(line.advanceBy).forEach((name) => {
+        const summary = grouped.get(normalizeMemberKey(name));
+        if (summary) {
+          summary.eventIds.add(event.id);
+          summary.roles.add("立替");
+        }
+      });
+      if (line.type === "収入") {
+        const receivedNames = splitMemberNames(line.receivedBy);
+        const fallbackReceivedNames = receivedNames.length ? receivedNames : splitMemberNames(line.counterparty);
+        fallbackReceivedNames.forEach((name) => {
+          const summary = grouped.get(normalizeMemberKey(name));
+          if (summary) {
+            summary.eventIds.add(event.id);
+            summary.roles.add("受取");
+          }
+        });
+      }
+    });
+  });
+
+  return [...grouped.values()]
+    .map((member) => ({
+      ...member,
+      roles: [...member.roles].sort((a, b) => a.localeCompare(b, "ja")),
+      eventCount: member.eventIds.size
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+}
+
+function buildMemberFinanceSummary(events) {
+  const grouped = new Map();
+  const registryEvents = state.events.length ? state.events : events;
+  const registeredNamesByKey = new Map();
+  registryEvents.forEach((event) => {
+    (event.members || []).forEach((member) => {
+      const name = String(member.name || "").trim();
+      const key = normalizeMemberKey(name);
+      if (key && !registeredNamesByKey.has(key)) {
+        registeredNamesByKey.set(key, name);
+      }
+    });
+  });
+  const registeredKeys = new Set(registeredNamesByKey.keys());
+  const getRegisteredNames = (value) => splitMemberNames(value).filter((name) => registeredKeys.has(normalizeMemberKey(name)));
+  const ensureSummary = (name) => {
+    const key = normalizeMemberKey(name);
+    if (!key || !registeredKeys.has(key)) {
+      return null;
+    }
+    const displayName = registeredNamesByKey.get(key) || name;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        name: displayName,
+        advancedTotal: 0,
+        unsettledTotal: 0,
+        receivedTotal: 0,
+        cashPosition: 0,
+        lineCount: 0,
+        unsettledCount: 0,
+        receiveLineCount: 0,
+        eventIds: new Set()
+      });
+    }
+
+    return grouped.get(key);
+  };
+
+  events.forEach((event) => {
+    event.finance.lines.forEach((line) => {
+      const amount = Number(line.actualAmount || line.plannedAmount || 0);
+
+      if (line.type === "支出") {
+        const payerNames = getRegisteredNames(line.advanceBy);
+        const payerShare = payerNames.length ? amount / payerNames.length : 0;
+        payerNames.forEach((name) => {
+          const summary = ensureSummary(name);
+          if (!summary) {
+            return;
+          }
+          summary.advancedTotal += payerShare;
+          summary.lineCount += 1;
+          summary.eventIds.add(event.id);
+          if ((line.settlementStatus || "未精算") === "未精算") {
+            summary.unsettledTotal += payerShare;
+            summary.unsettledCount += 1;
+            summary.cashPosition -= payerShare;
+          }
+        });
+      }
+
+      if (line.type === "収入") {
+        const explicitReceiverNames = getRegisteredNames(line.receivedBy);
+        const receiverNames = explicitReceiverNames.length ? explicitReceiverNames : getRegisteredNames(line.counterparty);
+        const receiverShare = receiverNames.length ? amount / receiverNames.length : 0;
+        receiverNames.forEach((name) => {
+          const summary = ensureSummary(name);
+          if (!summary) {
+            return;
+          }
+          summary.receivedTotal += receiverShare;
+          summary.cashPosition += receiverShare;
+          summary.receiveLineCount += 1;
+          summary.eventIds.add(event.id);
+        });
+      }
+
+      if (line.type === "支出") {
+        const receiverNames = getRegisteredNames(line.receivedBy);
+        const receiverShare = receiverNames.length ? amount / receiverNames.length : 0;
+        receiverNames.forEach((name) => {
+          const summary = ensureSummary(name);
+          if (!summary) {
+            return;
+          }
+          summary.receivedTotal += receiverShare;
+          summary.cashPosition += receiverShare;
+          summary.receiveLineCount += 1;
+          summary.eventIds.add(event.id);
+        });
+      }
+    });
+  });
+
+  return [...grouped.values()]
+    .map((item) => ({
+      ...item,
+      eventCount: item.eventIds.size
+    }))
+    .sort(
+      (a, b) =>
+        Math.abs(b.cashPosition) - Math.abs(a.cashPosition) ||
+        b.receivedTotal + b.unsettledTotal - (a.receivedTotal + a.unsettledTotal) ||
+        a.name.localeCompare(b.name, "ja")
+    );
+}
+
 function renderGlobalTaskRow(item, compact) {
   const overdue = getOverdueTasks([item.task]).length > 0;
   const dueSoon = !overdue && getDueSoonTasks([item.task], compact ? 1 : 3).length > 0;
@@ -1041,6 +2067,9 @@ function renderGlobalTaskRow(item, compact) {
 function renderFinanceWorkspace() {
   const monthly = buildMonthlyFinanceSummary(state.events);
   const summary = buildDashboardSnapshot(state.events);
+  const memberFinance = buildMemberFinanceSummary(state.events).filter(
+    (item) => item.advancedTotal > 0 || item.unsettledTotal > 0 || item.receivedTotal > 0
+  );
   const orderedEvents = [...state.events].sort((a, b) => toTimestamp(a.startsAt) - toTimestamp(b.startsAt));
 
   return `
@@ -1057,6 +2086,17 @@ function renderFinanceWorkspace() {
         ${renderDashboardMetric("支出合計", formatCurrency(summary.totalExpense), "実績ベース")}
         ${renderDashboardMetric("利益合計", formatSignedCurrency(summary.totalProfit), summary.totalProfit >= 0 ? "黒字" : "赤字")}
         ${renderDashboardMetric("未精算", formatCurrency(summary.totalUnsettledAmount), `${summary.totalUnsettledLines}件`)}
+      </section>
+      <section class="panel workspace-panel">
+        <div class="panel-head compact">
+          <h3>メンバーごとの収支サマリー</h3>
+          <span class="count-pill">${memberFinance.length}名</span>
+        </div>
+        ${
+          memberFinance.length
+            ? renderMemberFinanceTable(memberFinance)
+            : `<div class="empty-panel small">メンバーごとの受取・立替はまだありません。</div>`
+        }
       </section>
       <section class="workspace-split">
         <div class="panel workspace-panel">
@@ -1618,6 +2658,7 @@ function renderTabContent(event) {
 function renderBasicsTab(event) {
   const templateLabel = EVENT_TEMPLATES.find((template) => template.id === event.templateId)?.label || "カスタム";
   const imageCount = event.assetArchive.images.length;
+  const registeredMembers = getRegisteredMemberNames(event);
 
   return `
     <form class="stack-form" data-form="basic-info" data-event-id="${event.id}">
@@ -1643,7 +2684,7 @@ function renderBasicsTab(event) {
           )}
           ${renderField("テーマ", `<input name="theme" value="${escapeAttr(event.theme)}" />`)}
           ${renderField("登壇者", `<input name="speakers" value="${escapeAttr(event.speakers)}" />`)}
-          ${renderField("主催 / 担当", `<input name="owners" value="${escapeAttr(event.owners)}" />`)}
+          ${renderField("主催 / 担当", renderMemberPickerInput("owners", event.owners, registeredMembers, "先にメンバー表へ登録してください"))}
           ${renderField("Luma URL", `<input type="url" name="lumaUrl" value="${escapeAttr(event.lumaUrl)}" placeholder="https://lu.ma/..." />`)}
           ${renderField("テンプレ種別", `<input value="${escapeAttr(templateLabel)}" disabled />`)}
         </div>
@@ -1745,9 +2786,57 @@ function renderPreparationTab(event) {
   const prepBulkSummary = buildPrepBulkSummary(filteredTasks);
   const assigneeOptions = buildPrepAssigneeOptions(event.tasks);
   const assigneeSummary = buildPrepAssigneeSummary(event.tasks);
+  const prepTemplates = getAllPrepTaskTemplates();
+  const selectedTemplate = getSelectedPrepTemplate();
 
   return `
     <section class="section-stack">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>準備テンプレ</h3>
+            <p class="subtle">よく使う準備タスクをまとめて追加できます。今のイベントの準備タスクから、自分用テンプレも作れます。</p>
+          </div>
+          <div class="inline-actions">
+            <button class="button button-secondary" data-action="save-current-prep-template" data-event-id="${event.id}" ${
+              event.tasks.length ? "" : "disabled"
+            }>この準備をテンプレ化</button>
+            ${
+              selectedTemplate?.custom
+                ? `<button class="button button-ghost button-danger" data-action="delete-prep-template">選択テンプレ削除</button>`
+                : ""
+            }
+          </div>
+        </div>
+        <div class="template-apply-row">
+          <label class="search-field compact-search">
+            <span>追加するテンプレ</span>
+            <select data-action="select-prep-template">
+              ${prepTemplates
+                .map(
+                  (template) =>
+                    `<option value="${escapeAttr(template.id)}" ${
+                      state.selectedPrepTemplateId === template.id ? "selected" : ""
+                    }>${escapeHtml(template.label)}${template.custom ? "（自分用）" : ""}</option>`
+                )
+                .join("")}
+            </select>
+          </label>
+          <button class="button button-primary" data-action="apply-prep-template" data-event-id="${event.id}" ${
+            selectedTemplate ? "" : "disabled"
+          }>選択テンプレを追加</button>
+        </div>
+        <p class="subtle">${escapeHtml(selectedTemplate?.description || "テンプレを選択してください。")}</p>
+        ${
+          selectedTemplate
+            ? `<div class="template-preview">${selectedTemplate.tasks
+                .slice(0, 8)
+                .map((task) => `<span class="tag">${escapeHtml(task.title || "タスク")}</span>`)
+                .join("")}${selectedTemplate.tasks.length > 8 ? `<span class="tag">ほか${selectedTemplate.tasks.length - 8}件</span>` : ""}</div>`
+            : ""
+        }
+      </div>
+
       <div class="panel">
         <div class="panel-head">
           <div>
@@ -1873,6 +2962,43 @@ function buildPrepCategorySummary(tasks) {
   });
 
   return grouped.filter((item) => item.total > 0);
+}
+
+function getAllPrepTaskTemplates() {
+  const builtInTemplates = PREP_TASK_TEMPLATES.map((template) => ({ ...template, custom: false }));
+  const customTemplates = state.customPrepTemplates.map((template) => ({ ...template, custom: true }));
+  return [...builtInTemplates, ...customTemplates];
+}
+
+function getSelectedPrepTemplate() {
+  const templates = getAllPrepTaskTemplates();
+  return templates.find((template) => template.id === state.selectedPrepTemplateId) || templates[0] || null;
+}
+
+function createTasksFromPrepTemplate(template) {
+  return (template?.tasks || []).map((task, index) => ({
+    id: createId("task"),
+    title: task.title || `準備タスク ${index + 1}`,
+    assignee: "",
+    dueDate: "",
+    status: task.status && TASK_STATUS_OPTIONS.includes(task.status) ? task.status : "未着手",
+    memo: task.memo || "",
+    category: TASK_CATEGORY_OPTIONS.includes(task.category) ? task.category : "当日準備"
+  }));
+}
+
+function createPrepTemplateFromEvent(event, label) {
+  return {
+    id: createId("prep_template"),
+    label,
+    description: `${event.name || "イベント"} から作成した準備テンプレです。`,
+    tasks: event.tasks.map((task) => ({
+      title: task.title || "",
+      category: TASK_CATEGORY_OPTIONS.includes(task.category) ? task.category : "当日準備",
+      memo: task.memo || "",
+      status: "未着手"
+    }))
+  };
 }
 
 function getFilteredPrepTasks(tasks) {
@@ -2347,6 +3473,9 @@ function renderFinanceTab(event) {
   const financeGaps = buildFinanceGaps(event);
   const filteredLines = getFilteredFinanceLines(event.finance.lines, state.financeFilter);
   const visibleSummary = buildVisibleFinanceSummary(filteredLines);
+  const memberFinance = buildMemberFinanceSummary([event]).filter(
+    (item) => item.advancedTotal > 0 || item.unsettledTotal > 0 || item.receivedTotal > 0
+  );
 
   return `
     <section class="section-stack">
@@ -2438,6 +3567,20 @@ function renderFinanceTab(event) {
                   )
                   .join("")}
               </div>
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        memberFinance.length
+          ? `
+            <div class="panel">
+              <div class="panel-head compact">
+                <h3>メンバーごとの収支サマリー</h3>
+                <span class="count-pill">${memberFinance.length}名</span>
+              </div>
+              ${renderMemberFinanceTable(memberFinance)}
             </div>
           `
           : ""
@@ -2543,6 +3686,7 @@ function renderFinanceTab(event) {
           ${renderFinanceFilterButton("支出", "支出")}
           ${renderFinanceFilterButton("unsettled", "未精算")}
           ${renderFinanceFilterButton("advanced", "立替あり")}
+          ${renderFinanceFilterButton("received", "受取あり")}
           ${renderFinanceFilterButton("actualMissing", "実績未入力")}
         </div>
         <div class="summary-row">
@@ -2564,6 +3708,7 @@ function renderFinanceTab(event) {
                       <th>実績</th>
                       <th>差額</th>
                       <th>受取先 / 支払先</th>
+                      <th>受取</th>
                       <th>立替</th>
                       <th>精算</th>
                       <th>メモ</th>
@@ -2595,6 +3740,7 @@ function renderFinanceRow(eventId, line) {
       <td>${formatCurrency(line.actualAmount)}</td>
       <td><span class="variance-pill ${variance === 0 ? "" : variance > 0 ? "negative" : "positive"}">${formatSignedCurrency(variance)}</span></td>
       <td>${escapeHtml(line.counterparty || "未設定")}</td>
+      <td>${escapeHtml(line.receivedBy || "-")}</td>
       <td>${escapeHtml(line.advanceBy || "-")}</td>
       <td><span class="tag ${line.settlementStatus === "未精算" ? "warning" : ""}">${escapeHtml(line.settlementStatus || "未精算")}</span></td>
       <td>${escapeHtml(line.memo || "-")}</td>
@@ -2795,6 +3941,7 @@ function exportFinanceCsv(event) {
     "実績金額",
     "差額",
     "受取先/支払先",
+    "受取メンバー",
     "立替者",
     "精算状態",
     "メモ"
@@ -2807,6 +3954,7 @@ function exportFinanceCsv(event) {
     line.actualAmount,
     Number(line.actualAmount || 0) - Number(line.plannedAmount || 0),
     line.counterparty || "",
+    line.receivedBy || "",
     line.advanceBy || "",
     line.settlementStatus || "",
     line.memo || ""
@@ -2877,6 +4025,48 @@ function renderField(label, inputHtml) {
   `;
 }
 
+function renderMemberPickerInput(name, value, members, placeholder = "") {
+  const memberNames = [
+    ...new Set(
+      (members || [])
+        .map((member) => (typeof member === "string" ? member : member.name))
+        .flatMap(splitMemberNames)
+        .filter(Boolean)
+    )
+  ].sort((a, b) => a.localeCompare(b, "ja"));
+  const selected = new Set(splitMemberNames(value).map(normalizeMemberKey));
+
+  if (!memberNames.length) {
+    return `
+      <div class="member-picker empty">
+        <input type="hidden" name="${name}" value="" />
+        <p class="field-note">${escapeHtml(placeholder || "先にメンバー表へ登録してください。")}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="member-picker" data-member-picker>
+      <input type="hidden" name="${name}" value="${escapeAttr(splitMemberNames(value).join("、"))}" />
+      <div class="member-picker-options">
+        ${memberNames
+          .map(
+            (memberName) => `
+              <label class="member-choice">
+                <input type="checkbox" value="${escapeAttr(memberName)}" data-action="toggle-member-picker" ${
+                  selected.has(normalizeMemberKey(memberName)) ? "checked" : ""
+                } />
+                <span>${escapeHtml(memberName)}</span>
+              </label>
+            `
+          )
+          .join("")}
+      </div>
+      <small class="field-note">メンバー表から複数選択できます。</small>
+    </div>
+  `;
+}
+
 function formatShortUrl(value) {
   if (!value) {
     return "";
@@ -2943,6 +4133,7 @@ function getModalSubtitle(modal) {
 
 function renderModalBody(modal, event) {
   if (modal.kind === "create-event") {
+    const registeredMembers = getRegisteredMemberNames();
     return `
       <form class="stack-form" data-form="create-event">
         <div class="section-grid two-column">
@@ -2959,7 +4150,7 @@ function renderModalBody(modal, event) {
             "ステータス",
             `<select name="status">${EVENT_STATUS_OPTIONS.map((status) => `<option value="${status}">${status}</option>`).join("")}</select>`
           )}
-          ${renderField("主催 / 担当", `<input name="owners" />`)}
+          ${renderField("主催 / 担当", renderMemberPickerInput("owners", "", registeredMembers, "先にメンバー表へ登録してください"))}
           ${renderField("Luma URL", `<input type="url" name="lumaUrl" placeholder="https://lu.ma/..." />`)}
           ${renderField(
             "Luma状態",
@@ -2993,13 +4184,14 @@ function renderModalBody(modal, event) {
   }
 
   const item = findModalItem(modal, event);
+  const suggestedMembers = getSuggestedMembersForEvent(event);
 
   if (modal.kind === "task") {
     return `
       <form class="stack-form" data-form="task" data-event-id="${modal.eventId}" data-mode="${modal.mode}" data-item-id="${item?.id || ""}">
         ${renderField("タスク名", `<input name="title" value="${escapeAttr(item?.title || "")}" required />`)}
         <div class="section-grid two-column">
-          ${renderField("担当者", `<input name="assignee" value="${escapeAttr(item?.assignee || "")}" />`)}
+          ${renderField("担当者", renderMemberPickerInput("assignee", item?.assignee || "", suggestedMembers, "メンバー名を選択"))}
           ${renderField("期限", `<input type="date" name="dueDate" value="${escapeAttr(item?.dueDate || "")}" />`)}
           ${renderField(
             "ステータス",
@@ -3030,7 +4222,7 @@ function renderModalBody(modal, event) {
         <div class="section-grid two-column">
           ${renderField("時刻", `<input type="time" name="time" step="300" value="${escapeAttr(item?.time || "")}" />`)}
           ${renderField("項目名", `<input name="title" value="${escapeAttr(item?.title || "")}" required />`)}
-          ${renderField("担当", `<input name="owner" value="${escapeAttr(item?.owner || "")}" />`)}
+          ${renderField("担当", renderMemberPickerInput("owner", item?.owner || "", suggestedMembers, "メンバー名を選択"))}
           ${renderField("メモ", `<input name="note" value="${escapeAttr(item?.note || "")}" />`)}
         </div>
         <div class="form-actions">
@@ -3045,7 +4237,7 @@ function renderModalBody(modal, event) {
       <form class="stack-form" data-form="role" data-event-id="${modal.eventId}" data-mode="${modal.mode}" data-item-id="${item?.id || ""}">
         <div class="section-grid two-column">
           ${renderField("役割", `<input name="role" value="${escapeAttr(item?.role || "")}" required />`)}
-          ${renderField("担当", `<input name="owner" value="${escapeAttr(item?.owner || "")}" />`)}
+          ${renderField("担当", renderMemberPickerInput("owner", item?.owner || "", suggestedMembers, "メンバー名を選択"))}
         </div>
         ${renderField("メモ", `<textarea name="note" rows="4">${escapeHtml(item?.note || "")}</textarea>`)}
         <div class="form-actions">
@@ -3096,7 +4288,8 @@ function renderModalBody(modal, event) {
           ${renderField("受取先 / 支払先", `<input name="counterparty" value="${escapeAttr(item?.counterparty || "")}" />`)}
           ${renderField("予定金額", `<input type="number" name="plannedAmount" value="${escapeAttr(item?.plannedAmount || "")}" min="0" step="1" />`)}
           ${renderField("実績金額", `<input type="number" name="actualAmount" value="${escapeAttr(item?.actualAmount || "")}" min="0" step="1" />`)}
-          ${renderField("立替者", `<input name="advanceBy" value="${escapeAttr(item?.advanceBy || "")}" />`)}
+          ${renderField("受取メンバー", renderMemberPickerInput("receivedBy", item?.receivedBy || "", suggestedMembers, "メンバー名を選択"))}
+          ${renderField("立替者", renderMemberPickerInput("advanceBy", item?.advanceBy || "", suggestedMembers, "メンバー名を選択"))}
           ${renderField(
             "精算状態",
             `<select name="settlementStatus">${SETTLEMENT_STATUS_OPTIONS.map(
@@ -3125,6 +4318,21 @@ function renderModalBody(modal, event) {
           <input type="checkbox" name="followUp" ${item?.followUp ? "checked" : ""} />
           <span>次回フォロー候補として残す</span>
         </label>
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">${modal.mode === "edit" ? "更新" : "追加"}</button>
+        </div>
+      </form>
+    `;
+  }
+
+  if (modal.kind === "member") {
+    return `
+      <form class="stack-form" data-form="member" data-event-id="${modal.eventId}" data-mode="${modal.mode}" data-item-id="${item?.id || ""}">
+        <div class="section-grid two-column">
+          ${renderField("名前", `<input name="name" value="${escapeAttr(item?.name || "")}" required />`)}
+          ${renderField("役割", `<input name="role" value="${escapeAttr(item?.role || "")}" placeholder="主催 / 受付 / 司会 など" />`)}
+        </div>
+        ${renderField("メモ", `<textarea name="note" rows="4">${escapeHtml(item?.note || "")}</textarea>`)}
         <div class="form-actions">
           <button class="button button-primary" type="submit">${modal.mode === "edit" ? "更新" : "追加"}</button>
         </div>
@@ -3175,6 +4383,10 @@ function findModalItem(modal, event) {
 
   if (modal.kind === "participant") {
     return event.participantHub.touchedParticipants.find((item) => item.id === modal.itemId) || null;
+  }
+
+  if (modal.kind === "member") {
+    return event.members.find((item) => item.id === modal.itemId) || null;
   }
 
   if (modal.kind === "asset") {
@@ -3244,6 +4456,10 @@ function cloneEvent(sourceEvent) {
   next.theme = cloned.theme;
   next.speakers = cloned.speakers;
   next.owners = cloned.owners;
+  next.members = cloned.members.map((member) => ({
+    ...member,
+    id: createId("member")
+  }));
   next.lumaUrl = "";
   next.lumaStatus = "未着手";
   next.lumaRegistrationCount = "";
@@ -3346,16 +4562,18 @@ async function createEventFromForm(formData) {
   event.speakers = String(formData.get("speakers") || "");
   event.summary = String(formData.get("summary") || "");
   event.notes = String(formData.get("notes") || "");
+  const globalMemberNames = buildGlobalMemberSummary(state.events).map((member) => member.name);
+  const eventWithMembers = addMemberNamesToEvent(event, [...globalMemberNames, event.owners], "メンバー");
 
   try {
-    validateEventCore(event);
+    validateEventCore(eventWithMembers);
   } catch (error) {
     showUiError(error.message);
     return;
   }
 
-  state.events = [touchEvent(event), ...state.events].sort(sortEvents);
-  state.selectedEventId = event.id;
+  state.events = [touchEvent(eventWithMembers), ...state.events].sort(sortEvents);
+  state.selectedEventId = eventWithMembers.id;
   state.activeView = "detail";
   state.activeTab = "基本情報";
   state.modal = null;
@@ -3394,14 +4612,20 @@ async function handleBasicInfoSubmit(form) {
     return;
   }
 
-  await updateEvent(eventId, (event) => ({
-    ...event,
-    ...payload,
-    assetArchive: {
-      ...event.assetArchive,
-      ...assetArchivePatch
-    }
-  }));
+  await updateEvent(eventId, (event) =>
+    addMemberNamesToEvent(
+      {
+        ...event,
+        ...payload,
+        assetArchive: {
+          ...event.assetArchive,
+          ...assetArchivePatch
+        }
+      },
+      [payload.owners],
+      "主催 / 担当"
+    )
+  );
 }
 
 async function handleRunbookNotesSubmit(form) {
@@ -3451,6 +4675,71 @@ async function handleFinanceMemoSubmit(form) {
       memo: String(formData.get("memo") || "")
     }
   }));
+}
+
+async function handleGlobalMemberSubmit(form) {
+  const formData = new FormData(form);
+  const name = String(formData.get("name") || "").trim();
+  const role = String(formData.get("role") || "").trim() || "メンバー";
+  const note = String(formData.get("note") || "").trim();
+
+  if (!name) {
+    showUiError("メンバー名を入力してください。");
+    return;
+  }
+
+  if (!state.events.length) {
+    showUiError("先にイベントを作成してください。メンバーはイベントに紐づけて保存されます。");
+    return;
+  }
+
+  state.events = state.events
+    .map((event) => {
+      const next = addMemberNamesToEvent(event, [name], role);
+      return touchEvent({
+        ...next,
+        members: next.members.map((member) =>
+          normalizeMemberKey(member.name) === normalizeMemberKey(name)
+            ? {
+                ...member,
+                role: member.role || role,
+                note: member.note || note
+              }
+            : member
+        )
+      });
+    })
+    .sort(sortEvents);
+
+  state.error = "";
+  render();
+  await syncEvents();
+}
+
+async function renameGlobalMember(fromName, toName) {
+  const nextName = String(toName || "").trim();
+
+  if (!nextName || normalizeMemberKey(fromName) === normalizeMemberKey(nextName)) {
+    return;
+  }
+
+  state.events = state.events
+    .map((event) => touchEvent(applyGlobalMemberRename(event, fromName, nextName)))
+    .sort(sortEvents);
+  state.error = "";
+  state.info = `メンバー名を「${fromName}」から「${nextName}」へ更新しました。`;
+  render();
+  await syncEvents();
+}
+
+async function deleteGlobalMember(memberName) {
+  state.events = state.events
+    .map((event) => touchEvent(applyGlobalMemberDelete(event, memberName)))
+    .sort(sortEvents);
+  state.error = "";
+  state.info = `「${memberName}」をメンバー候補と担当欄から削除しました。`;
+  render();
+  await syncEvents();
 }
 
 async function handleEntitySubmit(form, kind) {
@@ -3505,6 +4794,7 @@ async function handleEntitySubmit(form, kind) {
         plannedAmount: parseFinanceAmount(formData.get("plannedAmount") || 0),
         actualAmount: parseFinanceAmount(formData.get("actualAmount") || 0),
         counterparty: String(formData.get("counterparty") || ""),
+        receivedBy: String(formData.get("receivedBy") || ""),
         advanceBy: String(formData.get("advanceBy") || ""),
         settlementStatus: String(formData.get("settlementStatus") || "未精算"),
         memo: String(formData.get("memo") || "")
@@ -3517,6 +4807,14 @@ async function handleEntitySubmit(form, kind) {
         handle: String(formData.get("handle") || ""),
         note: String(formData.get("note") || ""),
         followUp: formData.get("followUp") === "on"
+      };
+    }
+
+    if (kind === "member") {
+      draft = {
+        name: String(formData.get("name") || ""),
+        role: String(formData.get("role") || ""),
+        note: String(formData.get("note") || "")
       };
     }
 
@@ -3614,8 +4912,19 @@ async function handleEntitySubmit(form, kind) {
         touchedParticipants:
           mode === "edit"
             ? event.participantHub.touchedParticipants.map((item) => (item.id === itemId ? nextItem : item))
-            : [...event.participantHub.touchedParticipants, nextItem]
+          : [...event.participantHub.touchedParticipants, nextItem]
       };
+    }
+
+    if (kind === "member") {
+      const nextItem = {
+        id: itemId || createId("member"),
+        ...draft
+      };
+      nextEvent.members =
+        mode === "edit"
+          ? event.members.map((item) => (item.id === itemId ? nextItem : item))
+          : [...event.members, nextItem];
     }
 
     if (kind === "asset") {
@@ -3632,7 +4941,7 @@ async function handleEntitySubmit(form, kind) {
       };
     }
 
-    return nextEvent;
+    return addMemberNamesToEvent(nextEvent, getDraftMemberNames(kind, draft), kind === "finance" ? "立替" : "メンバー");
   });
 
   state.modal = null;
@@ -3695,6 +5004,13 @@ async function handleDelete(kind, eventId, itemId) {
       };
     }
 
+    if (kind === "member") {
+      return {
+        ...event,
+        members: event.members.filter((item) => item.id !== itemId)
+      };
+    }
+
     if (kind === "asset") {
       return {
         ...event,
@@ -3726,6 +5042,12 @@ document.addEventListener("click", async (event) => {
   const itemId = button.dataset.itemId;
 
   if (action === "sign-in-google") {
+    if (isInAppBrowser()) {
+      state.error = "LINEなどのアプリ内ブラウザでは Google ログインできないことがあります。右上メニューから Chrome / Safari で開いてください。";
+      render();
+      return;
+    }
+
     try {
       state.error = "";
       render();
@@ -3735,6 +5057,19 @@ document.addEventListener("click", async (event) => {
       state.error = error.message || "Google ログインに失敗しました。";
       render();
     }
+    return;
+  }
+
+  if (action === "copy-current-url") {
+    try {
+      await copyText(window.location.href);
+      state.info = "URLをコピーしました。Chrome / Safari に貼り付けて開いてください。";
+      state.error = "";
+    } catch (error) {
+      console.error(error);
+      state.error = "URLコピーに失敗しました。ブラウザのアドレスバーからコピーしてください。";
+    }
+    render();
     return;
   }
 
@@ -3777,6 +5112,25 @@ document.addEventListener("click", async (event) => {
 
   if (action === "close-modal") {
     closeModal();
+    return;
+  }
+
+  if (action === "rename-global-member") {
+    const memberName = button.dataset.memberName || "";
+    const nextName = window.prompt("新しいメンバー名を入力してください。", memberName);
+
+    if (nextName?.trim()) {
+      await renameGlobalMember(memberName, nextName);
+    }
+    return;
+  }
+
+  if (action === "delete-global-member") {
+    const memberName = button.dataset.memberName || "";
+
+    if (window.confirm(`「${memberName}」を全イベントのメンバー候補・担当欄・立替者欄から削除しますか？`)) {
+      await deleteGlobalMember(memberName);
+    }
     return;
   }
 
@@ -3831,6 +5185,64 @@ document.addEventListener("click", async (event) => {
 
   if (action === "set-prep-filter") {
     state.prepFilter = button.dataset.prepFilter || "all";
+    render();
+    return;
+  }
+
+  if (action === "apply-prep-template") {
+    const selectedTemplate = getSelectedPrepTemplate();
+
+    if (!selectedTemplate) {
+      return;
+    }
+
+    await updateEvent(eventId, (eventItem) => ({
+      ...eventItem,
+      tasks: [...eventItem.tasks, ...createTasksFromPrepTemplate(selectedTemplate)]
+    }));
+    state.info = `${selectedTemplate.label} の準備タスクを追加しました。`;
+    render();
+    return;
+  }
+
+  if (action === "save-current-prep-template") {
+    const sourceEvent = state.events.find((item) => item.id === eventId);
+
+    if (!sourceEvent || !sourceEvent.tasks.length) {
+      return;
+    }
+
+    const suggestedName = sourceEvent.name ? `${sourceEvent.name} 準備` : "新しい準備テンプレ";
+    const label = window.prompt("この準備テンプレの名前を入力してください。", suggestedName);
+
+    if (!label?.trim()) {
+      return;
+    }
+
+    const nextTemplate = createPrepTemplateFromEvent(sourceEvent, label.trim());
+    state.customPrepTemplates = [...state.customPrepTemplates, nextTemplate];
+    state.selectedPrepTemplateId = nextTemplate.id;
+    writeCustomPrepTemplates(state.customPrepTemplates);
+    state.info = "準備テンプレを保存しました。";
+    render();
+    return;
+  }
+
+  if (action === "delete-prep-template") {
+    const selectedTemplate = getSelectedPrepTemplate();
+
+    if (!selectedTemplate?.custom) {
+      return;
+    }
+
+    if (!window.confirm(`準備テンプレ「${selectedTemplate.label}」を削除しますか？`)) {
+      return;
+    }
+
+    state.customPrepTemplates = state.customPrepTemplates.filter((template) => template.id !== selectedTemplate.id);
+    state.selectedPrepTemplateId = "default";
+    writeCustomPrepTemplates(state.customPrepTemplates);
+    state.info = "準備テンプレを削除しました。";
     render();
     return;
   }
@@ -4069,6 +5481,23 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "open-member-modal") {
+    openModal("member", { eventId });
+    return;
+  }
+
+  if (action === "edit-member") {
+    openModal("member", { eventId, itemId, mode: "edit" });
+    return;
+  }
+
+  if (action === "delete-member") {
+    if (window.confirm("このメンバーを削除しますか？")) {
+      await handleDelete("member", eventId, itemId);
+    }
+    return;
+  }
+
   if (action === "open-asset-modal") {
     openModal("asset", { eventId });
     return;
@@ -4180,9 +5609,26 @@ document.addEventListener("click", async (event) => {
 document.addEventListener("change", async (event) => {
   const target = event.target;
 
+  if (target.matches('[data-action="toggle-member-picker"]')) {
+    const picker = target.closest("[data-member-picker]");
+    const hidden = picker?.querySelector('input[type="hidden"]');
+
+    if (hidden) {
+      const selectedNames = [...picker.querySelectorAll('[data-action="toggle-member-picker"]:checked')]
+        .map((input) => input.value)
+        .filter(Boolean);
+      hidden.value = selectedNames.join("、");
+    }
+    return;
+  }
+
   if (target.matches('[data-action="toggle-task-status"]')) {
     const eventId = target.dataset.eventId;
     const taskId = target.dataset.taskId;
+    state.revealCompletedForEventId = target.checked ? eventId : null;
+    state.info = target.checked
+      ? "タスクを完了にしたため、未完了リストや今日のタスク一覧からは外れることがあります。完了済みタスク側に移動しています。"
+      : "";
     await updateEvent(eventId, (eventItem) => ({
       ...eventItem,
       tasks: eventItem.tasks.map((task) =>
@@ -4233,6 +5679,12 @@ document.addEventListener("change", async (event) => {
 
   if (target.matches('[data-action="set-prep-assignee-filter"]')) {
     state.prepAssigneeFilter = target.value || "all";
+    render();
+    return;
+  }
+
+  if (target.matches('[data-action="select-prep-template"]')) {
+    state.selectedPrepTemplateId = target.value || "default";
     render();
     return;
   }
@@ -4302,7 +5754,12 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (["task", "timeline", "role", "checklist", "finance", "participant", "asset"].includes(formName)) {
+  if (formName === "global-member") {
+    await handleGlobalMemberSubmit(form);
+    return;
+  }
+
+  if (["task", "timeline", "role", "checklist", "finance", "participant", "member", "asset"].includes(formName)) {
     await handleEntitySubmit(form, formName);
   }
 });
@@ -4350,15 +5807,20 @@ async function importEventsFromFile(file) {
 
 function applySession(session) {
   const previousUserId = state.authUser?.uid || null;
+  const previousAllowed = state.authAllowed;
   const nextUserId = session.user?.uid || null;
 
   state.backendLabel = session.backendLabel;
   state.authRequired = Boolean(session.authRequired);
   state.authUser = session.user || null;
+  state.authAllowed = session.isAllowed !== false;
+  state.accessMode = session.accessMode || "authenticated";
 
   return {
     previousUserId,
-    nextUserId
+    previousAllowed,
+    nextUserId,
+    nextAllowed: state.authAllowed
   };
 }
 
@@ -4368,7 +5830,13 @@ function clearLoadedEvents() {
   state.selectedEventId = null;
 }
 
+function isSecurityRestrictedError(error) {
+  const code = error?.code || "";
+  return ["permission-denied", "unauthenticated", "access-not-allowed"].includes(code);
+}
+
 async function init() {
+  state.customPrepTemplates = readCustomPrepTemplates();
   render();
 
   try {
@@ -4377,9 +5845,9 @@ async function init() {
     state.error = "";
 
     await subscribeStorageSession(async (nextSession) => {
-      const { previousUserId, nextUserId } = applySession(nextSession);
+      const { previousUserId, previousAllowed, nextUserId, nextAllowed } = applySession(nextSession);
 
-      if (state.authRequired && !nextUserId) {
+      if (state.authRequired && (!nextUserId || !nextAllowed)) {
         clearLoadedEvents();
         state.saveState = "idle";
         state.lastSavedAt = "";
@@ -4388,7 +5856,7 @@ async function init() {
         return;
       }
 
-      if (state.authRequired && previousUserId !== nextUserId) {
+      if (state.authRequired && (previousUserId !== nextUserId || previousAllowed !== nextAllowed)) {
         state.isLoading = true;
         render();
 
@@ -4409,12 +5877,14 @@ async function init() {
       render();
     });
 
-    if (!state.authRequired || state.authUser) {
+    if (!state.authRequired || (state.authUser && state.authAllowed)) {
       await loadEventData();
     }
   } catch (error) {
     console.error(error);
-    state.error = "Event Hub の初期化に失敗しました。Firebase 設定・Rules・API を確認してください。";
+    state.error = isLocalApiRuntime()
+      ? "Event Hub の初期化に失敗しました。ローカルサーバーが起動しているか、/api/session と /api/events を確認してください。"
+      : error?.message || "Event Hub の初期化に失敗しました。Firebase 設定・Rules・API を確認してください。";
   } finally {
     state.isLoading = false;
     render();
@@ -4428,7 +5898,7 @@ async function loadEventData() {
   try {
     remoteEvents = cloneEventsSnapshot(await loadEvents());
   } catch (error) {
-    if (localBackupEvents.length) {
+    if (localBackupEvents.length && !isSecurityRestrictedError(error)) {
       applyLoadedEvents(localBackupEvents);
       state.error = `${error.message || "保存先からの読込に失敗しました。"} この端末に残っていた最新バックアップを表示しています。内容を確認してから保存し直してください。`;
       state.saveState = "error";

@@ -9,12 +9,19 @@ import { validateEntity, validateEventCore } from "../public/src/validation.js";
 
 const require = createRequire(import.meta.url);
 const { parseEventsCsv, serializeEventsToCsv } = require("../server.js");
+const { handleApi } = require("../lib/event-api.js");
 
 const event = createEmptyEvent({ withTemplateTasks: false });
 event.name = "Smoke Event";
-event.startsAt = "2026-05-20T19:00";
+event.startsAt = "2099-05-20T19:00";
 event.venue = "Test Venue";
 event.owners = "Ryu";
+event.members.push({
+  id: "member_1",
+  name: "Miki",
+  role: "受付",
+  note: "当日受付リード"
+});
 event.result.impression = "よかった";
 event.assetArchive.driveFolderUrl = "https://drive.google.com/drive/folders/example";
 event.assetArchive.notes = "イベント写真";
@@ -43,7 +50,7 @@ event.tasks.push({
   id: "task_1",
   title: "会場確認",
   assignee: "Ryu",
-  dueDate: "2026-05-18",
+  dueDate: "2099-05-18",
   status: "進行中",
   memo: "",
   category: "会場"
@@ -83,6 +90,7 @@ const roundTrip = parseEventsCsv(csv);
 assert.equal(roundTrip.length, 1);
 assert.equal(roundTrip[0].name, event.name);
 assert.equal(roundTrip[0].tasks[0].title, event.tasks[0].title);
+assert.equal(roundTrip[0].members[0].name, event.members[0].name);
 assert.equal(roundTrip[0].runbook.timetable[0].title, event.runbook.timetable[0].title);
 assert.equal(roundTrip[0].finance.lines[0].plannedAmount, event.finance.lines[0].plannedAmount);
 assert.equal(roundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
@@ -90,6 +98,27 @@ assert.equal(roundTrip[0].assetArchive.images[0].label, event.assetArchive.image
 const browserCsv = serializeBrowserCsv([event]);
 const browserRoundTrip = parseBrowserCsv(browserCsv);
 assert.equal(browserRoundTrip.length, 1);
+assert.equal(browserRoundTrip[0].members[0].role, event.members[0].role);
 assert.equal(browserRoundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
+
+const originalVercelEnv = process.env.VERCEL;
+process.env.VERCEL = "1";
+const blockedResponse = {
+  statusCode: null,
+  body: "",
+  writeHead(statusCode) {
+    this.statusCode = statusCode;
+  },
+  end(body) {
+    this.body = body;
+  }
+};
+assert.equal(await handleApi({ method: "GET" }, blockedResponse, "/api/events"), true);
+assert.equal(blockedResponse.statusCode, 404);
+if (originalVercelEnv === undefined) {
+  delete process.env.VERCEL;
+} else {
+  process.env.VERCEL = originalVercelEnv;
+}
 
 console.log("smoke ok");

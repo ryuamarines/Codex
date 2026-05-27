@@ -12,8 +12,8 @@ export const TASK_CATEGORY_OPTIONS = [
 export const TAB_OPTIONS = ["基本情報", "準備", "当日", "終了後", "収支"];
 export const FINANCE_TYPE_OPTIONS = ["収入", "支出"];
 export const FINANCE_CATEGORIES = {
-  収入: ["参加費収入", "スポンサー収入", "その他収入"],
-  支出: ["会場費", "謝礼", "飲食費", "備品費", "デザイン費", "広告費", "交通費", "その他"]
+  収入: ["参加費収入", "スポンサー収入", "報酬", "その他収入"],
+  支出: ["会場費", "報酬", "謝礼", "飲食費", "備品費", "デザイン費", "広告費", "交通費", "その他"]
 };
 export const SETTLEMENT_STATUS_OPTIONS = ["未精算", "精算済み"];
 export const LUMA_STATUS_OPTIONS = ["未着手", "下書き中", "公開準備中", "公開中", "受付停止", "終了"];
@@ -29,6 +29,39 @@ export const DEFAULT_TASK_TEMPLATES = [
   { title: "備品確認", category: "備品" },
   { title: "終了後お礼", category: "終了後対応" },
   { title: "振り返り記入", category: "終了後対応" }
+];
+
+export const PREP_TASK_TEMPLATES = [
+  {
+    id: "default",
+    label: "標準準備",
+    description: "会場、Luma、告知、当日準備、終了後対応までの基本セットです。",
+    tasks: DEFAULT_TASK_TEMPLATES
+  },
+  {
+    id: "wonder-tech-hub",
+    label: "Wonder Tech Hub",
+    description: "Wonder Tech Hub #01 ベース。公開、資料作成、当日準備、終了後レポートまでを一通り持つテンプレです。",
+    tasks: [
+      { title: "イベント自体のコンセプト確定", category: "会場", memo: "関係者でイベントの軸、対象者、当日の体験をそろえる。" },
+      { title: "会場確認", category: "会場", memo: "会場条件、導線、レイアウト、当日の使い方を確認する。" },
+      { title: "Peatix公開", category: "会場", memo: "公開ページの内容と公開状態を確認する。" },
+      { title: "connpass公開", category: "会場", memo: "公開ページの内容と公開状態を確認する。" },
+      { title: "Luma準備", category: "Luma対応", memo: "Lumaページの下書き、定員、申込導線、公開前確認を進める。" },
+      { title: "Lumaページ作成", category: "Luma対応", memo: "Lumaページを作成し、会場、日時、概要、申込条件を入れる。" },
+      { title: "Luma&X告知文作成", category: "Luma対応", memo: "LumaとXで使う告知文を作成し、表記ゆれを整える。" },
+      { title: "Luma&X 告知文作成", category: "告知", memo: "SNS向けの短文、投稿タイミング、必要な画像を準備する。" },
+      { title: "告知投稿", category: "告知", memo: "公開後の告知投稿とリマインド投稿を実施する。" },
+      { title: "イベント資料作成 個人", category: "登壇者対応", memo: "登壇者や関係者ごとの資料作成を進める。" },
+      { title: "当日役割確認", category: "当日準備", memo: "受付、司会、登壇対応、撮影、撤収などの担当を確認する。" },
+      { title: "ネームカード準備", category: "当日準備", memo: "参加者や運営向けのネームカードを準備する。" },
+      { title: "備品確認", category: "備品", memo: "投影、音響、電源、受付用品、軽食まわりの備品を確認する。" },
+      { title: "軽食発注", category: "備品", memo: "必要な軽食や飲み物を発注する。" },
+      { title: "終了後お礼", category: "終了後対応", memo: "登壇者、協力者、参加者へのお礼文を送る。" },
+      { title: "振り返り記入", category: "終了後対応", memo: "良かった点、改善点、次回に活かすメモを残す。" },
+      { title: "レポート作成", category: "終了後対応", memo: "イベント後に公開・共有できるレポートを作成する。" }
+    ]
+  }
 ];
 
 export const EVENT_TEMPLATES = [
@@ -188,6 +221,7 @@ export function createEmptyEvent({ withTemplateTasks = true, templateId = "custo
     theme: "",
     speakers: "",
     owners: "",
+    members: [],
     lumaUrl: "",
     lumaStatus: "未着手",
     lumaRegistrationCount: "",
@@ -235,6 +269,7 @@ export function normalizeEvent(event) {
   return {
     ...base,
     ...eventWithoutDrive,
+    members: Array.isArray(eventWithoutDrive.members) ? eventWithoutDrive.members : [],
     tasks: Array.isArray(eventWithoutDrive.tasks) ? eventWithoutDrive.tasks : [],
     runbook: {
       ...base.runbook,

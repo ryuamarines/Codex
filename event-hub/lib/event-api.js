@@ -18,6 +18,10 @@ function sendCsv(res, filename, content) {
   res.end(content);
 }
 
+function isPublicDeployment() {
+  return process.env.VERCEL === "1";
+}
+
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -50,6 +54,11 @@ async function readJsonBody(req) {
 }
 
 async function handleApi(req, res, pathname) {
+  if (isPublicDeployment() && pathname.startsWith("/api/")) {
+    sendText(res, 404, "API route not available in public deployment");
+    return true;
+  }
+
   if (pathname === "/api/session" && req.method === "GET") {
     sendJson(res, 200, getSessionInfo());
     return true;

@@ -126,6 +126,7 @@ const EVENT_COLUMNS = [
   "theme",
   "speakers",
   "owners",
+  "membersBlob",
   "lumaUrl",
   "lumaStatus",
   "lumaRegistrationCount",
@@ -163,6 +164,8 @@ const EVENT_COLUMNS = [
   "imageLinksBlob"
 ];
 
+const REQUIRED_EVENT_COLUMNS = EVENT_COLUMNS.filter((column) => column !== "membersBlob");
+
 function serializeEventRow(event) {
   return [
     event.id || "",
@@ -174,6 +177,7 @@ function serializeEventRow(event) {
     event.theme || "",
     event.speakers || "",
     event.owners || "",
+    serializeCollection(event.members, ["id", "name", "role", "note"]),
     event.lumaUrl || "",
     event.lumaStatus || "",
     event.lumaRegistrationCount ?? "",
@@ -213,7 +217,7 @@ function serializeEventRow(event) {
     }),
     serializeCollection(
       event.finance?.lines,
-      ["id", "type", "category", "name", "plannedAmount", "actualAmount", "counterparty", "advanceBy", "settlementStatus", "memo"]
+      ["id", "type", "category", "name", "plannedAmount", "actualAmount", "counterparty", "advanceBy", "settlementStatus", "memo", "receivedBy"]
     ),
     serializeCollection(event.assetArchive?.images, ["id", "label", "url", "note"])
   ];
@@ -236,7 +240,7 @@ export function parseEventsCsv(text) {
     return acc;
   }, {});
 
-  const missing = EVENT_COLUMNS.filter((column) => typeof headerIndex[column] === "undefined");
+  const missing = REQUIRED_EVENT_COLUMNS.filter((column) => typeof headerIndex[column] === "undefined");
   if (missing.length) {
     throw new Error(`CSV header is missing required columns: ${missing.join(", ")}`);
   }
@@ -254,6 +258,7 @@ export function parseEventsCsv(text) {
       theme: get("theme"),
       speakers: get("speakers"),
       owners: get("owners"),
+      members: parseCollection(get("membersBlob"), ["id", "name", "role", "note"]),
       lumaUrl: get("lumaUrl"),
       lumaStatus: get("lumaStatus"),
       lumaRegistrationCount: get("lumaRegistrationCount"),
@@ -301,7 +306,7 @@ export function parseEventsCsv(text) {
         memo: get("financeMemo"),
         lines: parseCollection(
           get("financeLinesBlob"),
-          ["id", "type", "category", "name", "plannedAmount", "actualAmount", "counterparty", "advanceBy", "settlementStatus", "memo"],
+          ["id", "type", "category", "name", "plannedAmount", "actualAmount", "counterparty", "advanceBy", "settlementStatus", "memo", "receivedBy"],
           {
             plannedAmount: (value) => (value === "" ? "" : Number(value)),
             actualAmount: (value) => (value === "" ? "" : Number(value))
