@@ -51,11 +51,12 @@ const EVENT_COLUMNS = [
   "rolesBlob",
   "checklistBlob",
   "participantsBlob",
+  "attendeesBlob",
   "financeLinesBlob",
   "imageLinksBlob"
 ];
 
-const REQUIRED_EVENT_COLUMNS = EVENT_COLUMNS.filter((column) => column !== "membersBlob");
+const REQUIRED_EVENT_COLUMNS = EVENT_COLUMNS.filter((column) => !["membersBlob", "attendeesBlob"].includes(column));
 
 function getSessionInfo() {
   return {
@@ -304,6 +305,28 @@ function serializeEventRow(event) {
     serializeCollection(event.participantHub?.touchedParticipants, ["id", "name", "handle", "note", "followUp"], {
       followUp: (value) => (value ? "1" : "")
     }),
+    serializeCollection(event.participantHub?.attendees, [
+      "id",
+      "guestId",
+      "name",
+      "firstName",
+      "lastName",
+      "email",
+      "phoneNumber",
+      "createdAt",
+      "approvalStatus",
+      "checkedInAt",
+      "utmSource",
+      "ticketName",
+      "amount",
+      "aiStage",
+      "tools",
+      "organization",
+      "position",
+      "businessCardUrl",
+      "businessCardNote",
+      "rawImportedAt"
+    ]),
     serializeCollection(
       event.finance?.lines,
       ["id", "type", "category", "name", "plannedAmount", "actualAmount", "counterparty", "advanceBy", "settlementStatus", "memo", "receivedBy"]
@@ -389,7 +412,29 @@ function parseEventsCsv(text) {
         notes: get("participantNotes"),
         touchedParticipants: parseCollection(get("participantsBlob"), ["id", "name", "handle", "note", "followUp"], {
           followUp: (value) => value === "1" || value === "true"
-        })
+        }),
+        attendees: parseCollection(get("attendeesBlob"), [
+          "id",
+          "guestId",
+          "name",
+          "firstName",
+          "lastName",
+          "email",
+          "phoneNumber",
+          "createdAt",
+          "approvalStatus",
+          "checkedInAt",
+          "utmSource",
+          "ticketName",
+          "amount",
+          "aiStage",
+          "tools",
+          "organization",
+          "position",
+          "businessCardUrl",
+          "businessCardNote",
+          "rawImportedAt"
+        ])
       },
       finance: {
         memo: get("financeMemo"),

@@ -251,6 +251,7 @@ export function createEmptyEvent({ withTemplateTasks = true, templateId = "custo
       checkedInCount: "",
       lastImportedAt: "",
       notes: "",
+      attendees: [],
       touchedParticipants: []
     },
     finance: {
@@ -285,6 +286,9 @@ export function normalizeEvent(event) {
     participantHub: {
       ...base.participantHub,
       ...(eventWithoutDrive.participantHub || {}),
+      attendees: Array.isArray(eventWithoutDrive.participantHub?.attendees)
+        ? eventWithoutDrive.participantHub.attendees
+        : [],
       touchedParticipants: Array.isArray(eventWithoutDrive.participantHub?.touchedParticipants)
         ? eventWithoutDrive.participantHub.touchedParticipants
         : []

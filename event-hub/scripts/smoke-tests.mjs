@@ -34,6 +34,16 @@ event.assetArchive.images.push({
 event.runbook.timetable.push({ id: "time_1", time: "19:00", title: "開場", owner: "受付", note: "" });
 event.runbook.roles.push({ id: "role_1", role: "受付", owner: "Ryu", note: "" });
 event.runbook.checklist.push({ id: "check_1", label: "音響確認", checked: false, note: "" });
+event.participantHub.attendees.push({
+  id: "attendee_1",
+  guestId: "guest_1",
+  name: "Test Guest",
+  email: "guest@example.com",
+  approvalStatus: "approved",
+  checkedInAt: "2099-05-20T10:00:00.000Z",
+  organization: "Test Org",
+  businessCardUrl: "https://example.com/card"
+});
 event.finance.lines.push({
   id: "line_1",
   type: "支出",
@@ -93,12 +103,14 @@ assert.equal(roundTrip[0].tasks[0].title, event.tasks[0].title);
 assert.equal(roundTrip[0].members[0].name, event.members[0].name);
 assert.equal(roundTrip[0].runbook.timetable[0].title, event.runbook.timetable[0].title);
 assert.equal(roundTrip[0].finance.lines[0].plannedAmount, event.finance.lines[0].plannedAmount);
+assert.equal(roundTrip[0].participantHub.attendees[0].email, event.participantHub.attendees[0].email);
 assert.equal(roundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
 
 const browserCsv = serializeBrowserCsv([event]);
 const browserRoundTrip = parseBrowserCsv(browserCsv);
 assert.equal(browserRoundTrip.length, 1);
 assert.equal(browserRoundTrip[0].members[0].role, event.members[0].role);
+assert.equal(browserRoundTrip[0].participantHub.attendees[0].businessCardUrl, event.participantHub.attendees[0].businessCardUrl);
 assert.equal(browserRoundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
 
 const originalVercelEnv = process.env.VERCEL;

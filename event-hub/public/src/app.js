@@ -75,7 +75,9 @@ const state = {
   financeFilter: "all",
   taskBoardFilter: "open",
   taskBoardAssigneeFilter: "all",
+  crmSearchQuery: "",
   revealCompletedForEventId: null,
+  pendingParticipantImportEventId: null,
   modal: null,
   mobileSidebarOpen: false,
   backendLabel: "Local JSON / Node",
@@ -343,6 +345,7 @@ function render() {
     </div>
     ${state.modal ? renderModal() : ""}
     <input id="events-import-input" type="file" accept="text/csv,.csv" hidden />
+    <input id="luma-participant-import-input" type="file" accept="text/csv,.csv" hidden />
   `;
 }
 
@@ -437,6 +440,7 @@ function renderWorkspaceNavItems() {
     { id: "events", label: "イベント", count: state.events.length },
     { id: "tasks", label: "タスク", count: buildGlobalTaskItems(state.events, { mode: "open", assignee: "all" }).length },
     { id: "members", label: "メンバー", count: buildGlobalMemberSummary(state.events).length },
+    { id: "crm", label: "CRM", count: buildCrmProfiles(state.events).length },
     { id: "finance", label: "収支", count: state.events.filter((event) => event.finance.lines.length > 0).length }
   ];
 
@@ -458,6 +462,7 @@ function renderMobileTopbar(selectedEvent) {
     events: "イベント",
     tasks: "タスク",
     members: "メンバー",
+    crm: "CRM",
     finance: "収支",
     detail: selectedEvent?.name || "イベント詳細"
   };
@@ -484,6 +489,7 @@ function renderMobileBottomNav() {
     { id: "events", label: "イベント" },
     { id: "tasks", label: "タスク" },
     { id: "members", label: "チーム" },
+    { id: "crm", label: "CRM" },
     { id: "finance", label: "収支" }
   ];
 
@@ -541,6 +547,8 @@ function renderWorkspace(selectedEvent) {
       return renderTasksWorkspace();
     case "members":
       return renderMembersWorkspace();
+    case "crm":
+      return renderCrmWorkspace();
     case "finance":
       return renderFinanceWorkspace();
     case "detail":
@@ -1580,12 +1588,222 @@ function renderMemberFinanceTable(items) {
   `;
 }
 
+function renderCrmWorkspace() {
+  const profiles = buildCrmProfiles(state.events);
+  const query = state.crmSearchQuery.trim().toLowerCase();
+  const filteredProfiles = query
+    ? profiles.filter((profile) =>
+        [profile.name, profile.email, profile.organization, profile.position, profile.aiStage, profile.tools]
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
+      )
+    : profiles;
+  const checkedInProfiles = profiles.filter((profile) => profile.checkedInCount > 0);
+  const repeatProfiles = profiles.filter((profile) => profile.registrationCount > 1);
+  const cardProfiles = profiles.filter((profile) => profile.businessCardUrl || profile.businessCardNote);
+
+  return `
+    <section class="workspace-section">
+      <div class="workspace-header">
+        <div>
+          <p class="eyebrow">CRM</p>
+          <h2>参加者CRM</h2>
+          <p class="subtle">Luma参加者CSVを各イベントに取り込み、個人ごとの登録数・参加数・名刺リンクを横断で見ます。</p>
+        </div>
+        <label class="search-field compact-search">
+          <span>検索</span>
+          <input type="search" data-action="search-crm" placeholder="名前・メール・所属・AIステージ" value="${escapeAttr(state.crmSearchQuery)}" />
+        </label>
+      </div>
+
+      <section class="dashboard-metrics">
+        ${renderDashboardMetric("登録者", profiles.length, "メール単位で集計")}
+        ${renderDashboardMetric("来場者", checkedInProfiles.length, "チェックインあり")}
+        ${renderDashboardMetric("複数回登録", repeatProfiles.length, "2イベント以上")}
+        ${renderDashboardMetric("名刺あり", cardProfiles.length, "URLまたはメモあり")}
+      </section>
+
+      <section class="panel workspace-panel">
+        <div class="panel-head">
+          <div>
+            <h3>イベント別インポート</h3>
+            <p class="subtle">Lumaの参加者CSVを該当イベントへ取り込みます。同じメールは更新、別イベント分は履歴として加算します。</p>
+          </div>
+        </div>
+        <div class="crm-import-grid">
+          ${state.events
+            .map((event) => {
+              const count = event.participantHub?.attendees?.length || 0;
+              const checkedIn = (event.participantHub?.attendees || []).filter((item) => item.checkedInAt).length;
+              return `
+                <article class="compact-row">
+                  <div>
+                    <strong>${escapeHtml(event.name || "名称未設定")}</strong>
+                    <p>${escapeHtml(formatDate(event.startsAt))} / 取込 ${count}名 / 来場 ${checkedIn}名</p>
+                  </div>
+                  <button class="button button-primary compact-button" data-action="trigger-luma-import" data-event-id="${event.id}">Luma CSV取込</button>
+                </article>
+              `;
+            })
+            .join("")}
+        </div>
+      </section>
+
+      <section class="panel workspace-panel">
+        <div class="panel-head compact">
+          <h3>個人一覧</h3>
+          <span class="count-pill">${filteredProfiles.length}/${profiles.length}名</span>
+        </div>
+        <div class="finance-table-wrap">
+          ${
+            filteredProfiles.length
+              ? `
+                <table class="finance-table crm-table">
+                  <thead>
+                    <tr>
+                      <th>名前</th>
+                      <th>所属</th>
+                      <th>登録</th>
+                      <th>来場</th>
+                      <th>AIステージ</th>
+                      <th>名刺</th>
+                      <th>最終接点</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${filteredProfiles.map((profile) => renderCrmProfileRow(profile)).join("")}
+                  </tbody>
+                </table>
+              `
+              : `<div class="empty-panel">該当する参加者はまだありません。</div>`
+          }
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderCrmProfileRow(profile) {
+  const lastEvent = profile.events[profile.events.length - 1];
+
+  return `
+    <tr>
+      <td>
+        <strong>${escapeHtml(profile.name || "名前未設定")}</strong>
+        <p class="subtle">${escapeHtml(profile.email || "メール未設定")}</p>
+      </td>
+      <td>
+        ${escapeHtml(profile.organization || "-")}
+        ${profile.position ? `<p class="subtle">${escapeHtml(profile.position)}</p>` : ""}
+      </td>
+      <td>${profile.registrationCount}</td>
+      <td>${profile.checkedInCount}</td>
+      <td>${escapeHtml(profile.aiStage || "-")}</td>
+      <td>
+        ${
+          profile.businessCardUrl
+            ? `<a href="${escapeAttr(profile.businessCardUrl)}" target="_blank" rel="noreferrer">名刺</a>`
+            : escapeHtml(profile.businessCardNote || "-")
+        }
+      </td>
+      <td>${lastEvent ? `${escapeHtml(lastEvent.eventName)}<p class="subtle">${escapeHtml(formatDateTime(lastEvent.createdAt))}</p>` : "-"}</td>
+      <td>
+        <button class="icon-button" data-action="edit-crm-card" data-crm-key="${escapeAttr(profile.key)}">名刺編集</button>
+      </td>
+    </tr>
+  `;
+}
+
 function renderTaskBoardFilterChip(value, label) {
   return `
     <button class="filter-chip ${state.taskBoardFilter === value ? "active" : ""}" data-action="set-task-board-filter" data-task-filter="${value}">
       ${escapeHtml(label)}
     </button>
   `;
+}
+
+function getCrmKeyFromAttendee(attendee) {
+  const email = String(attendee.email || "").trim().toLowerCase();
+
+  if (email) {
+    return `email:${email}`;
+  }
+
+  return `name:${normalizeMemberKey(attendee.name || `${attendee.firstName || ""} ${attendee.lastName || ""}`)}`;
+}
+
+function buildCrmProfiles(events) {
+  const grouped = new Map();
+
+  events.forEach((event) => {
+    (event.participantHub?.attendees || []).forEach((attendee) => {
+      const key = getCrmKeyFromAttendee(attendee);
+
+      if (!key || key === "name:") {
+        return;
+      }
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          key,
+          name: attendee.name || [attendee.lastName, attendee.firstName].filter(Boolean).join(" ") || "",
+          firstName: attendee.firstName || "",
+          lastName: attendee.lastName || "",
+          email: attendee.email || "",
+          phoneNumber: attendee.phoneNumber || "",
+          organization: attendee.organization || "",
+          position: attendee.position || "",
+          aiStage: attendee.aiStage || "",
+          tools: attendee.tools || "",
+          businessCardUrl: attendee.businessCardUrl || "",
+          businessCardNote: attendee.businessCardNote || "",
+          registrationCount: 0,
+          checkedInCount: 0,
+          approvedCount: 0,
+          declinedCount: 0,
+          invitedCount: 0,
+          events: []
+        });
+      }
+
+      const profile = grouped.get(key);
+      profile.name = profile.name || attendee.name || "";
+      profile.firstName = profile.firstName || attendee.firstName || "";
+      profile.lastName = profile.lastName || attendee.lastName || "";
+      profile.email = profile.email || attendee.email || "";
+      profile.phoneNumber = profile.phoneNumber || attendee.phoneNumber || "";
+      profile.organization = profile.organization || attendee.organization || "";
+      profile.position = profile.position || attendee.position || "";
+      profile.aiStage = profile.aiStage || attendee.aiStage || "";
+      profile.tools = profile.tools || attendee.tools || "";
+      profile.businessCardUrl = profile.businessCardUrl || attendee.businessCardUrl || "";
+      profile.businessCardNote = profile.businessCardNote || attendee.businessCardNote || "";
+      profile.registrationCount += 1;
+      profile.checkedInCount += attendee.checkedInAt ? 1 : 0;
+      profile.approvedCount += attendee.approvalStatus === "approved" ? 1 : 0;
+      profile.declinedCount += attendee.approvalStatus === "declined" ? 1 : 0;
+      profile.invitedCount += attendee.approvalStatus === "invited" ? 1 : 0;
+      profile.events.push({
+        eventId: event.id,
+        eventName: event.name || "名称未設定",
+        startsAt: event.startsAt,
+        guestId: attendee.guestId || "",
+        approvalStatus: attendee.approvalStatus || "",
+        checkedInAt: attendee.checkedInAt || "",
+        createdAt: attendee.createdAt || ""
+      });
+    });
+  });
+
+  return [...grouped.values()].sort(
+    (a, b) =>
+      b.checkedInCount - a.checkedInCount ||
+      b.registrationCount - a.registrationCount ||
+      (b.events[b.events.length - 1]?.createdAt || "").localeCompare(a.events[a.events.length - 1]?.createdAt || "") ||
+      a.name.localeCompare(b.name, "ja")
+  );
 }
 
 function buildGlobalTaskItems(events, { mode = "open", assignee = "all" } = {}) {
@@ -3405,9 +3623,12 @@ function renderResultTab(event) {
         <div class="panel-head">
           <div>
             <h3>参加者管理の受け皿</h3>
-            <p class="subtle">本格CRMにはせず、将来の参加者一覧取り込みに備える薄い構造です。Luma由来の一覧を後で差し込みやすくしてあります。</p>
+            <p class="subtle">Luma参加者CSVを取り込み、全体CRMへ参加履歴として反映します。</p>
           </div>
-          <button class="button button-primary" type="button" data-action="open-participant-modal" data-event-id="${event.id}">接点メモ追加</button>
+          <div class="inline-actions">
+            <button class="button button-secondary" type="button" data-action="trigger-luma-import" data-event-id="${event.id}">Luma CSV取込</button>
+            <button class="button button-primary" type="button" data-action="open-participant-modal" data-event-id="${event.id}">接点メモ追加</button>
+          </div>
         </div>
         <div class="section-grid two-column">
           ${renderField("取り込み状態", `<select name="participantImportStatus">${PARTICIPANT_IMPORT_STATUS_OPTIONS.map(
@@ -3421,6 +3642,34 @@ function renderResultTab(event) {
           ${renderField("取り込み元", `<input name="participantSource" value="${escapeAttr(participantHub.source)}" />`)}
         </div>
         ${renderField("参加者管理メモ", `<textarea name="participantNotes" rows="4">${escapeHtml(participantHub.notes)}</textarea>`)}
+        <div class="summary-row">
+          <div class="mini-stat"><span>CRM登録</span><strong>${(participantHub.attendees || []).length}</strong></div>
+          <div class="mini-stat"><span>チェックイン</span><strong>${(participantHub.attendees || []).filter((item) => item.checkedInAt).length}</strong></div>
+          <div class="mini-stat"><span>承認済み</span><strong>${(participantHub.attendees || []).filter((item) => item.approvalStatus === "approved").length}</strong></div>
+        </div>
+        <div class="participant-list">
+          ${
+            (participantHub.attendees || []).length
+              ? (participantHub.attendees || [])
+                  .slice(0, 12)
+                  .map(
+                    (item) => `
+                      <article class="compact-row">
+                        <div>
+                          <strong>${escapeHtml(item.name || "名前未設定")}</strong>
+                          <p>${escapeHtml([item.email, item.organization, item.position].filter(Boolean).join(" / ") || "属性未入力")}</p>
+                          <small>${escapeHtml([item.approvalStatus || "status未設定", item.checkedInAt ? "来場済み" : "未チェックイン", item.aiStage].filter(Boolean).join(" / "))}</small>
+                        </div>
+                        <div class="inline-actions">
+                          ${item.businessCardUrl ? `<a class="icon-button" href="${escapeAttr(item.businessCardUrl)}" target="_blank" rel="noreferrer">名刺</a>` : ""}
+                        </div>
+                      </article>
+                    `
+                  )
+                  .join("")
+              : `<div class="empty-panel small">Luma参加者CSVはまだ取り込まれていません。</div>`
+          }
+        </div>
         <div class="participant-list">
           ${
             participantHub.touchedParticipants.length
@@ -5070,6 +5319,20 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "trigger-luma-import") {
+    if (!eventId) {
+      return;
+    }
+    state.pendingParticipantImportEventId = eventId;
+    document.getElementById("luma-participant-import-input")?.click();
+    return;
+  }
+
+  if (action === "edit-crm-card") {
+    await editCrmBusinessCard(button.dataset.crmKey || "");
+    return;
+  }
+
   if (action === "open-mobile-sidebar") {
     state.mobileSidebarOpen = true;
     render();
@@ -5670,6 +5933,13 @@ document.addEventListener("change", async (event) => {
   if (target.id === "events-import-input") {
     await importEventsFromFile(target.files?.[0] || null);
     target.value = "";
+    return;
+  }
+
+  if (target.id === "luma-participant-import-input") {
+    await importLumaParticipantsFromFile(target.files?.[0] || null, state.pendingParticipantImportEventId);
+    state.pendingParticipantImportEventId = null;
+    target.value = "";
   }
 });
 
@@ -5678,6 +5948,11 @@ document.addEventListener("input", (event) => {
 
   if (target.matches('[data-action="search-events"]')) {
     state.searchQuery = target.value || "";
+    render();
+  }
+
+  if (target.matches('[data-action="search-crm"]')) {
+    state.crmSearchQuery = target.value || "";
     render();
   }
 });
@@ -5775,6 +6050,183 @@ async function importEventsFromFile(file) {
     state.error = "CSV読込に失敗しました。書き出したバックアップ形式を確認してください。";
     render();
   }
+}
+
+function parseCsvText(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      cell += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") {
+        index += 1;
+      }
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+
+  const headers = rows.shift()?.map((header) => header.replace(/^\uFEFF/, "").trim()) || [];
+  return rows
+    .filter((values) => values.some((value) => String(value || "").trim()))
+    .map((values) =>
+      headers.reduce((record, header, index) => {
+        record[header] = values[index] || "";
+        return record;
+      }, {})
+    );
+}
+
+function mapLumaAttendee(row) {
+  return {
+    id: row.guest_id || createId("attendee"),
+    guestId: row.guest_id || "",
+    name: row.name || [row.last_name, row.first_name].filter(Boolean).join(" ") || "",
+    firstName: row.first_name || "",
+    lastName: row.last_name || "",
+    email: String(row.email || "").trim().toLowerCase(),
+    phoneNumber: row.phone_number || "",
+    createdAt: row.created_at || "",
+    approvalStatus: row.approval_status || "",
+    checkedInAt: row.checked_in_at || "",
+    utmSource: row.utm_source || "",
+    ticketName: row.ticket_name || "",
+    amount: row.amount || "",
+    aiStage: row["あなたのAI活用ステージはどれに近いですか？"] || "",
+    tools: row["普段使っているAIツールを教えてください。"] || "",
+    organization: row["所属先（会社・団体・コミュニティなど）を教えてください。"] || "",
+    position: row["部署名/役職やポジションがあればご記入ください。"] || "",
+    businessCardUrl: "",
+    businessCardNote: "",
+    rawImportedAt: new Date().toISOString()
+  };
+}
+
+async function importLumaParticipantsFromFile(file, eventId) {
+  if (!file || !eventId) {
+    return;
+  }
+
+  try {
+    const rows = parseCsvText(await file.text());
+    const attendees = rows.map(mapLumaAttendee).filter((item) => item.email || item.guestId || item.name);
+
+    if (!attendees.length) {
+      state.error = "Luma参加者CSVから参加者を読み取れませんでした。";
+      render();
+      return;
+    }
+
+    await updateEvent(eventId, (eventItem) => {
+      const existing = eventItem.participantHub?.attendees || [];
+      const byKey = new Map(existing.map((attendee) => [getCrmKeyFromAttendee(attendee) || attendee.guestId || attendee.id, attendee]));
+
+      attendees.forEach((attendee) => {
+        const key = getCrmKeyFromAttendee(attendee) || attendee.guestId || attendee.id;
+        const previous = byKey.get(key) || {};
+        byKey.set(key, {
+          ...previous,
+          ...attendee,
+          businessCardUrl: previous.businessCardUrl || attendee.businessCardUrl || "",
+          businessCardNote: previous.businessCardNote || attendee.businessCardNote || ""
+        });
+      });
+
+      const nextAttendees = [...byKey.values()].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+      const checkedInCount = nextAttendees.filter((attendee) => attendee.checkedInAt).length;
+      const activeRegistrationCount = nextAttendees.filter((attendee) => attendee.approvalStatus !== "declined").length;
+
+      return {
+        ...eventItem,
+        lumaRegistrationCount: String(activeRegistrationCount),
+        participantHub: {
+          ...eventItem.participantHub,
+          source: "Luma",
+          importStatus: "取り込み済み",
+          checkedInCount: String(checkedInCount),
+          lastImportedAt: new Date().toISOString(),
+          attendees: nextAttendees
+        }
+      };
+    });
+
+    state.activeView = "crm";
+    state.info = `${attendees.length}名分のLuma参加者CSVを取り込みました。`;
+    render();
+  } catch (error) {
+    console.error(error);
+    state.error = "Luma参加者CSVの取り込みに失敗しました。CSV形式を確認してください。";
+    render();
+  }
+}
+
+async function editCrmBusinessCard(crmKey) {
+  if (!crmKey) {
+    return;
+  }
+
+  const profile = buildCrmProfiles(state.events).find((item) => item.key === crmKey);
+  const nextUrl = window.prompt("名刺URLを入力してください。空欄でURLを削除します。", profile?.businessCardUrl || "");
+
+  if (nextUrl === null) {
+    return;
+  }
+
+  const nextNote = window.prompt("名刺メモを入力してください。", profile?.businessCardNote || "");
+
+  if (nextNote === null) {
+    return;
+  }
+
+  state.events = state.events.map((eventItem) => ({
+    ...eventItem,
+    participantHub: {
+      ...eventItem.participantHub,
+      attendees: (eventItem.participantHub?.attendees || []).map((attendee) =>
+        getCrmKeyFromAttendee(attendee) === crmKey
+          ? {
+              ...attendee,
+              businessCardUrl: nextUrl.trim(),
+              businessCardNote: nextNote.trim()
+            }
+          : attendee
+      )
+    }
+  }));
+  render();
+  await syncEvents();
 }
 
 function applySession(session) {
