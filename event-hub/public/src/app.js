@@ -1599,17 +1599,17 @@ function renderCrmWorkspace() {
           .includes(query)
       )
     : profiles;
-  const checkedInProfiles = profiles.filter((profile) => profile.checkedInCount > 0);
-  const repeatProfiles = profiles.filter((profile) => profile.registrationCount > 1);
+  const repeatProfiles = profiles.filter((profile) => profile.visitCount > 1);
   const cardProfiles = profiles.filter((profile) => profile.businessCardUrl || profile.businessCardNote);
+  const totalVisits = profiles.reduce((sum, profile) => sum + profile.visitCount, 0);
 
   return `
     <section class="workspace-section">
       <div class="workspace-header">
         <div>
           <p class="eyebrow">CRM</p>
-          <h2>参加者CRM</h2>
-          <p class="subtle">Luma参加者CSVを各イベントに取り込み、個人ごとの登録数・参加数・名刺リンクを横断で見ます。</p>
+          <h2>顧客CRM</h2>
+          <p class="subtle">Luma参加者CSVからチェックイン済みの人だけを取り込み、顧客ごとの来場回数と名刺リンクを横断で見ます。</p>
         </div>
         <label class="search-field compact-search">
           <span>検索</span>
@@ -1618,9 +1618,9 @@ function renderCrmWorkspace() {
       </div>
 
       <section class="dashboard-metrics">
-        ${renderDashboardMetric("登録者", profiles.length, "メール単位で集計")}
-        ${renderDashboardMetric("来場者", checkedInProfiles.length, "チェックインあり")}
-        ${renderDashboardMetric("複数回登録", repeatProfiles.length, "2イベント以上")}
+        ${renderDashboardMetric("顧客数", profiles.length, "メール単位で集約")}
+        ${renderDashboardMetric("来場数", totalVisits, "チェックインのみ")}
+        ${renderDashboardMetric("複数回来場", repeatProfiles.length, "2イベント以上")}
         ${renderDashboardMetric("名刺あり", cardProfiles.length, "URLまたはメモあり")}
       </section>
 
@@ -1628,7 +1628,7 @@ function renderCrmWorkspace() {
         <div class="panel-head">
           <div>
             <h3>イベント別インポート</h3>
-            <p class="subtle">Lumaの参加者CSVを該当イベントへ取り込みます。同じメールは更新、別イベント分は履歴として加算します。</p>
+            <p class="subtle">Lumaの参加者CSVからチェックイン済みの人だけを該当イベントへ取り込みます。同じメールは顧客単位でまとまります。</p>
           </div>
         </div>
         <div class="crm-import-grid">
@@ -1640,7 +1640,7 @@ function renderCrmWorkspace() {
                 <article class="compact-row">
                   <div>
                     <strong>${escapeHtml(event.name || "名称未設定")}</strong>
-                    <p>${escapeHtml(formatDate(event.startsAt))} / 取込 ${count}名 / 来場 ${checkedIn}名</p>
+                    <p>${escapeHtml(formatDate(event.startsAt))} / 顧客 ${count}名 / 来場 ${checkedIn}名</p>
                   </div>
                   <button class="button button-primary compact-button" data-action="trigger-luma-import" data-event-id="${event.id}">Luma CSV取込</button>
                 </article>
@@ -1653,7 +1653,7 @@ function renderCrmWorkspace() {
       <section class="panel workspace-panel">
         <div class="panel-head compact">
           <h3>個人一覧</h3>
-          <span class="count-pill">${filteredProfiles.length}/${profiles.length}名</span>
+          <span class="count-pill">${filteredProfiles.length}/${profiles.length}顧客</span>
         </div>
         <div class="finance-table-wrap">
           ${
@@ -1664,8 +1664,7 @@ function renderCrmWorkspace() {
                     <tr>
                       <th>名前</th>
                       <th>所属</th>
-                      <th>登録</th>
-                      <th>来場</th>
+                      <th>来場回数</th>
                       <th>AIステージ</th>
                       <th>名刺</th>
                       <th>最終接点</th>
@@ -1677,7 +1676,7 @@ function renderCrmWorkspace() {
                   </tbody>
                 </table>
               `
-              : `<div class="empty-panel">該当する参加者はまだありません。</div>`
+              : `<div class="empty-panel">該当する顧客はまだありません。</div>`
           }
         </div>
       </section>
@@ -1698,8 +1697,7 @@ function renderCrmProfileRow(profile) {
         ${escapeHtml(profile.organization || "-")}
         ${profile.position ? `<p class="subtle">${escapeHtml(profile.position)}</p>` : ""}
       </td>
-      <td>${profile.registrationCount}</td>
-      <td>${profile.checkedInCount}</td>
+      <td>${profile.visitCount}</td>
       <td>${escapeHtml(profile.aiStage || "-")}</td>
       <td>
         ${
@@ -1739,6 +1737,10 @@ function buildCrmProfiles(events) {
 
   events.forEach((event) => {
     (event.participantHub?.attendees || []).forEach((attendee) => {
+      if (!attendee.checkedInAt) {
+        return;
+      }
+
       const key = getCrmKeyFromAttendee(attendee);
 
       if (!key || key === "name:") {
@@ -1759,8 +1761,7 @@ function buildCrmProfiles(events) {
           tools: attendee.tools || "",
           businessCardUrl: attendee.businessCardUrl || "",
           businessCardNote: attendee.businessCardNote || "",
-          registrationCount: 0,
-          checkedInCount: 0,
+          visitCount: 0,
           approvedCount: 0,
           declinedCount: 0,
           invitedCount: 0,
@@ -1780,8 +1781,7 @@ function buildCrmProfiles(events) {
       profile.tools = profile.tools || attendee.tools || "";
       profile.businessCardUrl = profile.businessCardUrl || attendee.businessCardUrl || "";
       profile.businessCardNote = profile.businessCardNote || attendee.businessCardNote || "";
-      profile.registrationCount += 1;
-      profile.checkedInCount += attendee.checkedInAt ? 1 : 0;
+      profile.visitCount += 1;
       profile.approvedCount += attendee.approvalStatus === "approved" ? 1 : 0;
       profile.declinedCount += attendee.approvalStatus === "declined" ? 1 : 0;
       profile.invitedCount += attendee.approvalStatus === "invited" ? 1 : 0;
@@ -1799,8 +1799,7 @@ function buildCrmProfiles(events) {
 
   return [...grouped.values()].sort(
     (a, b) =>
-      b.checkedInCount - a.checkedInCount ||
-      b.registrationCount - a.registrationCount ||
+      b.visitCount - a.visitCount ||
       (b.events[b.events.length - 1]?.createdAt || "").localeCompare(a.events[a.events.length - 1]?.createdAt || "") ||
       a.name.localeCompare(b.name, "ja")
   );
@@ -3623,7 +3622,7 @@ function renderResultTab(event) {
         <div class="panel-head">
           <div>
             <h3>参加者管理の受け皿</h3>
-            <p class="subtle">Luma参加者CSVを取り込み、全体CRMへ参加履歴として反映します。</p>
+            <p class="subtle">Luma参加者CSVからチェックイン済みの人だけを取り込み、全体CRMへ来場履歴として反映します。</p>
           </div>
           <div class="inline-actions">
             <button class="button button-secondary" type="button" data-action="trigger-luma-import" data-event-id="${event.id}">Luma CSV取込</button>
@@ -3643,14 +3642,15 @@ function renderResultTab(event) {
         </div>
         ${renderField("参加者管理メモ", `<textarea name="participantNotes" rows="4">${escapeHtml(participantHub.notes)}</textarea>`)}
         <div class="summary-row">
-          <div class="mini-stat"><span>CRM登録</span><strong>${(participantHub.attendees || []).length}</strong></div>
+          <div class="mini-stat"><span>顧客</span><strong>${(participantHub.attendees || []).filter((item) => item.checkedInAt).length}</strong></div>
           <div class="mini-stat"><span>チェックイン</span><strong>${(participantHub.attendees || []).filter((item) => item.checkedInAt).length}</strong></div>
           <div class="mini-stat"><span>承認済み</span><strong>${(participantHub.attendees || []).filter((item) => item.approvalStatus === "approved").length}</strong></div>
         </div>
         <div class="participant-list">
           ${
-            (participantHub.attendees || []).length
+            (participantHub.attendees || []).filter((item) => item.checkedInAt).length
               ? (participantHub.attendees || [])
+                  .filter((item) => item.checkedInAt)
                   .slice(0, 12)
                   .map(
                     (item) => `
@@ -3658,7 +3658,7 @@ function renderResultTab(event) {
                         <div>
                           <strong>${escapeHtml(item.name || "名前未設定")}</strong>
                           <p>${escapeHtml([item.email, item.organization, item.position].filter(Boolean).join(" / ") || "属性未入力")}</p>
-                          <small>${escapeHtml([item.approvalStatus || "status未設定", item.checkedInAt ? "来場済み" : "未チェックイン", item.aiStage].filter(Boolean).join(" / "))}</small>
+                          <small>${escapeHtml([item.approvalStatus || "status未設定", "来場済み", item.aiStage].filter(Boolean).join(" / "))}</small>
                         </div>
                         <div class="inline-actions">
                           ${item.businessCardUrl ? `<a class="icon-button" href="${escapeAttr(item.businessCardUrl)}" target="_blank" rel="noreferrer">名刺</a>` : ""}
@@ -3667,7 +3667,7 @@ function renderResultTab(event) {
                     `
                   )
                   .join("")
-              : `<div class="empty-panel small">Luma参加者CSVはまだ取り込まれていません。</div>`
+              : `<div class="empty-panel small">チェックイン済みのLuma参加者はまだ取り込まれていません。</div>`
           }
         </div>
         <div class="participant-list">
@@ -6141,17 +6141,24 @@ async function importLumaParticipantsFromFile(file, eventId) {
 
   try {
     const rows = parseCsvText(await file.text());
-    const attendees = rows.map(mapLumaAttendee).filter((item) => item.email || item.guestId || item.name);
+    const importedAt = new Date().toISOString();
+    const attendees = rows
+      .map(mapLumaAttendee)
+      .filter((item) => item.checkedInAt && (item.email || item.guestId || item.name));
 
     if (!attendees.length) {
-      state.error = "Luma参加者CSVから参加者を読み取れませんでした。";
+      state.error = "Luma参加者CSVからチェックイン済みの参加者を読み取れませんでした。";
       render();
       return;
     }
 
     await updateEvent(eventId, (eventItem) => {
       const existing = eventItem.participantHub?.attendees || [];
-      const byKey = new Map(existing.map((attendee) => [getCrmKeyFromAttendee(attendee) || attendee.guestId || attendee.id, attendee]));
+      const byKey = new Map(
+        existing
+          .filter((attendee) => attendee.checkedInAt)
+          .map((attendee) => [getCrmKeyFromAttendee(attendee) || attendee.guestId || attendee.id, attendee])
+      );
 
       attendees.forEach((attendee) => {
         const key = getCrmKeyFromAttendee(attendee) || attendee.guestId || attendee.id;
@@ -6166,24 +6173,22 @@ async function importLumaParticipantsFromFile(file, eventId) {
 
       const nextAttendees = [...byKey.values()].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
       const checkedInCount = nextAttendees.filter((attendee) => attendee.checkedInAt).length;
-      const activeRegistrationCount = nextAttendees.filter((attendee) => attendee.approvalStatus !== "declined").length;
 
       return {
         ...eventItem,
-        lumaRegistrationCount: String(activeRegistrationCount),
         participantHub: {
           ...eventItem.participantHub,
           source: "Luma",
           importStatus: "取り込み済み",
           checkedInCount: String(checkedInCount),
-          lastImportedAt: new Date().toISOString(),
+          lastImportedAt: importedAt,
           attendees: nextAttendees
         }
       };
     });
 
     state.activeView = "crm";
-    state.info = `${attendees.length}名分のLuma参加者CSVを取り込みました。`;
+    state.info = `${attendees.length}名分のチェックイン済みLuma参加者を取り込みました。`;
     render();
   } catch (error) {
     console.error(error);
