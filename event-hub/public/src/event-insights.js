@@ -94,15 +94,6 @@ export function buildFinanceGaps(event) {
   const lines = event.finance.lines || [];
   const issues = [];
   const warnings = [];
-  const missingActualLines = lines.filter(
-    (line) => Number(line.plannedAmount || 0) > 0 && Number(line.actualAmount || 0) === 0
-  );
-
-  if (event.status === "開催済み" && missingActualLines.length) {
-    issues.push(`開催済みなのに実績未入力の明細が ${missingActualLines.length} 件あります。`);
-  } else if (missingActualLines.length) {
-    warnings.push(`実績未入力の明細が ${missingActualLines.length} 件あります。`);
-  }
 
   if (!lines.length && event.status !== "企画中") {
     warnings.push("収支明細がまだありません。主要な収入・支出だけでも先に入れておくと追いやすいです。");
@@ -119,7 +110,7 @@ export function buildFinanceGaps(event) {
   return {
     issues,
     warnings,
-    missingActualCount: missingActualLines.length
+    missingActualCount: 0
   };
 }
 

@@ -79,8 +79,7 @@ export function validateEntity(kind, payload) {
       throw new Error("収支項目名は必須です。");
     }
 
-    parseNonNegativeNumber(payload.plannedAmount, "予定金額");
-    parseNonNegativeNumber(payload.actualAmount, "実績金額");
+    parseNonNegativeNumber(payload.actualAmount, "金額");
   }
 
   if (kind === "participant" && !String(payload.name || "").trim()) {

@@ -1975,7 +1975,7 @@ function buildMemberFinanceSummary(events) {
 
   events.forEach((event) => {
     event.finance.lines.forEach((line) => {
-      const amount = Number(line.actualAmount || line.plannedAmount || 0);
+      const amount = Number(line.actualAmount || 0);
 
       if (line.type === "支出") {
         const payerNames = getRegisteredNames(line.advanceBy);
@@ -2182,7 +2182,7 @@ function buildDashboardSnapshot(events) {
       acc.totalProfit += finance.profitActual;
       acc.totalUnsettledLines += getUnsettledLines(event.finance.lines).length;
       acc.totalUnsettledAmount += getUnsettledLines(event.finance.lines).reduce(
-        (sum, line) => sum + Number(line.actualAmount || line.plannedAmount || 0),
+        (sum, line) => sum + Number(line.actualAmount || 0),
         0
       );
       return acc;
@@ -2330,7 +2330,7 @@ function buildPortfolioSummary(events) {
       const registrationCount = Number(event.lumaRegistrationCount || 0);
       const unsettledLines = getUnsettledLines(event.finance.lines);
       const unsettledAmount = unsettledLines.reduce(
-        (sum, line) => sum + Number(line.actualAmount || line.plannedAmount || 0),
+        (sum, line) => sum + Number(line.actualAmount || 0),
         0
       );
 
@@ -2603,7 +2603,7 @@ function buildOperationalSummary(event) {
   });
 
   unsettledLines.slice(0, 2).forEach((line) => {
-    focusItems.push(`未精算: ${line.name} ${formatCurrency(line.actualAmount || line.plannedAmount)}`);
+    focusItems.push(`未精算: ${line.name} ${formatCurrency(line.actualAmount || 0)}`);
   });
 
   if (!event.lumaUrl) {
@@ -3494,7 +3494,6 @@ function renderFinanceTab(event) {
   const finance = calculateFinance(event);
   const unsettledLines = getUnsettledLines(event.finance.lines);
   const settlementSummary = buildSettlementSummary(unsettledLines);
-  const variance = buildFinanceVariance(event.finance.lines);
   const categoryBreakdown = buildFinanceCategoryBreakdown(event.finance.lines);
   const financeGaps = buildFinanceGaps(event);
   const filteredLines = getFilteredFinanceLines(event.finance.lines, state.financeFilter);
@@ -3516,40 +3515,21 @@ function renderFinanceTab(event) {
 
       <div class="stats-grid">
         <div class="stat-card wide">
-          <span>売上予定</span>
-          <strong>${formatCurrency(finance.revenuePlan)}</strong>
-        </div>
-        <div class="stat-card wide">
-          <span>売上実績</span>
+          <span>売上</span>
           <strong>${formatCurrency(finance.revenueActual)}</strong>
         </div>
         <div class="stat-card wide">
-          <span>費用予定</span>
-          <strong>${formatCurrency(finance.expensePlan)}</strong>
-        </div>
-        <div class="stat-card wide">
-          <span>費用実績</span>
+          <span>支出</span>
           <strong>${formatCurrency(finance.expenseActual)}</strong>
         </div>
         <div class="stat-card wide emphasis">
           <span>利益</span>
           <strong>${formatCurrency(finance.profitActual)}</strong>
-          <small>予定: ${formatCurrency(finance.profitPlan)}</small>
         </div>
         <div class="stat-card wide">
           <span>未精算</span>
           <strong>${unsettledLines.length}件</strong>
           <small>立替の可視化</small>
-        </div>
-        <div class="stat-card wide ${variance.revenueVariance >= 0 ? "" : "warning-card"}">
-          <span>売上差額</span>
-          <strong>${formatSignedCurrency(variance.revenueVariance)}</strong>
-          <small>実績 - 予定</small>
-        </div>
-        <div class="stat-card wide ${variance.expenseVariance <= 0 ? "" : "warning-card"}">
-          <span>費用差額</span>
-          <strong>${formatSignedCurrency(variance.expenseVariance)}</strong>
-          <small>実績 - 予定</small>
         </div>
       </div>
 
@@ -3570,7 +3550,7 @@ function renderFinanceTab(event) {
                           <strong>${escapeHtml(line.name)}</strong>
                           <p>${escapeHtml(line.advanceBy || "立替者未設定")} / ${escapeHtml(line.counterparty || "相手先未設定")}</p>
                         </div>
-                        <div><strong>${formatCurrency(line.actualAmount || line.plannedAmount)}</strong></div>
+                        <div><strong>${formatCurrency(line.actualAmount || 0)}</strong></div>
                       </div>
                     `
                   )
@@ -3635,9 +3615,7 @@ function renderFinanceTab(event) {
                     <tr>
                       <th>種別</th>
                       <th>カテゴリ</th>
-                      <th>予定</th>
-                      <th>実績</th>
-                      <th>差額</th>
+                      <th>金額</th>
                       <th>件数</th>
                     </tr>
                   </thead>
@@ -3648,9 +3626,7 @@ function renderFinanceTab(event) {
                           <tr>
                             <td>${escapeHtml(item.type)}</td>
                             <td>${escapeHtml(item.category)}</td>
-                            <td>${formatCurrency(item.plannedAmount)}</td>
                             <td>${formatCurrency(item.actualAmount)}</td>
-                            <td><span class="variance-pill ${item.variance === 0 ? "" : item.variance > 0 ? "negative" : "positive"}">${formatSignedCurrency(item.variance)}</span></td>
                             <td>${item.count}件</td>
                           </tr>
                         `
@@ -3689,7 +3665,6 @@ function renderFinanceTab(event) {
           <div class="review-card neutral">
             <h4>補足</h4>
             <ul>
-              <li>実績未入力 ${financeGaps.missingActualCount}件</li>
               <li>未精算 ${unsettledLines.length}件</li>
               <li>明細 ${event.finance.lines.length}件</li>
             </ul>
@@ -3722,12 +3697,10 @@ function renderFinanceTab(event) {
           ${renderFinanceFilterButton("unsettled", "未精算")}
           ${renderFinanceFilterButton("advanced", "立替あり")}
           ${renderFinanceFilterButton("received", "受取あり")}
-          ${renderFinanceFilterButton("actualMissing", "実績未入力")}
         </div>
         <div class="summary-row">
           <div class="mini-stat"><span>表示件数</span><strong>${visibleSummary.count}</strong></div>
-          <div class="mini-stat"><span>予定合計</span><strong>${formatCurrency(visibleSummary.plannedAmount)}</strong></div>
-          <div class="mini-stat"><span>実績合計</span><strong>${formatCurrency(visibleSummary.actualAmount)}</strong></div>
+          <div class="mini-stat"><span>金額合計</span><strong>${formatCurrency(visibleSummary.actualAmount)}</strong></div>
         </div>
         <div class="finance-table-wrap">
           ${
@@ -3739,9 +3712,7 @@ function renderFinanceTab(event) {
                       <th>種別</th>
                       <th>カテゴリ</th>
                       <th>項目名</th>
-                      <th>予定</th>
-                      <th>実績</th>
-                      <th>差額</th>
+                      <th>金額</th>
                       <th>受取先 / 支払先</th>
                       <th>受取</th>
                       <th>立替</th>
@@ -3764,16 +3735,12 @@ function renderFinanceTab(event) {
 }
 
 function renderFinanceRow(eventId, line) {
-  const variance = Number(line.actualAmount || 0) - Number(line.plannedAmount || 0);
-
   return `
     <tr class="${line.settlementStatus === "未精算" ? "finance-row-warning" : ""}">
       <td>${escapeHtml(line.type)}</td>
       <td>${escapeHtml(line.category)}</td>
       <td>${escapeHtml(line.name)}</td>
-      <td>${formatCurrency(line.plannedAmount)}</td>
       <td>${formatCurrency(line.actualAmount)}</td>
-      <td><span class="variance-pill ${variance === 0 ? "" : variance > 0 ? "negative" : "positive"}">${formatSignedCurrency(variance)}</span></td>
       <td>${escapeHtml(line.counterparty || "未設定")}</td>
       <td>${escapeHtml(line.receivedBy || "-")}</td>
       <td>${escapeHtml(line.advanceBy || "-")}</td>
@@ -3795,7 +3762,7 @@ function renderFinanceRow(eventId, line) {
 function buildSettlementSummary(unsettledLines) {
   const grouped = unsettledLines.reduce((acc, line) => {
     const label = line.advanceBy || "立替者未設定";
-    const amount = Number(line.actualAmount || line.plannedAmount || 0);
+    const amount = Number(line.actualAmount || 0);
 
     if (!acc[label]) {
       acc[label] = { label, total: 0, count: 0 };
@@ -3809,23 +3776,6 @@ function buildSettlementSummary(unsettledLines) {
   return Object.values(grouped).sort((a, b) => b.total - a.total);
 }
 
-function buildFinanceVariance(lines) {
-  return lines.reduce(
-    (acc, line) => {
-      const variance = Number(line.actualAmount || 0) - Number(line.plannedAmount || 0);
-
-      if (line.type === "収入") {
-        acc.revenueVariance += variance;
-      } else {
-        acc.expenseVariance += variance;
-      }
-
-      return acc;
-    },
-    { revenueVariance: 0, expenseVariance: 0 }
-  );
-}
-
 function buildFinanceCategoryBreakdown(lines) {
   const grouped = lines.reduce((acc, line) => {
     const key = `${line.type}:${line.category}`;
@@ -3834,17 +3784,13 @@ function buildFinanceCategoryBreakdown(lines) {
       acc[key] = {
         type: line.type,
         category: line.category || "未分類",
-        plannedAmount: 0,
         actualAmount: 0,
-        variance: 0,
         count: 0
       };
     }
 
-    acc[key].plannedAmount += Number(line.plannedAmount || 0);
     acc[key].actualAmount += Number(line.actualAmount || 0);
     acc[key].count += 1;
-    acc[key].variance = acc[key].actualAmount - acc[key].plannedAmount;
     return acc;
   }, {});
 
@@ -3869,13 +3815,11 @@ function buildVisibleFinanceSummary(lines) {
   return lines.reduce(
     (acc, line) => {
       acc.count += 1;
-      acc.plannedAmount += Number(line.plannedAmount || 0);
       acc.actualAmount += Number(line.actualAmount || 0);
       return acc;
     },
     {
       count: 0,
-      plannedAmount: 0,
       actualAmount: 0
     }
   );
@@ -3972,9 +3916,7 @@ function exportFinanceCsv(event) {
     "種別",
     "カテゴリ",
     "項目名",
-    "予定金額",
-    "実績金額",
-    "差額",
+    "金額",
     "受取先/支払先",
     "受取メンバー",
     "立替者",
@@ -3985,9 +3927,7 @@ function exportFinanceCsv(event) {
     line.type,
     line.category,
     line.name,
-    line.plannedAmount,
     line.actualAmount,
-    Number(line.actualAmount || 0) - Number(line.plannedAmount || 0),
     line.counterparty || "",
     line.receivedBy || "",
     line.advanceBy || "",
@@ -4321,8 +4261,7 @@ function renderModalBody(modal, event) {
           )}
           ${renderField("項目名", `<input name="name" value="${escapeAttr(item?.name || "")}" required />`)}
           ${renderField("受取先 / 支払先", `<input name="counterparty" value="${escapeAttr(item?.counterparty || "")}" />`)}
-          ${renderField("予定金額", `<input type="number" name="plannedAmount" value="${escapeAttr(item?.plannedAmount || "")}" min="0" step="1" />`)}
-          ${renderField("実績金額", `<input type="number" name="actualAmount" value="${escapeAttr(item?.actualAmount || "")}" min="0" step="1" />`)}
+          ${renderField("金額", `<input type="number" name="actualAmount" value="${escapeAttr(item?.actualAmount || "")}" min="0" step="1" />`)}
           ${renderField("受取メンバー", renderMemberPickerInput("receivedBy", item?.receivedBy || "", suggestedMembers, "メンバー名を選択"))}
           ${renderField("立替者", renderMemberPickerInput("advanceBy", item?.advanceBy || "", suggestedMembers, "メンバー名を選択"))}
           ${renderField(
@@ -4826,7 +4765,7 @@ async function handleEntitySubmit(form, kind) {
         type: String(formData.get("type") || "支出"),
         category: String(formData.get("category") || ""),
         name: String(formData.get("name") || ""),
-        plannedAmount: parseFinanceAmount(formData.get("plannedAmount") || 0),
+        plannedAmount: 0,
         actualAmount: parseFinanceAmount(formData.get("actualAmount") || 0),
         counterparty: String(formData.get("counterparty") || ""),
         receivedBy: String(formData.get("receivedBy") || ""),

@@ -127,8 +127,6 @@ export function getFilteredFinanceLines(lines, financeFilter) {
         return Boolean(line.advanceBy);
       case "received":
         return Boolean(line.receivedBy);
-      case "actualMissing":
-        return Number(line.plannedAmount || 0) > 0 && Number(line.actualAmount || 0) === 0;
       case "all":
       default:
         return true;
