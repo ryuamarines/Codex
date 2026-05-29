@@ -1991,7 +1991,6 @@ function buildMemberFinanceSummary(events) {
           if ((line.settlementStatus || "未精算") === "未精算") {
             summary.unsettledTotal += payerShare;
             summary.unsettledCount += 1;
-            summary.cashPosition -= payerShare;
           }
         });
       }
@@ -2006,7 +2005,6 @@ function buildMemberFinanceSummary(events) {
             return;
           }
           summary.receivedTotal += receiverShare;
-          summary.cashPosition += receiverShare;
           summary.receiveLineCount += 1;
           summary.eventIds.add(event.id);
         });
@@ -2021,7 +2019,6 @@ function buildMemberFinanceSummary(events) {
             return;
           }
           summary.receivedTotal += receiverShare;
-          summary.cashPosition += receiverShare;
           summary.receiveLineCount += 1;
           summary.eventIds.add(event.id);
         });
@@ -2032,6 +2029,7 @@ function buildMemberFinanceSummary(events) {
   return [...grouped.values()]
     .map((item) => ({
       ...item,
+      cashPosition: item.receivedTotal - item.advancedTotal,
       eventCount: item.eventIds.size
     }))
     .sort(
