@@ -1233,6 +1233,7 @@ function renderMobileEventDetailWorkspace(event) {
       <details id="mobile-detail-finance" class="mobile-detail-section">
         <summary>収支</summary>
         <div class="mobile-detail-section-body">
+          <button class="button button-primary button-block-mobile" data-action="open-finance-modal" data-event-id="${event.id}">収支を追加</button>
           <div class="finance-summary-stack">
             <div class="finance-row"><span>売上</span><strong>${formatCurrency(finance.revenueActual)}</strong></div>
             <div class="finance-row"><span>支出</span><strong>${formatCurrency(finance.expenseActual)}</strong></div>
@@ -2071,6 +2072,8 @@ function renderFinanceWorkspace() {
     (item) => item.advancedTotal > 0 || item.unsettledTotal > 0 || item.receivedTotal > 0
   );
   const orderedEvents = [...state.events].sort((a, b) => toTimestamp(a.startsAt) - toTimestamp(b.startsAt));
+  const selectedFinanceEvent =
+    state.events.find((event) => event.id === state.selectedEventId) || orderedEvents.find((event) => event.status !== "開催済み") || orderedEvents[0];
 
   return `
     <section class="workspace-section">
@@ -2081,6 +2084,20 @@ function renderFinanceWorkspace() {
           <p class="subtle">イベント別の収支を横断して、利益の偏りや未精算を見つけやすくします。</p>
         </div>
       </div>
+      ${
+        selectedFinanceEvent
+          ? `
+            <div class="finance-action-panel finance-action-panel-global">
+              <div>
+                <p class="eyebrow">Quick Entry</p>
+                <h3>収支を追加</h3>
+                <p class="subtle">${escapeHtml(selectedFinanceEvent.name || "選択中イベント")} に明細を追加します。別イベントは下の一覧から追加できます。</p>
+              </div>
+              <button class="button button-primary" data-action="open-finance-modal" data-event-id="${selectedFinanceEvent.id}">収支明細を追加</button>
+            </div>
+          `
+          : ""
+      }
       <section class="dashboard-metrics">
         ${renderDashboardMetric("売上合計", formatCurrency(summary.totalRevenue), "実績ベース")}
         ${renderDashboardMetric("支出合計", formatCurrency(summary.totalExpense), "実績ベース")}
@@ -2122,17 +2139,26 @@ function renderFinanceWorkspace() {
               .map((event) => {
                 const finance = calculateFinance(event);
                 return `
-                  <button class="finance-event-row" data-action="open-event-detail" data-event-id="${event.id}">
-                    <div>
-                      <strong>${escapeHtml(event.name || "名称未設定")}</strong>
-                      <p>${escapeHtml(formatDate(event.startsAt))}</p>
+                  <div class="finance-event-row">
+                    <button class="finance-event-hit" data-action="open-event-detail" data-event-id="${event.id}">
+                      <span class="sr-only">イベント詳細を開く</span>
+                    </button>
+                    <div class="finance-event-main">
+                      <div>
+                        <strong>${escapeHtml(event.name || "名称未設定")}</strong>
+                        <p>${escapeHtml(formatDate(event.startsAt))}</p>
+                      </div>
+                      <div class="finance-event-meta">
+                        <span>売上 ${formatCurrency(finance.revenueActual)}</span>
+                        <span>支出 ${formatCurrency(finance.expenseActual)}</span>
+                        <strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong>
+                      </div>
                     </div>
-                    <div class="finance-event-meta">
-                      <span>売上 ${formatCurrency(finance.revenueActual)}</span>
-                      <span>支出 ${formatCurrency(finance.expenseActual)}</span>
-                      <strong class="${finance.profitActual >= 0 ? "text-positive" : "text-negative"}">${formatSignedCurrency(finance.profitActual)}</strong>
+                    <div class="finance-event-actions">
+                      <button class="button button-primary compact-button" data-action="open-finance-modal" data-event-id="${event.id}">追加</button>
+                      <button class="button button-ghost compact-button" data-action="open-event-detail" data-event-id="${event.id}">詳細</button>
                     </div>
-                  </button>
+                  </div>
                 `;
               })
               .join("")}
@@ -3479,6 +3505,15 @@ function renderFinanceTab(event) {
 
   return `
     <section class="section-stack">
+      <div class="finance-action-panel">
+        <div>
+          <p class="eyebrow">Finance Entry</p>
+          <h3>収支を追加</h3>
+          <p class="subtle">売上、支出、受取、立替をここからすぐ記録できます。</p>
+        </div>
+        <button class="button button-primary" data-action="open-finance-modal" data-event-id="${event.id}">収支明細を追加</button>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card wide">
           <span>売上予定</span>

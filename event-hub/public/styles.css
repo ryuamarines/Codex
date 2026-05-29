@@ -1693,18 +1693,77 @@ textarea {
   padding: 8px 12px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.finance-action-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
 .workspace-split > .panel,
 .workspace-split > .workspace-panel {
   flex: 1 1 360px;
 }
 
 .finance-event-row {
+  position: relative;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   padding: 14px 0;
   border: 0;
   background: transparent;
   border-bottom: 1px solid var(--line);
   text-align: left;
+}
+
+.finance-event-hit {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.finance-event-main,
+.finance-event-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.finance-event-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.finance-event-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .finance-event-meta {
@@ -2015,6 +2074,21 @@ textarea {
   .global-task-row,
   .task-row {
     align-items: flex-start;
+  }
+
+  .finance-action-panel,
+  .finance-event-row,
+  .finance-event-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .finance-event-meta {
+    justify-items: start;
+  }
+
+  .finance-event-actions .button {
+    flex: 1 1 120px;
   }
 
   .member-summary-card,
