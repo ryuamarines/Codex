@@ -440,8 +440,8 @@ function renderWorkspaceNavItems() {
     { id: "events", label: "イベント", count: state.events.length },
     { id: "tasks", label: "タスク", count: buildGlobalTaskItems(state.events, { mode: "open", assignee: "all" }).length },
     { id: "members", label: "メンバー", count: buildGlobalMemberSummary(state.events).length },
-    { id: "crm", label: "CRM", count: buildCrmProfiles(state.events).length },
-    { id: "finance", label: "収支", count: state.events.filter((event) => event.finance.lines.length > 0).length }
+    { id: "finance", label: "収支", count: state.events.filter((event) => event.finance.lines.length > 0).length },
+    { id: "crm", label: "CRM", count: buildCrmProfiles(state.events).length }
   ];
 
   return items
@@ -489,8 +489,8 @@ function renderMobileBottomNav() {
     { id: "events", label: "イベント" },
     { id: "tasks", label: "タスク" },
     { id: "members", label: "チーム" },
-    { id: "crm", label: "CRM" },
-    { id: "finance", label: "収支" }
+    { id: "finance", label: "収支" },
+    { id: "crm", label: "CRM" }
   ];
 
   return `
@@ -1593,7 +1593,7 @@ function renderCrmWorkspace() {
   const query = state.crmSearchQuery.trim().toLowerCase();
   const filteredProfiles = query
     ? profiles.filter((profile) =>
-        [profile.name, profile.email, profile.organization, profile.position, profile.aiStage, profile.tools]
+        [profile.name, profile.email, profile.organization, profile.position, profile.aiStage, profile.tools, profile.businessCardNote]
           .join(" ")
           .toLowerCase()
           .includes(query)
@@ -1666,6 +1666,7 @@ function renderCrmWorkspace() {
                       <th>所属</th>
                       <th>来場回数</th>
                       <th>AIステージ</th>
+                      <th>メモ</th>
                       <th>名刺</th>
                       <th>最終接点</th>
                       <th></th>
@@ -1699,6 +1700,7 @@ function renderCrmProfileRow(profile) {
       </td>
       <td>${profile.visitCount}</td>
       <td>${escapeHtml(profile.aiStage || "-")}</td>
+      <td>${escapeHtml(profile.businessCardNote || "-")}</td>
       <td>
         ${
           profile.businessCardUrl
@@ -1708,7 +1710,7 @@ function renderCrmProfileRow(profile) {
       </td>
       <td>${lastEvent ? `${escapeHtml(lastEvent.eventName)}<p class="subtle">${escapeHtml(formatDateTime(lastEvent.createdAt))}</p>` : "-"}</td>
       <td>
-        <button class="icon-button" data-action="edit-crm-card" data-crm-key="${escapeAttr(profile.key)}">名刺編集</button>
+        <button class="icon-button" data-action="edit-crm-card" data-crm-key="${escapeAttr(profile.key)}">編集</button>
       </td>
     </tr>
   `;
@@ -4332,6 +4334,7 @@ function getModalTitle(modal) {
     checklist: modal.mode === "edit" ? "チェック項目編集" : "チェック項目追加",
     finance: modal.mode === "edit" ? "収支明細編集" : "収支明細追加",
     participant: modal.mode === "edit" ? "接点メモ編集" : "接点メモ追加",
+    "crm-card": "顧客情報編集",
     asset: modal.mode === "edit" ? "画像リンク編集" : "画像リンク追加"
   };
 
@@ -4347,6 +4350,7 @@ function getModalSubtitle(modal) {
     checklist: "当日チェック用の簡易項目です。",
     finance: "立替と精算状態まで見える明細を残します。",
     participant: "将来の参加者一覧取り込みに備えた軽い接点メモです。",
+    "crm-card": "顧客メモと名刺リンクを、同じメールアドレスの来場履歴へまとめて反映します。",
     asset: "画像自体は Google Drive に置き、このイベントには参照リンクだけを残します。"
   };
 
@@ -4407,6 +4411,24 @@ function renderModalBody(modal, event) {
 
   const item = findModalItem(modal, event);
   const suggestedMembers = getSuggestedMembersForEvent(event);
+
+  if (modal.kind === "crm-card") {
+    const profile = buildCrmProfiles(state.events).find((profileItem) => profileItem.key === modal.crmKey);
+
+    return `
+      <form class="stack-form" data-form="crm-card" data-crm-key="${escapeAttr(modal.crmKey || "")}">
+        <div class="section-grid two-column">
+          ${renderField("顧客", `<input value="${escapeAttr(profile?.name || "顧客未選択")}" disabled />`)}
+          ${renderField("メール", `<input value="${escapeAttr(profile?.email || "")}" disabled />`)}
+          ${renderField("名刺URL", `<input type="url" name="businessCardUrl" value="${escapeAttr(profile?.businessCardUrl || "")}" placeholder="https://..." />`)}
+        </div>
+        ${renderField("顧客メモ", `<textarea name="businessCardNote" rows="5">${escapeHtml(profile?.businessCardNote || "")}</textarea>`)}
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">顧客情報を保存</button>
+        </div>
+      </form>
+    `;
+  }
 
   if (modal.kind === "task") {
     return `
@@ -5329,7 +5351,7 @@ document.addEventListener("click", async (event) => {
   }
 
   if (action === "edit-crm-card") {
-    await editCrmBusinessCard(button.dataset.crmKey || "");
+    openModal("crm-card", { crmKey: button.dataset.crmKey || "", mode: "edit" });
     return;
   }
 
@@ -6006,6 +6028,11 @@ document.addEventListener("submit", async (event) => {
     return;
   }
 
+  if (formName === "crm-card") {
+    await handleCrmProfileSubmit(form);
+    return;
+  }
+
   if (["task", "timeline", "role", "checklist", "finance", "participant", "member", "asset"].includes(formName)) {
     await handleEntitySubmit(form, formName);
   }
@@ -6197,23 +6224,16 @@ async function importLumaParticipantsFromFile(file, eventId) {
   }
 }
 
-async function editCrmBusinessCard(crmKey) {
+async function handleCrmProfileSubmit(form) {
+  const crmKey = form.dataset.crmKey || "";
+
   if (!crmKey) {
     return;
   }
 
-  const profile = buildCrmProfiles(state.events).find((item) => item.key === crmKey);
-  const nextUrl = window.prompt("名刺URLを入力してください。空欄でURLを削除します。", profile?.businessCardUrl || "");
-
-  if (nextUrl === null) {
-    return;
-  }
-
-  const nextNote = window.prompt("名刺メモを入力してください。", profile?.businessCardNote || "");
-
-  if (nextNote === null) {
-    return;
-  }
+  const formData = new FormData(form);
+  const nextUrl = String(formData.get("businessCardUrl") || "").trim();
+  const nextNote = String(formData.get("businessCardNote") || "").trim();
 
   state.events = state.events.map((eventItem) => ({
     ...eventItem,
@@ -6230,6 +6250,7 @@ async function editCrmBusinessCard(crmKey) {
       )
     }
   }));
+  closeModal();
   render();
   await syncEvents();
 }
