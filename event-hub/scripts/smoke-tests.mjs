@@ -42,7 +42,11 @@ event.participantHub.attendees.push({
   approvalStatus: "approved",
   checkedInAt: "2099-05-20T10:00:00.000Z",
   organization: "Test Org",
-  businessCardUrl: "https://example.com/card"
+  businessCardUrl: "https://example.com/card",
+  crmTags: "VIP、次回招待",
+  followUpAt: "2099-05-21",
+  followUpNote: "お礼を送る",
+  followUpDone: false
 });
 event.finance.lines.push({
   id: "line_1",
@@ -104,6 +108,7 @@ assert.equal(roundTrip[0].members[0].name, event.members[0].name);
 assert.equal(roundTrip[0].runbook.timetable[0].title, event.runbook.timetable[0].title);
 assert.equal(roundTrip[0].finance.lines[0].plannedAmount, event.finance.lines[0].plannedAmount);
 assert.equal(roundTrip[0].participantHub.attendees[0].email, event.participantHub.attendees[0].email);
+assert.equal(roundTrip[0].participantHub.attendees[0].crmTags, event.participantHub.attendees[0].crmTags);
 assert.equal(roundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
 
 const browserCsv = serializeBrowserCsv([event]);
@@ -111,6 +116,7 @@ const browserRoundTrip = parseBrowserCsv(browserCsv);
 assert.equal(browserRoundTrip.length, 1);
 assert.equal(browserRoundTrip[0].members[0].role, event.members[0].role);
 assert.equal(browserRoundTrip[0].participantHub.attendees[0].businessCardUrl, event.participantHub.attendees[0].businessCardUrl);
+assert.equal(browserRoundTrip[0].participantHub.attendees[0].followUpAt, event.participantHub.attendees[0].followUpAt);
 assert.equal(browserRoundTrip[0].assetArchive.images[0].label, event.assetArchive.images[0].label);
 
 const originalVercelEnv = process.env.VERCEL;

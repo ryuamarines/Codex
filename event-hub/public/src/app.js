@@ -1611,10 +1611,13 @@ function renderCrmWorkspace() {
           <h2>顧客CRM</h2>
           <p class="subtle">Luma参加者CSVからチェックイン済みの人だけを取り込み、顧客ごとの来場回数と名刺リンクを横断で見ます。</p>
         </div>
-        <label class="search-field compact-search">
-          <span>検索</span>
-          <input type="search" data-action="search-crm" placeholder="名前・メール・所属・AIステージ" value="${escapeAttr(state.crmSearchQuery)}" />
-        </label>
+        <div class="header-actions">
+          <label class="search-field compact-search">
+            <span>検索</span>
+            <input type="search" data-action="search-crm" placeholder="名前・メール・所属・AIステージ" value="${escapeAttr(state.crmSearchQuery)}" />
+          </label>
+          <button class="button button-secondary" data-action="export-crm-csv">CRM CSV</button>
+        </div>
       </div>
 
       <section class="dashboard-metrics">
@@ -1666,7 +1669,9 @@ function renderCrmWorkspace() {
                       <th>所属</th>
                       <th>来場回数</th>
                       <th>AIステージ</th>
+                      <th>タグ</th>
                       <th>メモ</th>
+                      <th>フォロー</th>
                       <th>名刺</th>
                       <th>最終接点</th>
                       <th></th>
@@ -1700,20 +1705,38 @@ function renderCrmProfileRow(profile) {
       </td>
       <td>${profile.visitCount}</td>
       <td>${escapeHtml(profile.aiStage || "-")}</td>
+      <td>${profile.tags.length ? profile.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join(" ") : "-"}</td>
       <td>${escapeHtml(profile.businessCardNote || "-")}</td>
+      <td>${escapeHtml(formatCrmFollowUp(profile))}</td>
       <td>
         ${
           profile.businessCardUrl
             ? `<a href="${escapeAttr(profile.businessCardUrl)}" target="_blank" rel="noreferrer">名刺</a>`
-            : escapeHtml(profile.businessCardNote || "-")
+            : "-"
         }
       </td>
       <td>${lastEvent ? `${escapeHtml(lastEvent.eventName)}<p class="subtle">${escapeHtml(formatDateTime(lastEvent.createdAt))}</p>` : "-"}</td>
       <td>
-        <button class="icon-button" data-action="edit-crm-card" data-crm-key="${escapeAttr(profile.key)}">編集</button>
+        <div class="inline-actions">
+          <button class="icon-button" data-action="open-crm-detail" data-crm-key="${escapeAttr(profile.key)}">詳細</button>
+          <button class="icon-button" data-action="edit-crm-card" data-crm-key="${escapeAttr(profile.key)}">編集</button>
+          <button class="icon-button" data-action="merge-crm-profile" data-crm-key="${escapeAttr(profile.key)}">統合</button>
+        </div>
       </td>
     </tr>
   `;
+}
+
+function formatCrmFollowUp(profile) {
+  if (profile.followUpDone) {
+    return "対応済み";
+  }
+
+  if (profile.followUpAt) {
+    return `${formatDate(profile.followUpAt)} ${profile.followUpNote || ""}`.trim();
+  }
+
+  return profile.followUpNote || "-";
 }
 
 function renderTaskBoardFilterChip(value, label) {
@@ -1761,8 +1784,12 @@ function buildCrmProfiles(events) {
           position: attendee.position || "",
           aiStage: attendee.aiStage || "",
           tools: attendee.tools || "",
+          tags: splitCrmTags(attendee.crmTags),
           businessCardUrl: attendee.businessCardUrl || "",
           businessCardNote: attendee.businessCardNote || "",
+          followUpAt: attendee.followUpAt || "",
+          followUpNote: attendee.followUpNote || "",
+          followUpDone: Boolean(attendee.followUpDone),
           visitCount: 0,
           approvedCount: 0,
           declinedCount: 0,
@@ -1781,8 +1808,12 @@ function buildCrmProfiles(events) {
       profile.position = profile.position || attendee.position || "";
       profile.aiStage = profile.aiStage || attendee.aiStage || "";
       profile.tools = profile.tools || attendee.tools || "";
+      profile.tags = mergeUniqueStrings(profile.tags, splitCrmTags(attendee.crmTags));
       profile.businessCardUrl = profile.businessCardUrl || attendee.businessCardUrl || "";
       profile.businessCardNote = profile.businessCardNote || attendee.businessCardNote || "";
+      profile.followUpAt = profile.followUpAt || attendee.followUpAt || "";
+      profile.followUpNote = profile.followUpNote || attendee.followUpNote || "";
+      profile.followUpDone = profile.followUpDone || Boolean(attendee.followUpDone);
       profile.visitCount += 1;
       profile.approvedCount += attendee.approvalStatus === "approved" ? 1 : 0;
       profile.declinedCount += attendee.approvalStatus === "declined" ? 1 : 0;
@@ -1805,6 +1836,27 @@ function buildCrmProfiles(events) {
       (b.events[b.events.length - 1]?.createdAt || "").localeCompare(a.events[a.events.length - 1]?.createdAt || "") ||
       a.name.localeCompare(b.name, "ja")
   );
+}
+
+function splitCrmTags(value) {
+  return String(value || "")
+    .split(/[、,／/・\n]+/u)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function mergeUniqueStrings(...groups) {
+  const values = new Map();
+
+  groups.flat().forEach((value) => {
+    const label = String(value || "").trim();
+    const key = label.toLowerCase();
+    if (label && !values.has(key)) {
+      values.set(key, label);
+    }
+  });
+
+  return [...values.values()];
 }
 
 function buildGlobalTaskItems(events, { mode = "open", assignee = "all" } = {}) {
@@ -4335,6 +4387,7 @@ function getModalTitle(modal) {
     finance: modal.mode === "edit" ? "収支明細編集" : "収支明細追加",
     participant: modal.mode === "edit" ? "接点メモ編集" : "接点メモ追加",
     "crm-card": "顧客情報編集",
+    "crm-detail": "顧客詳細",
     asset: modal.mode === "edit" ? "画像リンク編集" : "画像リンク追加"
   };
 
@@ -4351,6 +4404,7 @@ function getModalSubtitle(modal) {
     finance: "立替と精算状態まで見える明細を残します。",
     participant: "将来の参加者一覧取り込みに備えた軽い接点メモです。",
     "crm-card": "顧客メモと名刺リンクを、同じメールアドレスの来場履歴へまとめて反映します。",
+    "crm-detail": "来場履歴、タグ、フォローアップ、名刺情報を確認します。",
     asset: "画像自体は Google Drive に置き、このイベントには参照リンクだけを残します。"
   };
 
@@ -4421,12 +4475,73 @@ function renderModalBody(modal, event) {
           ${renderField("顧客", `<input value="${escapeAttr(profile?.name || "顧客未選択")}" disabled />`)}
           ${renderField("メール", `<input value="${escapeAttr(profile?.email || "")}" disabled />`)}
           ${renderField("名刺URL", `<input type="url" name="businessCardUrl" value="${escapeAttr(profile?.businessCardUrl || "")}" placeholder="https://..." />`)}
+          ${renderField("タグ", `<input name="crmTags" value="${escapeAttr((profile?.tags || []).join("、"))}" placeholder="次回招待、登壇候補、VIP" />`)}
+          ${renderField("次回連絡日", `<input type="date" name="followUpAt" value="${escapeAttr((profile?.followUpAt || "").slice(0, 10))}" />`)}
         </div>
         ${renderField("顧客メモ", `<textarea name="businessCardNote" rows="5">${escapeHtml(profile?.businessCardNote || "")}</textarea>`)}
+        ${renderField("フォローアップメモ", `<textarea name="followUpNote" rows="4">${escapeHtml(profile?.followUpNote || "")}</textarea>`)}
+        <label class="check-toggle simple">
+          <input type="checkbox" name="followUpDone" ${profile?.followUpDone ? "checked" : ""} />
+          <span>フォローアップ対応済み</span>
+        </label>
         <div class="form-actions">
           <button class="button button-primary" type="submit">顧客情報を保存</button>
         </div>
       </form>
+    `;
+  }
+
+  if (modal.kind === "crm-detail") {
+    const profile = buildCrmProfiles(state.events).find((profileItem) => profileItem.key === modal.crmKey);
+
+    if (!profile) {
+      return `<div class="empty-panel">顧客が見つかりません。</div>`;
+    }
+
+    return `
+      <div class="section-stack">
+        <section class="summary-row">
+          <div class="mini-stat"><span>来場回数</span><strong>${profile.visitCount}</strong></div>
+          <div class="mini-stat"><span>所属</span><strong>${escapeHtml(profile.organization || "-")}</strong></div>
+          <div class="mini-stat"><span>AIステージ</span><strong>${escapeHtml(profile.aiStage || "-")}</strong></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head compact">
+            <h3>${escapeHtml(profile.name || "名前未設定")}</h3>
+            <span class="count-pill">${escapeHtml(profile.email || "メール未設定")}</span>
+          </div>
+          <div class="finance-summary-stack">
+            <div class="finance-row"><span>タグ</span><strong>${profile.tags.length ? profile.tags.map(escapeHtml).join(" / ") : "-"}</strong></div>
+            <div class="finance-row"><span>メモ</span><strong>${escapeHtml(profile.businessCardNote || "-")}</strong></div>
+            <div class="finance-row"><span>フォロー</span><strong>${escapeHtml(formatCrmFollowUp(profile))}</strong></div>
+            <div class="finance-row"><span>名刺</span><strong>${profile.businessCardUrl ? `<a href="${escapeAttr(profile.businessCardUrl)}" target="_blank" rel="noreferrer">開く</a>` : "-"}</strong></div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-head compact">
+            <h3>来場履歴</h3>
+            <span class="count-pill">${profile.events.length}件</span>
+          </div>
+          <div class="participant-list">
+            ${profile.events
+              .map(
+                (item) => `
+                  <article class="compact-row">
+                    <div>
+                      <strong>${escapeHtml(item.eventName)}</strong>
+                      <p>${escapeHtml(formatDate(item.startsAt))} / ${escapeHtml(item.approvalStatus || "status未設定")}</p>
+                      <small>${escapeHtml(item.checkedInAt ? `チェックイン ${formatDateTime(item.checkedInAt)}` : "チェックイン日時なし")}</small>
+                    </div>
+                  </article>
+                `
+              )
+              .join("")}
+          </div>
+        </section>
+        <div class="form-actions">
+          <button class="button button-primary" data-action="edit-crm-card" data-crm-key="${escapeAttr(profile.key)}">編集</button>
+        </div>
+      </div>
     `;
   }
 
@@ -5355,6 +5470,16 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "open-crm-detail") {
+    openModal("crm-detail", { crmKey: button.dataset.crmKey || "" });
+    return;
+  }
+
+  if (action === "merge-crm-profile") {
+    await mergeCrmProfile(button.dataset.crmKey || "");
+    return;
+  }
+
   if (action === "open-mobile-sidebar") {
     state.mobileSidebarOpen = true;
     render();
@@ -5848,6 +5973,11 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "export-crm-csv") {
+    exportCrmCsv();
+    return;
+  }
+
   if (action === "trigger-import") {
     const input = document.getElementById("events-import-input");
     input?.click();
@@ -6155,8 +6285,12 @@ function mapLumaAttendee(row) {
     tools: row["普段使っているAIツールを教えてください。"] || "",
     organization: row["所属先（会社・団体・コミュニティなど）を教えてください。"] || "",
     position: row["部署名/役職やポジションがあればご記入ください。"] || "",
+    crmTags: "",
     businessCardUrl: "",
     businessCardNote: "",
+    followUpAt: "",
+    followUpNote: "",
+    followUpDone: false,
     rawImportedAt: new Date().toISOString()
   };
 }
@@ -6234,6 +6368,10 @@ async function handleCrmProfileSubmit(form) {
   const formData = new FormData(form);
   const nextUrl = String(formData.get("businessCardUrl") || "").trim();
   const nextNote = String(formData.get("businessCardNote") || "").trim();
+  const nextTags = splitCrmTags(formData.get("crmTags") || "").join("、");
+  const nextFollowUpAt = String(formData.get("followUpAt") || "").trim();
+  const nextFollowUpNote = String(formData.get("followUpNote") || "").trim();
+  const nextFollowUpDone = formData.get("followUpDone") === "on";
 
   state.events = state.events.map((eventItem) => ({
     ...eventItem,
@@ -6244,7 +6382,11 @@ async function handleCrmProfileSubmit(form) {
           ? {
               ...attendee,
               businessCardUrl: nextUrl.trim(),
-              businessCardNote: nextNote.trim()
+              businessCardNote: nextNote.trim(),
+              crmTags: nextTags,
+              followUpAt: nextFollowUpAt,
+              followUpNote: nextFollowUpNote,
+              followUpDone: nextFollowUpDone
             }
           : attendee
       )
@@ -6253,6 +6395,102 @@ async function handleCrmProfileSubmit(form) {
   closeModal();
   render();
   await syncEvents();
+}
+
+async function mergeCrmProfile(sourceKey) {
+  if (!sourceKey) {
+    return;
+  }
+
+  const sourceProfile = buildCrmProfiles(state.events).find((profile) => profile.key === sourceKey);
+  const targetEmail = window.prompt("統合先のメールアドレスを入力してください。統合元の来場履歴をこのメールにまとめます。", "");
+
+  if (!targetEmail) {
+    return;
+  }
+
+  const normalizedTargetEmail = targetEmail.trim().toLowerCase();
+
+  if (!normalizedTargetEmail.includes("@")) {
+    state.error = "統合先メールアドレスを確認してください。";
+    render();
+    return;
+  }
+
+  state.events = state.events.map((eventItem) => ({
+    ...eventItem,
+    participantHub: {
+      ...eventItem.participantHub,
+      attendees: (eventItem.participantHub?.attendees || []).map((attendee) =>
+        getCrmKeyFromAttendee(attendee) === sourceKey
+          ? {
+              ...attendee,
+              email: normalizedTargetEmail,
+              businessCardUrl: attendee.businessCardUrl || sourceProfile?.businessCardUrl || "",
+              businessCardNote: attendee.businessCardNote || sourceProfile?.businessCardNote || "",
+              crmTags: mergeUniqueStrings(splitCrmTags(attendee.crmTags), sourceProfile?.tags || []).join("、"),
+              followUpAt: attendee.followUpAt || sourceProfile?.followUpAt || "",
+              followUpNote: attendee.followUpNote || sourceProfile?.followUpNote || "",
+              followUpDone: attendee.followUpDone || sourceProfile?.followUpDone || false
+            }
+          : attendee
+      )
+    }
+  }));
+  state.info = "顧客を統合しました。";
+  render();
+  await syncEvents();
+}
+
+function exportCrmCsv() {
+  const profiles = buildCrmProfiles(state.events);
+  const header = [
+    "顧客名",
+    "メール",
+    "所属",
+    "役職",
+    "来場回数",
+    "AIステージ",
+    "利用ツール",
+    "タグ",
+    "顧客メモ",
+    "名刺URL",
+    "フォロー日",
+    "フォローメモ",
+    "フォロー済み",
+    "最終接点",
+    "来場履歴"
+  ];
+  const rows = profiles.map((profile) => {
+    const lastEvent = profile.events[profile.events.length - 1];
+    return [
+      profile.name,
+      profile.email,
+      profile.organization,
+      profile.position,
+      profile.visitCount,
+      profile.aiStage,
+      profile.tools,
+      profile.tags.join("、"),
+      profile.businessCardNote,
+      profile.businessCardUrl,
+      profile.followUpAt,
+      profile.followUpNote,
+      profile.followUpDone ? "1" : "",
+      lastEvent?.eventName || "",
+      profile.events.map((item) => `${item.eventName}(${formatDate(item.startsAt)})`).join(" / ")
+    ];
+  });
+  const csv = [header, ...rows].map((row) => row.map(toCsvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const dateLabel = new Date().toISOString().slice(0, 10);
+
+  link.href = url;
+  link.download = `event-hub-crm-${dateLabel}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function applySession(session) {

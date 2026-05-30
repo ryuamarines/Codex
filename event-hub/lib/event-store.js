@@ -323,10 +323,16 @@ function serializeEventRow(event) {
       "tools",
       "organization",
       "position",
+      "crmTags",
       "businessCardUrl",
       "businessCardNote",
+      "followUpAt",
+      "followUpNote",
+      "followUpDone",
       "rawImportedAt"
-    ]),
+    ], {
+      followUpDone: (value) => (value ? "1" : "")
+    }),
     serializeCollection(
       event.finance?.lines,
       ["id", "type", "category", "name", "plannedAmount", "actualAmount", "counterparty", "advanceBy", "settlementStatus", "memo", "receivedBy"]
@@ -431,10 +437,16 @@ function parseEventsCsv(text) {
           "tools",
           "organization",
           "position",
+          "crmTags",
           "businessCardUrl",
           "businessCardNote",
+          "followUpAt",
+          "followUpNote",
+          "followUpDone",
           "rawImportedAt"
-        ])
+        ], {
+          followUpDone: (value) => value === "1" || value === "true"
+        })
       },
       finance: {
         memo: get("financeMemo"),
