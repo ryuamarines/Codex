@@ -53,15 +53,6 @@ import {
   type RecordVisibilityFilter
 } from "@/lib/live-log-view-model";
 import {
-  buildShareSnapshotUrl,
-  type LiveLogShareSnapshot
-} from "@/lib/live-log-share-snapshot";
-import {
-  createAnalyticsSnapshot,
-  createYearlyAggregateSnapshot,
-  createYearlySnapshot
-} from "@/lib/live-log-share-snapshot-builders";
-import {
   createDashboardLayout,
   type AnalyticsTileId,
   type TileHeight,
@@ -724,7 +715,11 @@ export function LiveLogPage() {
     requestAnimationFrame(apply);
   }
 
-  async function captureAndShareElement(element: HTMLElement, label: string) {
+  async function captureAndHandleElementImage(
+    element: HTMLElement,
+    label: string,
+    action: "share" | "save"
+  ) {
     const scrollPositions = snapshotScrollPositions(element);
 
     try {
@@ -745,69 +740,63 @@ export function LiveLogPage() {
         return;
       }
 
-      const file = new File([blob], `${label}.png`, { type: "image/png" });
-
-      if (
-        typeof navigator.share === "function" &&
-        navigator.canShare &&
-        navigator.canShare({ files: [file] })
-      ) {
-        await navigator.share({
-          files: [file],
-          title: label,
-          text: `${label} を共有`
-        });
-        setShareMessage(`${label} を共有しました。`);
+      if (action === "share") {
+        await shareImageBlob(blob, label);
         return;
       }
 
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${label}.png`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setShareMessage(`${label} をPNGで保存しました。`);
+      saveImageBlob(blob, label);
     } catch (error) {
       if (isShareAbortError(error)) {
         return;
       }
 
-      setShareMessage("共有画像を作れませんでした。");
+      setShareMessage(
+        action === "share"
+          ? "画像を共有できませんでした。画像保存から投稿してください。"
+          : "画像を保存できませんでした。"
+      );
     } finally {
       element.classList.remove("shareCaptureTile");
       restoreScrollPositions(scrollPositions);
     }
   }
 
-  async function shareSnapshotLink(snapshot: LiveLogShareSnapshot, label: string) {
-    try {
-      const url = buildShareSnapshotUrl(window.location.origin, snapshot);
+  async function shareImageBlob(blob: Blob, label: string) {
+    const file = new File([blob], createShareImageFileName(), { type: "image/png" });
 
-      if (typeof navigator.share === "function") {
-        await navigator.share({
-          title: label,
-          text: `${label} を共有`,
-          url
-        });
-        setShareMessage(`${label} の共有URLを開きました。`);
-        return;
-      }
-
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-        setShareMessage(`${label} の共有URLをコピーしました。`);
-        return;
-      }
-
-      setShareMessage("このブラウザでは共有URLをコピーできませんでした。");
-    } catch (error) {
-      if (isShareAbortError(error)) {
-        return;
-      }
-
-      setShareMessage("共有URLを作れませんでした。");
+    if (
+      typeof navigator.share === "function" &&
+      navigator.canShare &&
+      navigator.canShare({ files: [file] })
+    ) {
+      await navigator.share({ files: [file] });
+      setShareMessage(`${label} を共有しました。`);
+      return;
     }
+
+    setShareMessage("このブラウザでは画像共有に対応していません。画像保存から投稿してください。");
+  }
+
+  function saveImageBlob(blob: Blob, label: string) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = createShareImageFileName();
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setShareMessage(`${label} をPNGで保存しました。`);
+  }
+
+  function createShareImageFileName() {
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "");
+
+    return `live-log-share-${timestamp}.png`;
   }
 
   async function shareAnalyticsTile(tileId: AnalyticsTileId, label: string) {
@@ -818,7 +807,18 @@ export function LiveLogPage() {
       return;
     }
 
-    await captureAndShareElement(tileElement, label);
+    await captureAndHandleElementImage(tileElement, label, "share");
+  }
+
+  async function saveAnalyticsTile(tileId: AnalyticsTileId, label: string) {
+    const tileElement = analyticsTileRefs.current[tileId];
+
+    if (!tileElement) {
+      setShareMessage("保存画像を作れませんでした。");
+      return;
+    }
+
+    await captureAndHandleElementImage(tileElement, label, "save");
   }
 
   async function shareYearlySummary() {
@@ -829,7 +829,18 @@ export function LiveLogPage() {
       return;
     }
 
-    await captureAndShareElement(panelElement, `${effectiveSelectedYear}年別まとめ`);
+    await captureAndHandleElementImage(panelElement, `${effectiveSelectedYear}年別まとめ`, "share");
+  }
+
+  async function saveYearlySummary() {
+    const panelElement = yearlySummaryRef.current;
+
+    if (!panelElement || !effectiveSelectedYear) {
+      setShareMessage("保存画像を作れませんでした。");
+      return;
+    }
+
+    await captureAndHandleElementImage(panelElement, `${effectiveSelectedYear}年別まとめ`, "save");
   }
 
   async function shareYearlyAggregate(key: YearlyAggregateKey, label: string) {
@@ -840,7 +851,18 @@ export function LiveLogPage() {
       return;
     }
 
-    await captureAndShareElement(element, label);
+    await captureAndHandleElementImage(element, label, "share");
+  }
+
+  async function saveYearlyAggregate(key: YearlyAggregateKey, label: string) {
+    const element = yearlyAggregateRefs.current[key];
+
+    if (!element) {
+      setShareMessage("保存画像を作れませんでした。");
+      return;
+    }
+
+    await captureAndHandleElementImage(element, label, "save");
   }
 
   function renderYearlySummaryActions() {
@@ -849,19 +871,8 @@ export function LiveLogPage() {
         <button className="tileActionButton" type="button" onClick={() => void shareYearlySummary()}>
           共有
         </button>
-        <button
-          className="tileActionButton"
-          type="button"
-          onClick={() => {
-            if (effectiveSelectedYear) {
-              void shareSnapshotLink(
-                createYearlySnapshot(effectiveSelectedYear, yearOverview, yearAggregates),
-                `${effectiveSelectedYear}年別まとめ`
-              );
-            }
-          }}
-        >
-          リンク
+        <button className="tileActionButton" type="button" onClick={() => void saveYearlySummary()}>
+          保存
         </button>
       </div>
     );
@@ -872,8 +883,6 @@ export function LiveLogPage() {
   }
 
   function renderYearlyAggregateActions(key: YearlyAggregateKey, label: string) {
-    const items = yearAggregates[key];
-
     return (
       <div className="tileActions" data-share-exclude="true">
         <button
@@ -886,9 +895,9 @@ export function LiveLogPage() {
         <button
           className="tileActionButton"
           type="button"
-          onClick={() => void shareSnapshotLink(createYearlyAggregateSnapshot(effectiveSelectedYear, label, items), label)}
+          onClick={() => void saveYearlyAggregate(key, label)}
         >
-          リンク
+          保存
         </button>
       </div>
     );
@@ -943,14 +952,9 @@ export function LiveLogPage() {
         <button
           className="tileActionButton"
           type="button"
-          onClick={() =>
-            void shareSnapshotLink(
-              createAnalyticsSnapshot(tileId, label, overview, trends, aggregates),
-              label
-            )
-          }
+          onClick={() => saveAnalyticsTile(tileId, label)}
         >
-          リンク
+          保存
         </button>
         {!isHeightFixed ? (
           <button
