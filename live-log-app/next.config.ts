@@ -21,13 +21,19 @@ const securityHeaders = [
   }
 ];
 
+const firebaseAuthHeaders = securityHeaders.filter((header) => header.key !== "X-Frame-Options");
+
 const nextConfig: NextConfig = {
   typedRoutes: true,
   outputFileTracingRoot: __dirname,
   async headers() {
     return [
       {
-        source: "/:path*",
+        source: "/__/auth/:path*",
+        headers: firebaseAuthHeaders
+      },
+      {
+        source: "/((?!__/auth(?:/|$)).*)",
         headers: securityHeaders
       }
     ];
