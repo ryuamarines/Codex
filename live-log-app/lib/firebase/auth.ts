@@ -112,14 +112,13 @@ export async function signInWithGoogle() {
 
     if (
       code === "auth/popup-blocked" ||
-      code === "auth/popup-closed-by-user" ||
-      code === "auth/cancelled-popup-request" ||
       code === "auth/operation-not-supported-in-this-environment"
     ) {
-      if (!prefersRedirect) {
-        throw formatGoogleAuthError(error);
-      }
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
 
+    if (prefersRedirect && (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request")) {
       await signInWithRedirect(auth, provider);
       return null;
     }
