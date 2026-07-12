@@ -53,6 +53,7 @@ export class FirestoreRoomPlanRepository {
     const payload = {
       project: cloudProject,
       owner: {
+        uid: user.uid,
         displayName: user.displayName ?? null,
         email: user.email ?? null
       }

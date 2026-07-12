@@ -249,10 +249,19 @@ export function getWallPlacement(
   offset: number,
   objectWidthPx: number
 ) {
-  const edge = getRoomEdges(roomPoints)[wallIndex];
-  const safeOffset = Math.max(0, Math.min(edge.length - objectWidthPx, offset));
+  const edges = getRoomEdges(roomPoints);
+  const safeWallIndex = Math.min(Math.max(0, Math.trunc(wallIndex)), Math.max(0, edges.length - 1));
+  const edge = edges[safeWallIndex] ?? {
+    start: roomPoints[0] ?? { x: 0, y: 0 },
+    end: roomPoints[0] ?? { x: 0, y: 0 },
+    index: 0,
+    length: 0,
+    angle: 0
+  };
+  const safeWidth = Math.min(Math.max(0, objectWidthPx), edge.length);
+  const safeOffset = Math.max(0, Math.min(edge.length - safeWidth, offset));
   const startRatio = edge.length === 0 ? 0 : safeOffset / edge.length;
-  const endRatio = edge.length === 0 ? 0 : (safeOffset + objectWidthPx) / edge.length;
+  const endRatio = edge.length === 0 ? 0 : (safeOffset + safeWidth) / edge.length;
   const start = interpolate(edge.start, edge.end, startRatio);
   const end = interpolate(edge.start, edge.end, endRatio);
   const center = interpolate(edge.start, edge.end, (startRatio + endRatio) / 2);

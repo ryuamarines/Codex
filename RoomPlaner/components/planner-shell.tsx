@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CloudPanel } from "@/components/cloud-panel";
 import { sampleProject } from "@/data/sample-project";
 import {
   distance,
@@ -91,6 +92,7 @@ export function PlannerShell() {
     redoStack,
     storageReady,
     storageHasProject,
+    storageError,
     updateProject,
     applyProjectUpdate,
     replaceProject,
@@ -829,35 +831,84 @@ export function PlannerShell() {
   ]);
 
   return (
-    <main className="min-h-screen p-5 text-slate-900 md:p-6">
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-4">
-        <header className="panel flex flex-col gap-4 p-5">
-          <div>
-            <div className="panel-title">RoomPlaner</div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">RoomPlaner</h1>
-            <input
-              className="input mt-3 max-w-md"
-              value={project.name}
-              onChange={(event) =>
-                updateProject((current) => ({
-                  ...current,
-                  name: event.target.value
-                }))
-              }
-              placeholder="プロジェクト名"
-            />
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              間取り図を下敷きにしながら、自由形状の部屋、窓、扉、制約ゾーン、家具を 2D 上で配置し、
-              干渉を即時確認できます。
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Mode: {modeDescriptionShort(mode)}</span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Objects: {objectIndex.length}</span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Warnings: {issues.length}</span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">Zoom: {Math.round(viewport.scale * 100)}%</span>
+    <main className="min-h-screen bg-[#f7f7f5] p-4 text-neutral-950 md:p-6">
+      <div className="mx-auto flex max-w-[1480px] flex-col gap-4">
+        <header className="panel overflow-hidden">
+          <div className="flex flex-col gap-4 border-b border-neutral-200 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="panel-title">RoomPlaner</div>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 md:text-3xl">ダッシュボード</h1>
+                <input
+                  className="input max-w-md"
+                  value={project.name}
+                  onChange={(event) =>
+                    updateProject((current) => ({
+                      ...current,
+                      name: event.target.value
+                    }))
+                  }
+                  placeholder="プロジェクト名"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium text-neutral-700">
+                {firebaseUser ? "アカウント保存" : "ゲスト保存"}
+              </span>
+              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium text-neutral-700">
+                {storageReady ? "保存準備完了" : "保存確認中"}
+              </span>
+              <button className="button-soft" onClick={handleUndo} disabled={undoStack.length === 0}>
+                Undo
+              </button>
+              <button className="button-soft" onClick={handleRedo} disabled={redoStack.length === 0}>
+                Redo
+              </button>
+              <button
+                className="button-strong"
+                onClick={() => {
+                  const emptyProject: PlannerProject = {
+                    ...sampleProject,
+                    id: `project-${Date.now()}`,
+                    name: "新規プロジェクト",
+                    background: null,
+                    room: null,
+                    windows: [],
+                    zones: [],
+                    doors: [],
+                    furniture: [],
+                    scalePxPerMm: 0.1
+                  };
+                  loadProjectState(emptyProject);
+                  setMode("select");
+                }}
+              >
+                + 新規プロジェクト
+              </button>
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-0 border-b border-neutral-200 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="border-b border-neutral-200 px-5 py-4 sm:border-r lg:border-b-0">
+              <div className="text-xs text-neutral-500">Mode</div>
+              <div className="mt-1 text-lg font-semibold">{modeDescriptionShort(mode)}</div>
+            </div>
+            <div className="border-b border-neutral-200 px-5 py-4 lg:border-b-0 lg:border-r">
+              <div className="text-xs text-neutral-500">Objects</div>
+              <div className="mt-1 text-lg font-semibold">{objectIndex.length}</div>
+            </div>
+            <div className="border-b border-neutral-200 px-5 py-4 sm:border-r sm:border-b-0">
+              <div className="text-xs text-neutral-500">Warnings</div>
+              <div className={issues.length > 0 ? "mt-1 text-lg font-semibold text-rose-600" : "mt-1 text-lg font-semibold"}>
+                {issues.length}
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <div className="text-xs text-neutral-500">Zoom</div>
+              <div className="mt-1 text-lg font-semibold">{Math.round(viewport.scale * 100)}%</div>
+            </div>
+          </div>
+          <div className="grid gap-2 px-5 py-4 sm:grid-cols-2 xl:grid-cols-6">
             <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
             <input
               ref={importJsonInputRef}
@@ -867,19 +918,13 @@ export function PlannerShell() {
               onChange={importLegacyJsonProject}
             />
             <button className="button-soft" onClick={() => importInputRef.current?.click()}>
-              CSV を読み込む
+              CSV 読込
             </button>
             <button className="button-soft" onClick={() => importJsonInputRef.current?.click()}>
-              旧JSONを読み込む
+              旧JSON読込
             </button>
             <button className="button-soft" onClick={exportProject}>
-              CSV を書き出す
-            </button>
-            <button className="button-soft" onClick={handleUndo} disabled={undoStack.length === 0}>
-              Undo
-            </button>
-            <button className="button-soft" onClick={handleRedo} disabled={redoStack.length === 0}>
-              Redo
+              CSV 書出
             </button>
             <button
               className="button-soft"
@@ -889,28 +934,7 @@ export function PlannerShell() {
                 clearPersistedProject();
               }}
             >
-              サンプルに戻す
-            </button>
-            <button
-              className="button-soft"
-              onClick={() => {
-                const emptyProject: PlannerProject = {
-                  ...sampleProject,
-                  id: `project-${Date.now()}`,
-                  name: "新規プロジェクト",
-                  background: null,
-                  room: null,
-                  windows: [],
-                  zones: [],
-                  doors: [],
-                  furniture: [],
-                  scalePxPerMm: 0.1
-                };
-                loadProjectState(emptyProject);
-                setMode("select");
-              }}
-            >
-              新規プロジェクト
+              サンプル
             </button>
           </div>
         </header>
@@ -991,55 +1015,18 @@ export function PlannerShell() {
 
           <aside className="panel h-fit p-4 xl:col-start-1 xl:row-start-1 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:sticky xl:top-4">
             <div className="panel-title">Add / Setup</div>
-            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">アカウント / クラウド</div>
-                  <div className="mt-2 text-sm text-slate-600">
-                    {firebaseUser ? `ログイン中: ${firebaseUser.displayName || firebaseUser.email || firebaseUser.uid}` : "未ログイン"}
-                  </div>
-                </div>
-                <div
-                  className={
-                    firebaseUser
-                      ? "rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
-                      : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500"
-                  }
-                >
-                  {firebaseUser ? "ONLINE" : "OFFLINE"}
-                </div>
-              </div>
-              <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
-                旧JSONを読み込んでから Firestore に保存すると、公開URL側で自分のデータとして持てます。
-              </div>
-              {cloudMessage ? (
-                <div className="mt-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">{cloudMessage}</div>
-              ) : null}
-              {cloudHydrating ? (
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600">
-                  Firestore の保存内容を確認しています。読込中でもログアウトはできます。
-                </div>
-              ) : null}
-              <div className="mt-3 grid gap-2">
-                {firebaseUser ? (
-                  <>
-                    <button className="button-soft w-full" onClick={loadProjectFromCloud} disabled={cloudBusy}>
-                      Firestore から読込
-                    </button>
-                    <button className="button-soft w-full" onClick={saveProjectToCloud} disabled={cloudBusy}>
-                      Firestore に保存
-                    </button>
-                    <button className="button-danger w-full" onClick={signOut} disabled={cloudBusy}>
-                      ログアウト
-                    </button>
-                  </>
-                ) : (
-                  <button className="button-strong w-full" onClick={signIn} disabled={!firebaseConfigured || cloudBusy}>
-                    Googleでログイン
-                  </button>
-                )}
-              </div>
-            </div>
+            <CloudPanel
+              firebaseUser={firebaseUser}
+              cloudMessage={cloudMessage}
+              storageError={storageError}
+              cloudHydrating={cloudHydrating}
+              cloudBusy={cloudBusy}
+              firebaseConfigured={firebaseConfigured}
+              onSignIn={signIn}
+              onSignOut={signOut}
+              onSaveProjectToCloud={saveProjectToCloud}
+              onLoadProjectFromCloud={loadProjectFromCloud}
+            />
             <div className="mt-4 grid gap-2">
               <label className="button-soft cursor-pointer text-center">
                 背景画像を読み込む

@@ -7,6 +7,8 @@
     "dev": "next dev",
     "dev:reset": "node scripts/clean-next.mjs && next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build",
     "start": "next start"
   },
   "dependencies": {

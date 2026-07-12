@@ -301,11 +301,11 @@ export function PlannerCanvas({
       <div className="mb-3 flex items-center justify-between px-2">
         <div>
           <div className="panel-title">2D Canvas</div>
-          <div className="mt-1 text-sm text-slate-600">
-            モード: <span className="font-semibold text-slate-900">{modeLabel(mode)}</span>
+          <div className="mt-1 text-sm text-neutral-600">
+            モード: <span className="font-semibold text-neutral-950">{modeLabel(mode)}</span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-neutral-600">
           <button className="button-soft" onClick={() => onViewportChange({ ...viewport, scale: Math.max(0.35, viewport.scale / 1.2) })}>
             -
           </button>
@@ -316,7 +316,7 @@ export function PlannerCanvas({
             100%
           </button>
           <input
-            className="w-24 accent-cyan-600"
+            className="w-24 accent-neutral-950"
             type="range"
             min="35"
             max="350"
@@ -329,16 +329,16 @@ export function PlannerCanvas({
               })
             }
           />
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
+          <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
             1px = {project.scalePxPerMm > 0 ? `${(1 / project.scalePxPerMm).toFixed(1)} mm` : "-"}
           </div>
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
+          <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
             Zoom {Math.round(viewport.scale * 100)}%
           </div>
         </div>
       </div>
 
-      <div className={`relative overflow-auto rounded-[28px] border border-slate-200 bg-[#f4f6fa] ${cursorClass}`}>
+      <div className={`relative overflow-auto rounded-[16px] border border-neutral-200 bg-[#f3f3f1] ${cursorClass}`}>
         <Stage
           ref={stageRef}
           width={project.canvas.width}

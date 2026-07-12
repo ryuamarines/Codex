@@ -119,10 +119,10 @@ export function importProjectCsv(raw: string): PlannerProject {
     id: projectRow.id || sampleProject.id,
     name: projectRow.name || sampleProject.name,
     canvas: {
-      width: toNumber(projectRow.canvasWidth, sampleProject.canvas.width),
-      height: toNumber(projectRow.canvasHeight, sampleProject.canvas.height)
+      width: positiveNumber(projectRow.canvasWidth, sampleProject.canvas.width),
+      height: positiveNumber(projectRow.canvasHeight, sampleProject.canvas.height)
     },
-    scalePxPerMm: toNumber(projectRow.scalePxPerMm, sampleProject.scalePxPerMm),
+    scalePxPerMm: positiveNumber(projectRow.scalePxPerMm, sampleProject.scalePxPerMm),
     floorOpacity: clamp(toNumber(projectRow.floorOpacity, sampleProject.floorOpacity), 0, 1),
     background: parseBackground(body.find((row) => row.recordType === "background")),
     room: parseRoom(roomRow, roomPointRows),
@@ -132,7 +132,7 @@ export function importProjectCsv(raw: string): PlannerProject {
     furniture: body.filter((row) => row.recordType === "furniture").map(parseFurniture)
   };
 
-  return project;
+  return normalizeImportedProject(project);
 }
 
 function serializeWindow(item: WindowObject): CsvRow {
@@ -218,7 +218,7 @@ function parseWindow(row: CsvRow): WindowObject {
     id: row.id,
     wallIndex: toNumber(row.wallIndex),
     offset: toNumber(row.offsetPx),
-    widthMm: toNumber(row.widthMm),
+    widthMm: positiveNumber(row.widthMm, 800),
     note: row.note
   };
 }
@@ -228,7 +228,7 @@ function parseDoor(row: CsvRow): DoorObject {
     id: row.id,
     wallIndex: toNumber(row.wallIndex),
     offset: toNumber(row.offsetPx),
-    widthMm: toNumber(row.widthMm),
+    widthMm: positiveNumber(row.widthMm, 800),
     swing: row.swing === "counterclockwise" ? "counterclockwise" : "clockwise",
     openDirection: row.openDirection === "outward" ? "outward" : "inward",
     note: row.note
@@ -240,8 +240,8 @@ function parseZone(row: CsvRow): ConstraintZone {
     id: row.id,
     x: toNumber(row.x),
     y: toNumber(row.y),
-    widthMm: toNumber(row.widthMm),
-    depthMm: toNumber(row.depthMm),
+    widthMm: positiveNumber(row.widthMm, 200),
+    depthMm: positiveNumber(row.depthMm, 200),
     note: row.note
   };
 }
@@ -253,8 +253,8 @@ function parseFurniture(row: CsvRow): FurnitureObject {
     kind: isFurnitureKind(row.kind) ? row.kind : "generic",
     x: toNumber(row.x),
     y: toNumber(row.y),
-    widthMm: toNumber(row.widthMm, 1200),
-    depthMm: toNumber(row.depthMm, 600),
+    widthMm: positiveNumber(row.widthMm, 1200),
+    depthMm: positiveNumber(row.depthMm, 600),
     rotation: toNumber(row.rotation)
   };
 }
@@ -366,6 +366,11 @@ function toNumber(value: string, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function positiveNumber(value: string, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function toBoolean(value: string, fallback: boolean) {
   if (value === "true") return true;
   if (value === "false") return false;
@@ -374,4 +379,32 @@ function toBoolean(value: string, fallback: boolean) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeImportedProject(project: PlannerProject): PlannerProject {
+  if (!project.room || project.room.points.length < 3) {
+    return {
+      ...project,
+      windows: [],
+      doors: []
+    };
+  }
+
+  const maxWallIndex = project.room.points.length - 1;
+
+  return {
+    ...project,
+    windows: project.windows.map((item) => ({
+      ...item,
+      wallIndex: clampWallIndex(item.wallIndex, maxWallIndex)
+    })),
+    doors: project.doors.map((item) => ({
+      ...item,
+      wallIndex: clampWallIndex(item.wallIndex, maxWallIndex)
+    }))
+  };
+}
+
+function clampWallIndex(value: number, maxWallIndex: number) {
+  return Math.min(maxWallIndex, Math.max(0, Math.trunc(Number.isFinite(value) ? value : 0)));
 }
