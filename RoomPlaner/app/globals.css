@@ -87,7 +87,11 @@ textarea {
   }
 
   .segmented-tab {
-    @apply flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded px-2 text-xs font-semibold text-neutral-500 transition hover:bg-white hover:text-neutral-950;
+    @apply flex min-h-9 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded px-2 text-xs font-semibold text-neutral-500 transition hover:bg-white hover:text-neutral-950;
+  }
+
+  .segmented-tab > svg {
+    @apply shrink-0;
   }
 
   .segmented-tab-active {
@@ -136,6 +140,13 @@ textarea {
 
   .canvas-statusbar {
     @apply mb-2.5 flex min-h-9 items-center justify-between gap-3 px-1;
+  }
+
+  .canvas-stage-viewport {
+    @apply relative overflow-hidden rounded-md border border-neutral-200 bg-[#f3f3f1];
+    height: clamp(480px, calc(100dvh - 210px), 900px);
+    touch-action: none;
+    overscroll-behavior: contain;
   }
 
   .panel-section {
@@ -190,6 +201,42 @@ textarea {
 
   .mobile-workspace-badge {
     @apply absolute -right-2 -top-1 grid min-w-4 place-items-center rounded bg-rose-600 px-1 text-[9px] font-bold text-white;
+  }
+
+  .dialog-backdrop {
+    @apply fixed inset-0 z-[70] grid place-items-center bg-black/35 p-4;
+  }
+
+  .dialog-panel {
+    @apply w-full max-w-md rounded-lg border border-neutral-200 bg-white p-5 shadow-2xl;
+  }
+
+  .dialog-icon {
+    @apply grid size-9 shrink-0 place-items-center rounded-md bg-neutral-100 text-neutral-700;
+  }
+
+  .dialog-icon-danger {
+    @apply bg-rose-100 text-rose-700;
+  }
+
+  .planner-toast {
+    @apply fixed bottom-20 left-1/2 z-[80] flex w-[min(92vw,560px)] -translate-x-1/2 items-start gap-2 rounded-lg border bg-white px-3 py-3 text-sm shadow-xl xl:bottom-5;
+  }
+
+  .planner-toast-info {
+    @apply border-neutral-300 text-neutral-700;
+  }
+
+  .planner-toast-success {
+    @apply border-emerald-300 text-emerald-800;
+  }
+
+  .planner-toast-error {
+    @apply border-rose-300 text-rose-800;
+  }
+
+  .planner-toast-close {
+    @apply -mr-1 -mt-1 grid size-7 shrink-0 place-items-center rounded text-current transition hover:bg-black/5;
   }
 
   @media (min-width: 1024px) {

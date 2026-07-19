@@ -1,25 +1,23 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import type { PlannerProject } from "@/lib/types";
+import {
+  buildCloudWorkspace,
+  CLOUD_WORKSPACE_SCHEMA_VERSION,
+  parseCloudWorkspaceRecord
+} from "@/lib/cloud-workspace";
+import type { PlannerWorkspaceSnapshot } from "@/lib/planner-workspace-storage";
 import { getFirebaseDb } from "@/lib/firebase/client";
 
 const ROOMPLAN_COLLECTION = "roomPlans";
 const FIRESTORE_DOC_SOFT_LIMIT_BYTES = 900_000;
-const ROOMPLAN_SCHEMA_VERSION = 2;
-
-function buildCloudProject(project: PlannerProject) {
-  return {
-    ...project,
-    background: null
-  } satisfies PlannerProject;
-}
 
 function estimateJsonBytes(value: unknown) {
   return new TextEncoder().encode(JSON.stringify(value)).length;
 }
 
 export class FirestoreRoomPlanRepository {
-  static readonly schemaVersion = ROOMPLAN_SCHEMA_VERSION;
+  static readonly schemaVersion = CLOUD_WORKSPACE_SCHEMA_VERSION;
 
   async load(user: Pick<User, "uid">) {
     const db = getFirebaseDb();
@@ -42,26 +40,22 @@ export class FirestoreRoomPlanRepository {
       throw new Error("Firestore の保存データ所有者が現在のユーザーと一致しません。");
     }
 
-    if (!("project" in data) || data.project === null || data.project === undefined) {
-      return null;
-    }
-
-    return {
-      schemaVersion: typeof data.schemaVersion === "number" ? data.schemaVersion : 1,
-      updatedAtMs: typeof data.updatedAtMs === "number" ? data.updatedAtMs : 0,
-      project: data.project as unknown
-    };
+    return parseCloudWorkspaceRecord(data);
   }
 
-  async save(user: Pick<User, "uid" | "displayName" | "email">, project: PlannerProject) {
+  async saveWorkspace(
+    user: Pick<User, "uid" | "displayName" | "email">,
+    snapshot: PlannerWorkspaceSnapshot
+  ) {
     const db = getFirebaseDb();
     if (!db) {
       throw new Error("Firebase is not configured.");
     }
 
-    const cloudProject = buildCloudProject(project);
+    const cloud = buildCloudWorkspace(snapshot);
     const payload = {
-      project: cloudProject,
+      workspace: cloud.workspace,
+      project: cloud.legacyProject,
       owner: {
         uid: user.uid,
         displayName: user.displayName ?? null,
@@ -70,14 +64,15 @@ export class FirestoreRoomPlanRepository {
     };
 
     if (estimateJsonBytes(payload) > FIRESTORE_DOC_SOFT_LIMIT_BYTES) {
-      throw new Error("プロジェクトが大きすぎて保存できません。背景画像を外してもサイズが大きいため、家具や画像を整理してから再保存してください。");
+      throw new Error("プロジェクト一覧が大きすぎてクラウド保存できません。不要な案や家具を整理してから再保存してください。");
     }
 
     await setDoc(
       doc(db, ROOMPLAN_COLLECTION, user.uid),
       {
-        schemaVersion: ROOMPLAN_SCHEMA_VERSION,
-        project: cloudProject,
+        schemaVersion: CLOUD_WORKSPACE_SCHEMA_VERSION,
+        workspace: cloud.workspace,
+        project: cloud.legacyProject,
         updatedAt: serverTimestamp(),
         updatedAtMs: Date.now(),
         owner: {
@@ -90,7 +85,11 @@ export class FirestoreRoomPlanRepository {
     );
 
     return {
-      backgroundOmitted: project.background !== null
+      backgroundsOmitted: cloud.backgroundsOmitted
     };
+  }
+
+  async save(user: Pick<User, "uid" | "displayName" | "email">, project: PlannerProject) {
+    return this.saveWorkspace(user, { activeProjectId: project.id, projects: [project] });
   }
 }

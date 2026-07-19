@@ -1,6 +1,6 @@
 "use client";
 
-import type { MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
@@ -79,6 +79,17 @@ export function PlannerAppHeader({
 }: PlannerAppHeaderProps) {
   const status = STORAGE_STATUS[storageStatus];
   const StatusIcon = status.icon;
+  const [projectNameDraft, setProjectNameDraft] = useState(projectName);
+
+  useEffect(() => {
+    setProjectNameDraft(projectName);
+  }, [activeProjectId, projectName]);
+
+  const commitProjectName = () => {
+    const normalized = projectNameDraft.trim() || "名称未設定";
+    setProjectNameDraft(normalized);
+    if (normalized !== projectName) onRenameProject(normalized);
+  };
 
   return (
     <header className="workspace-header">
@@ -109,8 +120,12 @@ export function PlannerAppHeader({
           <span className="sr-only">プロジェクト名</span>
           <input
             className="input h-9 py-1.5 font-semibold"
-            value={projectName}
-            onChange={(event) => onRenameProject(event.target.value)}
+            value={projectNameDraft}
+            onChange={(event) => setProjectNameDraft(event.target.value)}
+            onBlur={commitProjectName}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
             placeholder="プロジェクト名"
           />
         </label>

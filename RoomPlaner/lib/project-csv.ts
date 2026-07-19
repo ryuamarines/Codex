@@ -1,4 +1,5 @@
 import { sampleProject } from "@/data/sample-project";
+import { parsePlannerProject } from "@/lib/project-schema";
 import type {
   BackgroundImage,
   ConstraintZone,
@@ -132,7 +133,7 @@ export function importProjectCsv(raw: string): PlannerProject {
     furniture: body.filter((row) => row.recordType === "furniture").map(parseFurniture)
   };
 
-  return normalizeImportedProject(project);
+  return parsePlannerProject(normalizeImportedProject(project));
 }
 
 function serializeWindow(item: WindowObject): CsvRow {
@@ -312,14 +313,15 @@ function escapeCsvCell(value: string) {
 }
 
 function parseCsv(raw: string) {
+  const source = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
   const rows: string[][] = [];
   let currentCell = "";
   let currentRow: string[] = [];
   let inQuotes = false;
 
-  for (let index = 0; index < raw.length; index += 1) {
-    const char = raw[index];
-    const nextChar = raw[index + 1];
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const nextChar = source[index + 1];
 
     if (char === "\"") {
       if (inQuotes && nextChar === "\"") {
@@ -351,6 +353,10 @@ function parseCsv(raw: string) {
     }
 
     currentCell += char;
+  }
+
+  if (inQuotes) {
+    throw new Error("CSVの引用符が閉じられていません。");
   }
 
   currentRow.push(currentCell);

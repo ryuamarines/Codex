@@ -80,7 +80,11 @@ function parseCanvas(value: unknown) {
 function parseBackground(value: unknown): BackgroundImage | null {
   if (value === null || value === undefined) return null;
   const record = asRecord(value);
-  if (!record || typeof record.dataUrl !== "string" || record.dataUrl.length === 0) return null;
+  if (
+    !record
+    || typeof record.dataUrl !== "string"
+    || !/^data:image\/(?:png|jpe?g|webp);base64,/i.test(record.dataUrl)
+  ) return null;
 
   return {
     dataUrl: record.dataUrl,

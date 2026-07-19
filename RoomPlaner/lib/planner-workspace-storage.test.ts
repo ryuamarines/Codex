@@ -7,7 +7,9 @@ import {
   loadPlannerWorkspace,
   persistPlannerProject,
   readPlannerProject,
+  readPlannerWorkspaceSnapshot,
   removePlannerProject,
+  replacePlannerWorkspace,
   setActivePlannerProject
 } from "@/lib/planner-workspace-storage";
 import { clonePlannerProject, parsePlannerProject, parsePlannerProjectJson } from "@/lib/project-schema";
@@ -40,6 +42,22 @@ class MemoryStorage implements Storage {
   }
 }
 
+class FailingStorage extends MemoryStorage {
+  private failingKey: string | null = null;
+
+  failOnceOn(key: string) {
+    this.failingKey = key;
+  }
+
+  override setItem(key: string, value: string) {
+    if (key === this.failingKey) {
+      this.failingKey = null;
+      throw new Error("quota exceeded");
+    }
+    super.setItem(key, value);
+  }
+}
+
 describe("project schema", () => {
   it("rejects malformed or unrelated JSON without guessing a project", () => {
     expect(() => parsePlannerProjectJson("{"))
@@ -66,6 +84,30 @@ describe("project schema", () => {
 
     expect(parsed.floorOpacity).toBe(1);
     expect(new Set(objectIds).size).toBe(objectIds.length);
+  });
+
+  it("keeps raster backgrounds and rejects executable image formats", () => {
+    const safe = parsePlannerProject({
+      ...sampleProject,
+      background: {
+        dataUrl: "data:image/png;base64,b2s=",
+        visible: true,
+        opacity: 0.5,
+        locked: true,
+        width: 10,
+        height: 10
+      }
+    });
+    const unsafe = parsePlannerProject({
+      ...sampleProject,
+      background: {
+        ...safe.background,
+        dataUrl: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+      }
+    });
+
+    expect(safe.background?.dataUrl).toContain("image/png");
+    expect(unsafe.background).toBeNull();
   });
 });
 
@@ -146,5 +188,81 @@ describe("planner workspace storage", () => {
     expect(imported.importedProjects[0].name).toBe("ゲスト案件（ゲストから）");
     expect(readPlannerProject(storage, "guest", guestProject.id).name).toBe("ゲスト案件");
     expect(inspectGuestWorkspace(storage, imported.index.importedGuestRevision).available).toBe(false);
+  });
+
+  it("replaces a full workspace atomically while retaining local-only backgrounds", () => {
+    const storage = new MemoryStorage();
+    let index = loadPlannerWorkspace(storage, "user.cloud-user").index;
+    const local = {
+      ...clonePlannerProject(sampleProject),
+      background: {
+        dataUrl: "data:image/png;base64,bG9jYWw=",
+        visible: true,
+        opacity: 0.5,
+        locked: true,
+        width: 800,
+        height: 600
+      }
+    };
+    index = persistPlannerProject(storage, "user.cloud-user", index, local, { updatedAtMs: 10 });
+    const second = createEmptyPlannerProject("クラウド案B");
+
+    const replaced = replacePlannerWorkspace(
+      storage,
+      "user.cloud-user",
+      {
+        activeProjectId: second.id,
+        projects: [{ ...local, background: null, name: "クラウド案A" }, second]
+      },
+      { importedGuestRevision: 7, updatedAtMs: 20 }
+    );
+
+    expect(replaced.activeProject.name).toBe("クラウド案B");
+    expect(replaced.index.importedGuestRevision).toBe(7);
+    expect(readPlannerProject(storage, "user.cloud-user", local.id).background?.dataUrl).toContain("bG9jYWw");
+    expect(readPlannerWorkspaceSnapshot(storage, "user.cloud-user", replaced.index).projects).toHaveLength(2);
+    expect(storage.getItem("roomplaner.workspace.v2.user.cloud-user.before-cloud")).not.toBeNull();
+  });
+
+  it("rolls back project bodies when the cloud workspace index cannot be committed", () => {
+    const storage = new FailingStorage();
+    let index = loadPlannerWorkspace(storage, "user.rollback-user").index;
+    const local = { ...clonePlannerProject(sampleProject), name: "端末の原本" };
+    index = persistPlannerProject(storage, "user.rollback-user", index, local, { updatedAtMs: 10 });
+    const cloudOnly = createEmptyPlannerProject("クラウドだけの案");
+    storage.failOnceOn("roomplaner.workspace.v2.user.rollback-user");
+
+    expect(() => replacePlannerWorkspace(
+      storage,
+      "user.rollback-user",
+      {
+        activeProjectId: cloudOnly.id,
+        projects: [{ ...local, name: "クラウドの上書き" }, cloudOnly]
+      },
+      { updatedAtMs: 20 }
+    )).toThrow("quota exceeded");
+
+    expect(readPlannerProject(storage, "user.rollback-user", local.id).name).toBe("端末の原本");
+    expect(() => readPlannerProject(storage, "user.rollback-user", cloudOnly.id)).toThrow("見つかりません");
+    expect(loadPlannerWorkspace(storage, "user.rollback-user").index.activeProjectId).toBe(local.id);
+  });
+
+  it("removes orphaned project bodies after a successful cloud replacement", () => {
+    const storage = new MemoryStorage();
+    let index = loadPlannerWorkspace(storage, "user.cleanup-user").index;
+    const retained = { ...clonePlannerProject(sampleProject), name: "残す案" };
+    const stale = createEmptyPlannerProject("削除済み案");
+    index = persistPlannerProject(storage, "user.cleanup-user", index, retained, { updatedAtMs: 10 });
+    persistPlannerProject(storage, "user.cleanup-user", index, stale, { updatedAtMs: 11 });
+
+    replacePlannerWorkspace(
+      storage,
+      "user.cleanup-user",
+      { activeProjectId: retained.id, projects: [retained] },
+      { updatedAtMs: 20 }
+    );
+
+    expect(readPlannerProject(storage, "user.cleanup-user", retained.id).name).toBe("残す案");
+    expect(() => readPlannerProject(storage, "user.cleanup-user", stale.id)).toThrow("見つかりません");
   });
 });

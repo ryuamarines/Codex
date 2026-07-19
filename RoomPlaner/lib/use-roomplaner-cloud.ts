@@ -4,16 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { FirestoreRoomPlanRepository } from "@/lib/firebase/firestore-roomplan-repository";
-import { buildPlannerStorageScope, type PlannerStorageScope } from "@/lib/planner-workspace-storage";
+import {
+  buildPlannerStorageScope,
+  type PlannerStorageScope,
+  type PlannerWorkspaceSnapshot
+} from "@/lib/planner-workspace-storage";
 import type { PlannerProject } from "@/lib/types";
 
 type UseRoomPlanerCloudParams = {
   firebaseUser: User | null;
   authResolved: boolean;
   project: PlannerProject;
-  hydrateProjectState: (project: PlannerProject) => void;
-  loadProjectState: (project: PlannerProject) => void;
-  parseProject: (raw: string) => PlannerProject;
+  hydrateWorkspaceState: (workspace: PlannerWorkspaceSnapshot) => boolean;
+  loadWorkspaceState: (workspace: PlannerWorkspaceSnapshot) => boolean;
+  getWorkspaceSnapshot: () => PlannerWorkspaceSnapshot | null;
   storageReady: boolean;
   storageScope: PlannerStorageScope | null;
   storageHasProject: boolean;
@@ -56,9 +60,9 @@ export function useRoomPlanerCloud({
   firebaseUser,
   authResolved,
   project,
-  hydrateProjectState,
-  loadProjectState,
-  parseProject,
+  hydrateWorkspaceState,
+  loadWorkspaceState,
+  getWorkspaceSnapshot,
   storageReady,
   storageScope,
   storageHasProject
@@ -120,15 +124,17 @@ export function useRoomPlanerCloud({
           return;
         }
 
-        const parsed = parseProject(JSON.stringify(cloudRecord.project));
-        hydrateProjectState(parsed);
+        if (!hydrateWorkspaceState(cloudRecord.workspace)) {
+          setCloudMessage("クラウドデータを端末へ保存できなかったため、読込を中断しました。ブラウザの空き容量を確認してください。");
+          return;
+        }
 
-        if (cloudRecord.schemaVersion < FirestoreRoomPlanRepository.schemaVersion) {
+        if (cloudRecord.migratedLegacy || cloudRecord.schemaVersion < FirestoreRoomPlanRepository.schemaVersion) {
           setCloudMessage(
-            "旧形式のクラウドデータを安全に読み込み、ブラウザ保存へ移行しました。クラウド原本は変更していません。"
+            "旧形式のクラウドデータを安全に読み込みました。次回のクラウド保存で複数プロジェクト形式へ更新されます。"
           );
         } else {
-          setCloudMessage("このアカウントのクラウドプロジェクトを読み込みました。");
+          setCloudMessage(`${cloudRecord.workspace.projects.length}件のクラウドプロジェクトを読み込みました。`);
         }
       } catch (error) {
         if (active) setCloudMessage(getCloudErrorMessage(error));
@@ -148,8 +154,7 @@ export function useRoomPlanerCloud({
     authResolved,
     expectedScope,
     firebaseUser,
-    hydrateProjectState,
-    parseProject,
+    hydrateWorkspaceState,
     readyScope,
     storageHasProject,
     storageReady,
@@ -165,11 +170,16 @@ export function useRoomPlanerCloud({
     const targetProjectId = project.id;
     const targetProject = project;
     const operationId = ++cloudOperationRef.current;
+    const workspaceSnapshot = getWorkspaceSnapshot();
+    if (!workspaceSnapshot) {
+      setCloudMessage("ブラウザ保存を準備できなかったため、クラウド保存を中断しました。");
+      return;
+    }
 
     try {
       setCloudBusy(true);
       const repository = new FirestoreRoomPlanRepository();
-      const result = await withTimeout(repository.save(firebaseUser, project), 8000);
+      const result = await withTimeout(repository.saveWorkspace(firebaseUser, workspaceSnapshot), 12000);
       if (cloudOperationRef.current !== operationId) return;
       if (!contextIsCurrent(targetUserId, targetProjectId)) return;
       if (!contextIsCurrent(targetUserId, targetProjectId, targetProject)) {
@@ -177,9 +187,9 @@ export function useRoomPlanerCloud({
         return;
       }
       setCloudMessage(
-        result.backgroundOmitted
-          ? "Firestoreに保存しました。背景画像は容量制限のためクラウド保存から除外しています。"
-          : "現在のプロジェクトをFirestoreに保存しました。"
+        result.backgroundsOmitted > 0
+          ? `${workspaceSnapshot.projects.length}件をクラウド保存しました。背景画像${result.backgroundsOmitted}件は端末内だけに保持しています。`
+          : `${workspaceSnapshot.projects.length}件のプロジェクトをクラウド保存しました。`
       );
     } catch (error) {
       if (cloudOperationRef.current === operationId && contextIsCurrent(targetUserId, targetProjectId)) {
@@ -214,9 +224,11 @@ export function useRoomPlanerCloud({
         setCloudMessage("Firestoreに保存済みのプロジェクトが見つかりませんでした。");
         return;
       }
-      const parsed = parseProject(JSON.stringify(cloudRecord.project));
-      loadProjectState(parsed);
-      setCloudMessage("Firestoreから現在のプロジェクトへ読み込みました。");
+      if (!loadWorkspaceState(cloudRecord.workspace)) {
+        setCloudMessage("クラウドデータを端末へ保存できなかったため、読込を中断しました。ブラウザの空き容量を確認してください。");
+        return;
+      }
+      setCloudMessage(`${cloudRecord.workspace.projects.length}件のプロジェクトをクラウドから読み込みました。`);
     } catch (error) {
       if (cloudOperationRef.current === operationId && contextIsCurrent(targetUserId, targetProjectId)) {
         setCloudMessage(getCloudErrorMessage(error));

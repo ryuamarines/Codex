@@ -20,6 +20,7 @@ type CloudPanelProps = {
   cloudBusy: boolean;
   authBusy: boolean;
   firebaseConfigured: boolean;
+  projectCount: number;
   guestTransfer: { available: boolean; count: number };
   onSignIn: () => void;
   onSignOut: () => void;
@@ -38,6 +39,7 @@ export function CloudPanel({
   cloudBusy,
   authBusy,
   firebaseConfigured,
+  projectCount,
   guestTransfer,
   onSignIn,
   onSignOut,
@@ -62,6 +64,13 @@ export function CloudPanel({
         </span>
       </div>
 
+      {firebaseUser ? (
+        <div className="mt-3 flex items-center justify-between border-t border-neutral-200 pt-3 text-xs text-neutral-600">
+          <span>クラウド保存対象</span>
+          <strong className="text-neutral-950">{projectCount}件</strong>
+        </div>
+      ) : null}
+
       <div className="mt-3 space-y-2" aria-live="polite">
         {cloudMessage ? <div className="status-message">{cloudMessage}</div> : null}
         {authMessage ? <div className="status-message status-message-warning">{authMessage}</div> : null}
@@ -85,17 +94,22 @@ export function CloudPanel({
           <LoaderCircle className="animate-spin" size={15} />
           クラウドを確認中
         </div>
+      ) : cloudBusy ? (
+        <div className="status-message mt-3 flex items-center gap-2">
+          <LoaderCircle className="animate-spin" size={15} />
+          クラウド処理中
+        </div>
       ) : null}
       <div className="mt-3 grid gap-2">
         {firebaseUser ? (
           <>
             <button className="button-soft w-full" onClick={onLoadProjectFromCloud} disabled={cloudBusy || authBusy}>
               <CloudDownload size={16} />
-              クラウドから読込
+              全プロジェクトを読込
             </button>
             <button className="button-soft w-full" onClick={onSaveProjectToCloud} disabled={cloudBusy || authBusy}>
               <CloudUpload size={16} />
-              クラウドへ保存
+              全プロジェクトを保存
             </button>
             <button className="button-danger w-full" onClick={onSignOut} disabled={authBusy}>
               <LogOut size={16} />

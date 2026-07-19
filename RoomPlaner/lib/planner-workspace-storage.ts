@@ -33,6 +33,11 @@ export type LoadedPlannerWorkspace = {
   errors: string[];
 };
 
+export type PlannerWorkspaceSnapshot = {
+  activeProjectId: string;
+  projects: PlannerProject[];
+};
+
 export function buildPlannerStorageScope(userId: string | null): PlannerStorageScope {
   return userId ? `user.${userId}` : "guest";
 }
@@ -159,6 +164,106 @@ export function readPlannerProject(storage: Storage, scope: PlannerStorageScope,
   const project = readProject(storage, scope, projectId);
   if (!project) throw new Error("保存済みプロジェクトが見つかりません。");
   return { ...project, id: projectId };
+}
+
+export function readPlannerWorkspaceSnapshot(
+  storage: Storage,
+  scope: PlannerStorageScope,
+  index: PlannerWorkspaceIndex
+): PlannerWorkspaceSnapshot {
+  const projects = index.projects.map((summary) => readPlannerProject(storage, scope, summary.id));
+  return {
+    activeProjectId: projects.some((project) => project.id === index.activeProjectId)
+      ? index.activeProjectId
+      : projects[0]?.id ?? "",
+    projects
+  };
+}
+
+export function replacePlannerWorkspace(
+  storage: Storage,
+  scope: PlannerStorageScope,
+  snapshot: PlannerWorkspaceSnapshot,
+  options?: { importedGuestRevision?: number; updatedAtMs?: number; preserveLocalBackgrounds?: boolean }
+) {
+  const seenIds = new Set<string>();
+  const projects = snapshot.projects.map((project) => {
+    const parsed = parsePlannerProject(project);
+    if (seenIds.has(parsed.id)) {
+      throw new Error("クラウドのプロジェクトIDが重複しているため読み込めませんでした。");
+    }
+    seenIds.add(parsed.id);
+
+    if (options?.preserveLocalBackgrounds !== false && !parsed.background) {
+      try {
+        const local = readProject(storage, scope, parsed.id);
+        if (local?.background) return { ...parsed, background: local.background };
+      } catch {
+        // A broken local project must not block a valid cloud recovery.
+      }
+    }
+    return parsed;
+  });
+
+  if (projects.length === 0) {
+    throw new Error("クラウドのプロジェクト一覧が空です。");
+  }
+
+  const updatedAtMs = options?.updatedAtMs ?? Date.now();
+  const activeProjectId = projects.some((project) => project.id === snapshot.activeProjectId)
+    ? snapshot.activeProjectId
+    : projects[0].id;
+  const index: PlannerWorkspaceIndex = {
+    schemaVersion: WORKSPACE_SCHEMA_VERSION,
+    activeProjectId,
+    updatedAtMs,
+    contentRevision: updatedAtMs,
+    importedGuestRevision: options?.importedGuestRevision ?? 0,
+    projects: projects.map((project) => ({ id: project.id, name: project.name, updatedAtMs }))
+  };
+
+  const currentIndex = storage.getItem(indexKey(scope));
+  if (currentIndex) {
+    try {
+      storage.setItem(`${indexKey(scope)}.before-cloud`, currentIndex);
+    } catch {
+      // The active index remains untouched until the final write below.
+    }
+  }
+
+  const projectKeys = projects.map((project) => projectKey(scope, project.id));
+  const previousProjectValues = new Map(projectKeys.map((key) => [key, storage.getItem(key)]));
+  try {
+    for (const project of projects) {
+      writeProject(storage, scope, project, updatedAtMs);
+    }
+    writeIndex(storage, scope, index);
+  } catch (error) {
+    for (const key of projectKeys) {
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Continue restoring every previous value even if one cleanup fails.
+      }
+    }
+    for (const [key, value] of previousProjectValues) {
+      if (value === null) continue;
+      try {
+        storage.setItem(key, value);
+      } catch {
+        // Removing the failed writes first gives the rollback the best chance to fit.
+      }
+    }
+    throw error;
+  }
+
+  removeOrphanedProjectBodies(storage, scope, new Set(projectKeys));
+
+  return {
+    index,
+    projects,
+    activeProject: projects.find((project) => project.id === activeProjectId) ?? projects[0]
+  };
 }
 
 export function importGuestWorkspace(
@@ -328,6 +433,22 @@ function indexKey(scope: PlannerStorageScope) {
 
 function projectKey(scope: PlannerStorageScope, projectId: string) {
   return `${STORAGE_NAMESPACE}.${scope}.project.${encodeURIComponent(projectId)}`;
+}
+
+function removeOrphanedProjectBodies(storage: Storage, scope: PlannerStorageScope, expectedKeys: Set<string>) {
+  const prefix = `${STORAGE_NAMESPACE}.${scope}.project.`;
+  const staleKeys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix) && !expectedKeys.has(key)) staleKeys.push(key);
+  }
+  for (const key of staleKeys) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // Cleanup failure must not invalidate an already committed workspace.
+    }
+  }
 }
 
 function legacyKey(scope: PlannerStorageScope) {

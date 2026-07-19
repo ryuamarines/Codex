@@ -18,11 +18,17 @@ import {
 import { CloudPanel } from "@/components/cloud-panel";
 import { PlannerAppHeader } from "@/components/planner-app-header";
 import {
+  PlannerConfirmDialog,
+  type PlannerConfirmation
+} from "@/components/planner-confirm-dialog";
+import {
   PlannerMobileNav,
   PlannerPanelTabs,
   type PlannerNavigationOption
 } from "@/components/planner-navigation";
+import { PlannerToast, type PlannerNotice } from "@/components/planner-toast";
 import { sampleProject } from "@/data/sample-project";
+import { prepareBackgroundImage, type PreparedBackgroundImage } from "@/lib/background-image";
 import {
   distance,
   getDoorSwingPolygon,
@@ -34,7 +40,11 @@ import {
   projectOffsetOnWall,
   pxToMm
 } from "@/lib/geometry";
-import { getSelectedObjectDescriptor, updateDoorField } from "@/lib/inspector";
+import {
+  getSelectedObjectDescriptor,
+  updateDoorField,
+  type InspectorField
+} from "@/lib/inspector";
 import {
   addDoor,
   addFurnitureFromRect,
@@ -63,12 +73,12 @@ import {
   parseOrthogonalWallPath
 } from "@/lib/planner5d-migration";
 import { exportProjectCsv, importProjectCsv } from "@/lib/project-csv";
+import type { PlannerWorkspaceSnapshot } from "@/lib/planner-workspace-storage";
 import { usePlannerProject } from "@/lib/use-planner-project";
 import { useRoomPlanerAuth } from "@/lib/use-roomplaner-auth";
 import { useRoomPlanerCloud } from "@/lib/use-roomplaner-cloud";
 import { usePlannerUi } from "@/lib/use-planner-ui";
 import type {
-  BackgroundImage,
   CollisionIssue,
   DoorOpenDirection,
   DoorSwing,
@@ -108,6 +118,9 @@ type LeftPanelTab = "add" | "data" | "sync";
 type RightPanelTab = "edit" | "objects" | "issues";
 type MobileWorkspaceView = "canvas" | "add" | "inspect";
 
+const MAX_CSV_IMPORT_BYTES = 12 * 1024 * 1024;
+const MAX_JSON_IMPORT_BYTES = 25 * 1024 * 1024;
+
 const LEFT_PANEL_OPTIONS: PlannerNavigationOption<LeftPanelTab>[] = [
   { value: "add", label: "追加", icon: Shapes },
   { value: "data", label: "データ", icon: Database },
@@ -145,10 +158,12 @@ export function PlannerShell() {
     guestTransfer,
     updateProject,
     applyProjectUpdate,
+    beginProjectInteraction,
+    commitProjectInteraction,
     replaceProject,
-    hydrateProject,
+    hydrateWorkspace,
+    getWorkspaceSnapshot,
     importProjectJson,
-    exportProjectJson,
     undo,
     redo,
     switchProject,
@@ -184,6 +199,8 @@ export function PlannerShell() {
   } = usePlannerUi();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importJsonInputRef = useRef<HTMLInputElement | null>(null);
+  const activeProjectIdRef = useRef(activeProjectId);
+  activeProjectIdRef.current = activeProjectId;
   const [migrationWallPath, setMigrationWallPath] = useState("right 4200\ndown 2600\nleft 1800\ndown 1200\nleft 2400\nup 3800");
   const [migrationFurnitureCsv, setMigrationFurnitureCsv] = useState(
     "name,width,depth,x,y,rotation\nBed,1400,2000,2900,2800,90\nDesk,1200,600,900,800,0"
@@ -200,6 +217,10 @@ export function PlannerShell() {
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>("add");
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("edit");
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState<MobileWorkspaceView>("canvas");
+  const [canvasFrame, setCanvasFrame] = useState({ width: 1200, height: 800 });
+  const [confirmation, setConfirmation] = useState<PlannerConfirmation | null>(null);
+  const [notice, setNotice] = useState<PlannerNotice | null>(null);
+  const noticeIdRef = useRef(0);
   const selectedObject = useMemo(() => getSelectedObjectDescriptor(project, selection), [project, selection]);
   const setupActions: Array<{ mode: PlannerMode; label: string; disabled?: boolean }> = [
     { mode: "set-scale", label: "スケール設定" },
@@ -224,15 +245,31 @@ export function PlannerShell() {
     [objectIndex, objectSearch]
   );
 
+  const showNotice = useCallback((message: string, tone: PlannerNotice["tone"] = "info") => {
+    noticeIdRef.current += 1;
+    setNotice({ id: noticeIdRef.current, message, tone });
+  }, []);
+  const closeNotice = useCallback(() => setNotice(null), []);
+  const closeConfirmation = useCallback(() => setConfirmation(null), []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeoutId = window.setTimeout(() => setNotice((current) => current?.id === notice.id ? null : current), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
   const loadProjectState = useCallback((nextProject: PlannerProject) => {
     replaceProject(nextProject);
     resetTransientUi();
   }, [replaceProject, resetTransientUi]);
 
-  const hydrateProjectState = useCallback((nextProject: PlannerProject) => {
-    hydrateProject(nextProject);
+  const hydrateWorkspaceState = useCallback((nextWorkspace: PlannerWorkspaceSnapshot) => {
+    const hydrated = hydrateWorkspace(nextWorkspace);
+    if (!hydrated) return false;
     resetTransientUi();
-  }, [hydrateProject, resetTransientUi]);
+    setMode("select");
+    return true;
+  }, [hydrateWorkspace, resetTransientUi, setMode]);
 
   const {
     cloudMessage,
@@ -246,9 +283,9 @@ export function PlannerShell() {
     firebaseUser,
     authResolved,
     project,
-    hydrateProjectState,
-    loadProjectState,
-    parseProject: importProjectJson,
+    hydrateWorkspaceState,
+    loadWorkspaceState: hydrateWorkspaceState,
+    getWorkspaceSnapshot,
     storageReady,
     storageScope,
     storageHasProject
@@ -278,22 +315,22 @@ export function PlannerShell() {
     if (!bounds) return;
     const width = Math.max(1, bounds.maxX - bounds.minX);
     const height = Math.max(1, bounds.maxY - bounds.minY);
-    const padding = 80;
+    const padding = Math.min(80, canvasFrame.width * 0.1, canvasFrame.height * 0.1);
     const scale = Math.max(
       0.35,
       Math.min(
         3.5,
         Math.min(
-          (project.canvas.width - padding * 2) / width,
-          (project.canvas.height - padding * 2) / height
+          (canvasFrame.width - padding * 2) / width,
+          (canvasFrame.height - padding * 2) / height
         )
       )
     );
 
     setViewport({
       scale,
-      x: -bounds.minX * scale + (project.canvas.width - width * scale) / 2,
-      y: -bounds.minY * scale + (project.canvas.height - height * scale) / 2
+      x: -bounds.minX * scale + (canvasFrame.width - width * scale) / 2,
+      y: -bounds.minY * scale + (canvasFrame.height - height * scale) / 2
     });
   };
 
@@ -374,7 +411,10 @@ export function PlannerShell() {
     if (!draftPlacement) return;
 
     if (mode === "add-furniture" && draftPlacement.kind === "furniture") {
-      const result = addFurnitureFromRect(project, draftPlacement.start, nextPoint);
+      const result = addFurnitureFromRect(project, draftPlacement.start, nextPoint, {
+        widthMm: selectedFurniturePreset.widthMm,
+        depthMm: selectedFurniturePreset.depthMm
+      });
       replaceProject({
         ...result.nextProject,
         furniture: result.nextProject.furniture.map((item) =>
@@ -422,89 +462,114 @@ export function PlannerShell() {
     setMode("select");
   };
 
-  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      loadBackgroundDataUrl(String(reader.result ?? ""));
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  };
+  const applyPreparedBackground = (prepared: PreparedBackgroundImage, targetProjectId: string) => {
+    if (activeProjectIdRef.current !== targetProjectId) {
+      showNotice("画像の読込中にプロジェクトが切り替わったため、適用を中断しました。", "info");
+      return false;
+    }
 
-  const loadBackgroundDataUrl = (dataUrl: string) => {
-    const image = new window.Image();
-    image.onload = () => {
-      const background: BackgroundImage = {
-        dataUrl,
+    updateProject((current) => setBackground(
+      current,
+      {
+        dataUrl: prepared.dataUrl,
         visible: true,
         opacity: 0.64,
         locked: true,
-        width: image.width,
-        height: image.height
-      };
+        width: prepared.width,
+        height: prepared.height
+      },
+      {
+        width: Math.max(current.canvas.width, prepared.width),
+        height: Math.max(current.canvas.height, prepared.height)
+      }
+    ));
+    return true;
+  };
 
-      replaceProject(
-        setBackground(project, background, {
-          width: Math.max(project.canvas.width, image.width),
-          height: Math.max(project.canvas.height, image.height)
-        })
-      );
-    };
-    image.src = dataUrl;
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const targetProjectId = activeProjectId;
+    event.target.value = "";
+    try {
+      const prepared = await prepareBackgroundImage(file);
+      if (applyPreparedBackground(prepared, targetProjectId)) {
+        showNotice(
+          prepared.optimized ? "背景画像を保存向けに最適化して読み込みました。" : "背景画像を読み込みました。",
+          "success"
+        );
+      }
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "背景画像を読み込めませんでした。", "error");
+    }
   };
 
   const loadBundledPlanner5dSample = async () => {
-    const response = await fetch("/import-samples/planner5d-room.png");
-    const blob = await response.blob();
-    const reader = new FileReader();
-    reader.onload = () => {
-      loadBackgroundDataUrl(String(reader.result ?? ""));
-    };
-    reader.readAsDataURL(blob);
+    const targetProjectId = activeProjectId;
+    try {
+      const response = await fetch("/import-samples/planner5d-room.png");
+      if (!response.ok) throw new Error("添付画像を取得できませんでした。");
+      const blob = await response.blob();
+      const prepared = await prepareBackgroundImage(new File([blob], "planner5d-room.png", { type: blob.type || "image/png" }));
+      if (applyPreparedBackground(prepared, targetProjectId)) {
+        showNotice("添付画像を背景へ読み込みました。", "success");
+      }
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "添付画像を読み込めませんでした。", "error");
+    }
   };
 
   const exportProject = () => {
-    const blob = new Blob([exportProjectCsv(project)], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(["\ufeff", exportProjectCsv(project)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `${project.name || "RoomPlaner-project"}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+    showNotice("現在のプロジェクトをCSVへ書き出しました。", "success");
   };
 
-  const importProject = (event: ChangeEvent<HTMLInputElement>) => {
+  const importProject = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = importProjectCsv(String(reader.result ?? ""));
-        loadProjectState(parsed);
-      } catch {
-        window.alert("CSV の読み込みに失敗しました。RoomPlaner の書き出しCSVを選んでください。");
-      }
-    };
-    reader.readAsText(file);
+    const targetProjectId = activeProjectId;
     event.target.value = "";
+    try {
+      if (file.size > MAX_CSV_IMPORT_BYTES) {
+        throw new Error("CSVが12MBを超えています。RoomPlanerのプロジェクトCSVを選んでください。");
+      }
+      const parsed = importProjectCsv(await file.text());
+      if (activeProjectIdRef.current !== targetProjectId) {
+        showNotice("CSV読込中にプロジェクトが切り替わったため、適用を中断しました。", "info");
+        return;
+      }
+      loadProjectState(parsed);
+      showNotice("CSVからプロジェクトを読み込みました。", "success");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "CSVを読み込めませんでした。", "error");
+    }
   };
 
-  const importLegacyJsonProject = (event: ChangeEvent<HTMLInputElement>) => {
+  const importLegacyJsonProject = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = importProjectJson(String(reader.result ?? ""));
-        loadProjectState(parsed);
-      } catch {
-        window.alert("JSON の読み込みに失敗しました。旧 RoomPlaner の書き出しJSONを選んでください。");
-      }
-    };
-    reader.readAsText(file);
+    const targetProjectId = activeProjectId;
     event.target.value = "";
+    try {
+      if (file.size > MAX_JSON_IMPORT_BYTES) {
+        throw new Error("JSONが25MBを超えています。背景画像を外したデータで再度お試しください。");
+      }
+      const parsed = importProjectJson(await file.text());
+      if (activeProjectIdRef.current !== targetProjectId) {
+        showNotice("JSON読込中にプロジェクトが切り替わったため、適用を中断しました。", "info");
+        return;
+      }
+      loadProjectState(parsed);
+      showNotice("旧JSONからプロジェクトを読み込みました。", "success");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "JSONを読み込めませんでした。", "error");
+    }
   };
 
   const importRoomFromPlanner5dPath = () => {
@@ -543,8 +608,10 @@ export function PlannerShell() {
 
   const updateSelectedField = (field: string, value: string | number) => {
     if (!selection) return;
+    const normalizedValue = normalizeInspectorValue(field, value);
+    if (normalizedValue === null) return;
     updateProject((current) =>
-      updateSelectedFieldOnProject(current, selection, field, value, updateDoorField)
+      updateSelectedFieldOnProject(current, selection, field, normalizedValue, updateDoorField)
     );
   };
 
@@ -978,21 +1045,41 @@ export function PlannerShell() {
             createProject();
             resetTransientUi();
             setMode("select");
+            showNotice("新しいプロジェクトを作成しました。", "success");
           }}
-          onDuplicateProject={duplicateProject}
+          onDuplicateProject={() => {
+            duplicateProject();
+            showNotice("現在のプロジェクトを複製しました。", "success");
+          }}
           onDeleteProject={() => {
-            if (!window.confirm(`「${project.name}」を削除しますか？この操作はUndoできません。`)) return;
-            deleteProject();
-            resetTransientUi();
-            setMode("select");
+            setConfirmation({
+              title: "プロジェクトを削除",
+              message: `「${project.name}」を削除します。この操作は元に戻せません。`,
+              confirmLabel: "削除する",
+              danger: true,
+              onConfirm: () => {
+                deleteProject();
+                resetTransientUi();
+                setMode("select");
+                showNotice("プロジェクトを削除しました。", "success");
+              }
+            });
           }}
           onImportCsv={() => importInputRef.current?.click()}
           onImportJson={() => importJsonInputRef.current?.click()}
           onExportCsv={exportProject}
           onLoadSample={() => {
-            if (!window.confirm("現在のプロジェクト内容をサンプルで置き換えますか？")) return;
-            loadProjectState({ ...sampleProject, id: project.id });
-            setMode("select");
+            const targetProjectId = project.id;
+            setConfirmation({
+              title: "サンプルで置き換え",
+              message: "現在のプロジェクト内容をサンプルルームへ置き換えます。Undoで元に戻せます。",
+              confirmLabel: "置き換える",
+              onConfirm: () => {
+                loadProjectState({ ...sampleProject, id: targetProjectId });
+                setMode("select");
+                showNotice("サンプルルームを読み込みました。", "success");
+              }
+            });
           }}
         />
 
@@ -1071,6 +1158,9 @@ export function PlannerShell() {
               onToggleSelectedDoorOpenDirection={toggleSelectedDoorOpenDirection}
               onResizeSelectedFurniture={resizeSelectedFurniture}
               onResizeSelectedZone={resizeSelectedZone}
+              onStageSizeChange={setCanvasFrame}
+              onBeginProjectInteraction={beginProjectInteraction}
+              onCommitProjectInteraction={commitProjectInteraction}
             />
           </section>
 
@@ -1095,13 +1185,18 @@ export function PlannerShell() {
                 cloudBusy={cloudBusy}
                 authBusy={authBusy}
                 firebaseConfigured={firebaseConfigured}
+                projectCount={projects.length}
                 guestTransfer={guestTransfer}
                 onSignIn={handleSignIn}
                 onSignOut={handleSignOut}
                 onSaveProjectToCloud={saveProjectToCloud}
                 onLoadProjectFromCloud={() => {
-                  if (!window.confirm("選択中のプロジェクトをFirestoreの内容で置き換えますか？")) return;
-                  void loadProjectFromCloud();
+                  setConfirmation({
+                    title: "クラウドから読み込む",
+                    message: "このアカウントのプロジェクト一覧をクラウドの内容へ置き換えます。端末内の背景画像は同じプロジェクトIDに限り保持されます。",
+                    confirmLabel: "読み込む",
+                    onConfirm: () => { void loadProjectFromCloud(); }
+                  });
                 }}
                 onImportGuestProjects={importGuestProjects}
               />
@@ -1112,7 +1207,7 @@ export function PlannerShell() {
               <label className="button-soft cursor-pointer text-center">
                 <Upload size={15} />
                 背景画像を読み込む
-                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageUpload} />
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageUpload} />
               </label>
               <button className="button-soft" onClick={loadBundledPlanner5dSample}>
                 添付画像を背景に使う
@@ -1396,6 +1491,9 @@ export function PlannerShell() {
                       max="1"
                       step="0.05"
                       value={project.background.opacity}
+                      onPointerDown={beginProjectInteraction}
+                      onPointerUp={commitProjectInteraction}
+                      onPointerCancel={commitProjectInteraction}
                       onChange={(event) =>
                         updateProject((current) => ({
                           ...current,
@@ -1433,6 +1531,9 @@ export function PlannerShell() {
                     max="1"
                     step="0.05"
                     value={project.floorOpacity}
+                    onPointerDown={beginProjectInteraction}
+                    onPointerUp={commitProjectInteraction}
+                    onPointerCancel={commitProjectInteraction}
                     onChange={(event) =>
                       updateProject((current) => ({
                         ...current,
@@ -1474,36 +1575,11 @@ export function PlannerShell() {
 
                 <div className="mt-4 space-y-3">
                   {selectedObject.fields.map((field) => (
-                    <label key={field.key} className="block">
-                      <span className="mb-1.5 block text-xs font-semibold text-neutral-500">
-                        {field.label}
-                      </span>
-                      {field.type === "select" ? (
-                        <select
-                          className="input"
-                          value={String(field.value)}
-                          onChange={(event) => updateSelectedField(field.key, event.target.value)}
-                        >
-                          {field.options!.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          className="input"
-                          type={field.type}
-                          value={String(field.value)}
-                          onChange={(event) =>
-                            updateSelectedField(
-                              field.key,
-                              field.type === "number" ? Number(event.target.value) : event.target.value
-                            )
-                          }
-                        />
-                      )}
-                    </label>
+                    <InspectorFieldEditor
+                      key={field.key}
+                      field={field}
+                      onCommit={(value) => updateSelectedField(field.key, value)}
+                    />
                   ))}
                 </div>
 
@@ -1741,8 +1817,14 @@ export function PlannerShell() {
             { value: "add", label: "追加", icon: Plus },
             { value: "inspect", label: "編集", icon: Settings2, badge: issues.length }
           ]}
-          onChange={setMobileWorkspaceView}
+          onChange={(nextView) => {
+            setMobileWorkspaceView(nextView);
+            if (nextView === "add") setLeftPanelTab("add");
+            if (nextView === "inspect") setRightPanelTab("edit");
+          }}
         />
+        <PlannerToast notice={notice} onClose={closeNotice} />
+        <PlannerConfirmDialog confirmation={confirmation} onClose={closeConfirmation} />
       </div>
     </main>
   );
@@ -1763,6 +1845,75 @@ function SummaryValue({
       <strong className={danger ? "text-rose-700" : "text-neutral-950"}>{value}</strong>
     </div>
   );
+}
+
+function InspectorFieldEditor({
+  field,
+  onCommit
+}: {
+  field: InspectorField;
+  onCommit: (value: string | number) => void;
+}) {
+  const [draft, setDraft] = useState(String(field.value));
+
+  useEffect(() => {
+    setDraft(String(field.value));
+  }, [field.value]);
+
+  if (field.type === "select") {
+    return (
+      <label className="block">
+        <span className="mb-1.5 block text-xs font-semibold text-neutral-500">{field.label}</span>
+        <select className="input" value={field.value} onChange={(event) => onCommit(event.target.value)}>
+          {field.options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  const commit = () => {
+    if (draft === String(field.value)) return;
+    if (field.type === "number") {
+      const parsed = Number(draft);
+      if (!Number.isFinite(parsed)) {
+        setDraft(String(field.value));
+        return;
+      }
+      onCommit(parsed);
+      return;
+    }
+    onCommit(draft);
+  };
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-semibold text-neutral-500">{field.label}</span>
+      <input
+        className="input"
+        type={field.type}
+        inputMode={field.type === "number" ? "decimal" : undefined}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+      />
+    </label>
+  );
+}
+
+function normalizeInspectorValue(field: string, value: string | number) {
+  if (typeof value === "string") {
+    return value.slice(0, field === "name" ? 120 : 500);
+  }
+  if (!Number.isFinite(value)) return null;
+  if (field === "widthMm" || field === "depthMm") return Math.min(1_000_000, Math.max(200, value));
+  if (field === "offset") return Math.min(1_000_000, Math.max(0, value));
+  if (field === "rotation") return normalizeRotation(value);
+  return Math.min(1_000_000, Math.max(-1_000_000, value));
 }
 
 function modeDescriptionShort(mode: PlannerMode) {

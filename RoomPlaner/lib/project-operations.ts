@@ -1,4 +1,4 @@
-import { createId } from "@/lib/geometry";
+import { createId, getWallPlacement, mmToPx, nearestWallPoint } from "@/lib/geometry";
 import type { DoorObject, PlannerProject, Point } from "@/lib/types";
 
 export function addFurniture(project: PlannerProject, point: Point) {
@@ -45,12 +45,24 @@ export function addZone(project: PlannerProject, point: Point) {
   };
 }
 
-export function addFurnitureFromRect(project: PlannerProject, start: Point, end: Point) {
+export function addFurnitureFromRect(
+  project: PlannerProject,
+  start: Point,
+  end: Point,
+  defaults?: { widthMm: number; depthMm: number }
+) {
   const minX = Math.min(start.x, end.x);
   const maxX = Math.max(start.x, end.x);
   const minY = Math.min(start.y, end.y);
   const maxY = Math.max(start.y, end.y);
   const id = createId("furniture");
+  const isTap = maxX - minX < 6 && maxY - minY < 6;
+  const widthMm = isTap && defaults
+    ? defaults.widthMm
+    : Math.max(200, Math.round((maxX - minX) / project.scalePxPerMm));
+  const depthMm = isTap && defaults
+    ? defaults.depthMm
+    : Math.max(200, Math.round((maxY - minY) / project.scalePxPerMm));
 
   return {
     nextProject: {
@@ -63,8 +75,8 @@ export function addFurnitureFromRect(project: PlannerProject, start: Point, end:
           kind: "generic" as const,
           x: (minX + maxX) / 2,
           y: (minY + maxY) / 2,
-          widthMm: Math.max(200, Math.round((maxX - minX) / project.scalePxPerMm)),
-          depthMm: Math.max(200, Math.round((maxY - minY) / project.scalePxPerMm)),
+          widthMm,
+          depthMm,
           rotation: 0
         }
       ]
@@ -79,6 +91,7 @@ export function addZoneFromRect(project: PlannerProject, start: Point, end: Poin
   const minY = Math.min(start.y, end.y);
   const maxY = Math.max(start.y, end.y);
   const id = createId("zone");
+  const isTap = maxX - minX < 6 && maxY - minY < 6;
 
   return {
     nextProject: {
@@ -89,8 +102,8 @@ export function addZoneFromRect(project: PlannerProject, start: Point, end: Poin
           id,
           x: minX,
           y: minY,
-          widthMm: Math.max(200, Math.round((maxX - minX) / project.scalePxPerMm)),
-          depthMm: Math.max(200, Math.round((maxY - minY) / project.scalePxPerMm)),
+          widthMm: isTap ? 1600 : Math.max(200, Math.round((maxX - minX) / project.scalePxPerMm)),
+          depthMm: isTap ? 800 : Math.max(200, Math.round((maxY - minY) / project.scalePxPerMm)),
           note: ""
         }
       ]
@@ -134,13 +147,27 @@ export function addDoor(project: PlannerProject, wallIndex: number, offset: numb
 
 export function setRoom(project: PlannerProject, points: Point[]) {
   const roomId = createId("room");
+  const remap = (wallIndex: number, offset: number, widthMm: number) => {
+    if (!project.room) return { wallIndex, offset };
+    const widthPx = mmToPx(widthMm, project.scalePxPerMm);
+    const previous = getWallPlacement(project.room.points, wallIndex, offset, widthPx);
+    const nearest = nearestWallPoint(points, previous.center);
+    if (!nearest) return { wallIndex: 0, offset: 0 };
+    return {
+      wallIndex: nearest.index,
+      offset: Math.max(0, Math.min(nearest.length - widthPx, nearest.length * nearest.projection - widthPx / 2))
+    };
+  };
+
   return {
     nextProject: {
       ...project,
       room: {
         id: roomId,
         points
-      }
+      },
+      windows: project.windows.map((item) => ({ ...item, ...remap(item.wallIndex, item.offset, item.widthMm) })),
+      doors: project.doors.map((item) => ({ ...item, ...remap(item.wallIndex, item.offset, item.widthMm) }))
     },
     roomId
   };

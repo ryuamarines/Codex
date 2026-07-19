@@ -11,11 +11,14 @@ import {
   loadPlannerWorkspace,
   persistPlannerProject,
   readPlannerProject,
+  readPlannerWorkspaceSnapshot,
   removePlannerProject,
+  replacePlannerWorkspace,
   setActivePlannerProject,
   type PlannerProjectSummary,
   type PlannerStorageScope,
-  type PlannerWorkspaceIndex
+  type PlannerWorkspaceIndex,
+  type PlannerWorkspaceSnapshot
 } from "@/lib/planner-workspace-storage";
 import { clonePlannerProject, parsePlannerProject, parsePlannerProjectJson } from "@/lib/project-schema";
 import type { PlannerProject } from "@/lib/types";
@@ -52,6 +55,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
   const scopeRef = useRef<PlannerStorageScope | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const skipInitialSaveScopeRef = useRef<PlannerStorageScope | null>(null);
+  const interactionBaseRef = useRef<PlannerProject | null>(null);
   const storageReady = authResolved && loadedScope === expectedScope && workspaceIndex !== null;
 
   const cancelPendingSave = useCallback(() => {
@@ -67,6 +71,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
   }, []);
 
   const applyActiveProject = useCallback((nextProject: PlannerProject) => {
+    interactionBaseRef.current = null;
     projectRef.current = nextProject;
     setProject(nextProject);
     setUndoStack([]);
@@ -95,6 +100,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     }
 
     cancelPendingSave();
+    interactionBaseRef.current = null;
     setStorageNotice("");
     setStorageStatus("loading");
     setLoadedScope(null);
@@ -226,17 +232,31 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     updater: (current: PlannerProject) => PlannerProject,
     options?: { recordHistory?: boolean }
   ) => {
-    const recordHistory = options?.recordHistory ?? true;
-    setProject((current) => {
-      const next = updater(current);
-      projectRef.current = next;
-      if (next !== current) setStorageStatus("saving");
-      if (recordHistory && next !== current) {
-        setUndoStack((history) => [...history.slice(-39), current]);
-        setRedoStack([]);
-      }
-      return next;
-    });
+    const current = projectRef.current;
+    const next = updater(current);
+    if (next === current) return;
+
+    const recordHistory = (options?.recordHistory ?? true) && interactionBaseRef.current === null;
+    projectRef.current = next;
+    setStorageStatus("saving");
+    if (recordHistory) {
+      setUndoStack((history) => [...history.slice(-39), current]);
+      setRedoStack([]);
+    }
+    setProject(next);
+  }, []);
+
+  const beginProjectInteraction = useCallback(() => {
+    interactionBaseRef.current ??= projectRef.current;
+  }, []);
+
+  const commitProjectInteraction = useCallback(() => {
+    const base = interactionBaseRef.current;
+    interactionBaseRef.current = null;
+    if (!base || base === projectRef.current) return;
+    setUndoStack((history) => [...history.slice(-39), base]);
+    setRedoStack([]);
+    setStorageStatus("saving");
   }, []);
 
   const updateProject = useCallback((updater: (current: PlannerProject) => PlannerProject) => {
@@ -250,6 +270,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       id: index?.activeProjectId ?? nextProject.id
     });
     const current = projectRef.current;
+    interactionBaseRef.current = null;
     setUndoStack((history) => [...history.slice(-39), current]);
     setRedoStack([]);
     projectRef.current = normalized;
@@ -257,25 +278,45 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     setProject(normalized);
   }, []);
 
-  const hydrateProject = useCallback((nextProject: PlannerProject) => {
+  const getWorkspaceSnapshot = useCallback(() => {
     const scope = scopeRef.current;
-    const index = indexRef.current;
-    if (!scope || !index) return;
-    const normalized = parsePlannerProject({ ...nextProject, id: index.activeProjectId });
-
+    const currentIndex = flushCurrentProject({ force: true });
+    if (!scope || !currentIndex) return null;
     try {
-      const nextIndex = persistPlannerProject(window.localStorage, scope, index, normalized);
-      persistedProjectRef.current = normalized;
-      applyIndex(nextIndex);
+      return readPlannerWorkspaceSnapshot(window.localStorage, scope, currentIndex);
+    } catch (error) {
+      setStorageStatus("error");
+      setStorageError(`プロジェクト一覧を準備できませんでした: ${errorMessage(error)}`);
+      return null;
+    }
+  }, [flushCurrentProject]);
+
+  const hydrateWorkspace = useCallback((snapshot: PlannerWorkspaceSnapshot) => {
+    const scope = scopeRef.current;
+    const currentIndex = indexRef.current;
+    if (!scope || !currentIndex) return false;
+
+    cancelPendingSave();
+    interactionBaseRef.current = null;
+    try {
+      const hydrated = replacePlannerWorkspace(window.localStorage, scope, snapshot, {
+        importedGuestRevision: currentIndex.importedGuestRevision,
+        preserveLocalBackgrounds: true
+      });
+      applyIndex(hydrated.index);
+      skipInitialSaveScopeRef.current = scope;
+      persistedProjectRef.current = hydrated.activeProject;
+      applyActiveProject(hydrated.activeProject);
       setStorageHasProject(true);
       setStorageStatus("saved");
       setStorageError("");
+      return true;
     } catch (error) {
       setStorageStatus("error");
-      setStorageError(`クラウドデータのブラウザ保存に失敗しました: ${errorMessage(error)}`);
+      setStorageError(`クラウドのプロジェクト一覧を保存できませんでした: ${errorMessage(error)}`);
+      return false;
     }
-    applyActiveProject(normalized);
-  }, [applyActiveProject, applyIndex]);
+  }, [applyActiveProject, applyIndex, cancelPendingSave]);
 
   const switchProject = useCallback((projectId: string) => {
     const scope = scopeRef.current;
@@ -401,9 +442,9 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
   }, [applyActiveProject, applyIndex, flushCurrentProject]);
 
   const importProjectJson = useCallback((raw: string) => parsePlannerProjectJson(raw), []);
-  const exportProjectJson = useCallback(() => JSON.stringify(projectRef.current, null, 2), []);
 
   const undo = useCallback(() => {
+    interactionBaseRef.current = null;
     setUndoStack((history) => {
       const previous = history[history.length - 1];
       if (!previous) return history;
@@ -416,6 +457,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
   }, []);
 
   const redo = useCallback(() => {
+    interactionBaseRef.current = null;
     setRedoStack((history) => {
       const next = history[history.length - 1];
       if (!next) return history;
@@ -443,10 +485,12 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     guestTransfer,
     updateProject,
     applyProjectUpdate,
+    beginProjectInteraction,
+    commitProjectInteraction,
     replaceProject,
-    hydrateProject,
+    hydrateWorkspace,
+    getWorkspaceSnapshot,
     importProjectJson,
-    exportProjectJson,
     undo,
     redo,
     switchProject,

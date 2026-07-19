@@ -1,6 +1,7 @@
 "use client";
 
 import type { Stage as KonvaStage } from "konva/lib/Stage";
+import type { KonvaEventObject, Node as KonvaNode } from "konva/lib/Node";
 import { Image as KonvaImage, Arc, Circle, Group, Layer, Line, Rect, Stage, Text } from "react-konva";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
@@ -57,6 +58,9 @@ type PlannerCanvasProps = {
   onToggleSelectedDoorOpenDirection: () => void;
   onResizeSelectedFurniture: (widthMm: number, depthMm: number) => void;
   onResizeSelectedZone: (widthMm: number, depthMm: number) => void;
+  onStageSizeChange: (size: { width: number; height: number }) => void;
+  onBeginProjectInteraction: () => void;
+  onCommitProjectInteraction: () => void;
 };
 
 function useBackgroundImage(dataUrl: string | null) {
@@ -118,14 +122,27 @@ export function PlannerCanvas({
   onToggleSelectedDoorSwing,
   onToggleSelectedDoorOpenDirection,
   onResizeSelectedFurniture,
-  onResizeSelectedZone
+  onResizeSelectedZone,
+  onStageSizeChange,
+  onBeginProjectInteraction,
+  onCommitProjectInteraction
 }: PlannerCanvasProps) {
   const stageRef = useRef<KonvaStage | null>(null);
+  const stageViewportRef = useRef<HTMLDivElement | null>(null);
   const interactionRef = useRef<"pan" | "object" | null>(null);
   const skipNextStagePointerUpRef = useRef(false);
+  const pinchRef = useRef<{
+    distance: number;
+    scale: number;
+    worldPoint: Point;
+  } | null>(null);
   const backgroundImage = useBackgroundImage(project.background?.dataUrl ?? null);
   const [isStageDragging, setIsStageDragging] = useState(false);
   const [isObjectDragging, setIsObjectDragging] = useState(false);
+  const [stageSize, setStageSize] = useState({
+    width: Math.min(project.canvas.width, 1200),
+    height: Math.min(project.canvas.height, 800)
+  });
   const [panState, setPanState] = useState<{
     pointerStart: Point;
     viewportStart: ViewportState;
@@ -236,12 +253,34 @@ export function PlannerCanvas({
     return null;
   }, [project.room, project.scalePxPerMm, roomBounds, selectedFurniture, selectedZone, selection, selectionAnchor]);
   const quickPanelStyle = selectionBounds
-    ? getQuickToolbarPosition(selectionBounds, viewport, project.canvas)
+    ? getQuickToolbarPosition(selectionBounds, viewport, stageSize)
     : null;
+
+  useEffect(() => {
+    const element = stageViewportRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      const nextSize = {
+        width: Math.max(280, Math.floor(element.clientWidth)),
+        height: Math.max(420, Math.floor(element.clientHeight))
+      };
+      setStageSize((current) => (
+        current.width === nextSize.width && current.height === nextSize.height ? current : nextSize
+      ));
+      onStageSizeChange(nextSize);
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onStageSizeChange]);
 
   const beginObjectInteraction = () => {
     interactionRef.current = "object";
     skipNextStagePointerUpRef.current = true;
+    onBeginProjectInteraction();
     setIsObjectDragging(true);
     setPanState(null);
     setIsStageDragging(false);
@@ -250,6 +289,12 @@ export function PlannerCanvas({
   const finishObjectInteraction = () => {
     interactionRef.current = null;
     setIsObjectDragging(false);
+  };
+
+  const commitObjectInteraction = () => {
+    finishObjectInteraction();
+    skipNextStagePointerUpRef.current = false;
+    onCommitProjectInteraction();
   };
 
   const beginPan = (pointer: Point) => {
@@ -276,19 +321,167 @@ export function PlannerCanvas({
   }, []);
 
   useEffect(() => {
-    const onMouseUp = () => {
+    const finishInterruptedInteraction = () => {
+      if (interactionRef.current === "object") {
+        onCommitProjectInteraction();
+      }
       interactionRef.current = null;
+      pinchRef.current = null;
+      skipNextStagePointerUpRef.current = false;
       setIsObjectDragging(false);
       setPanState(null);
       setIsStageDragging(false);
     };
 
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("blur", finishInterruptedInteraction);
+    window.addEventListener("touchcancel", finishInterruptedInteraction);
 
     return () => {
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("blur", finishInterruptedInteraction);
+      window.removeEventListener("touchcancel", finishInterruptedInteraction);
     };
-  }, []);
+  }, [onCommitProjectInteraction]);
+
+  const getWorldPoint = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const stage = event.target.getStage();
+    const pointer = stage?.getPointerPosition();
+    if (!pointer) return null;
+    return {
+      screen: pointer,
+      world: {
+        x: (pointer.x - viewport.x) / viewport.scale,
+        y: (pointer.y - viewport.y) / viewport.scale
+      }
+    };
+  };
+
+  const getTargetSelection = (target: KonvaNode) => {
+    let node: KonvaNode | null = target;
+    while (node) {
+      const attrs = node.attrs as { objectId?: string; objectType?: Exclude<Selection, null>["type"] };
+      if (attrs.objectId && attrs.objectType) {
+        return { type: attrs.objectType, id: attrs.objectId } as Exclude<Selection, null>;
+      }
+      node = node.getParent();
+    }
+    return null;
+  };
+
+  const beginPinch = (event: KonvaEventObject<TouchEvent>) => {
+    if (event.evt.touches.length < 2) return false;
+    const stage = event.target.getStage();
+    const container = stage?.container();
+    if (!stage || !container) return false;
+    const first = event.evt.touches[0];
+    const second = event.evt.touches[1];
+    const rect = container.getBoundingClientRect();
+    const center = {
+      x: (first.clientX + second.clientX) / 2 - rect.left,
+      y: (first.clientY + second.clientY) / 2 - rect.top
+    };
+    pinchRef.current = {
+      distance: Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY),
+      scale: viewport.scale,
+      worldPoint: {
+        x: (center.x - viewport.x) / viewport.scale,
+        y: (center.y - viewport.y) / viewport.scale
+      }
+    };
+    finishPan();
+    return true;
+  };
+
+  const handleStagePointerDown = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    setContextMenu(null);
+    if ("touches" in event.evt) {
+      event.evt.preventDefault();
+      if (beginPinch(event as KonvaEventObject<TouchEvent>)) return;
+    }
+
+    const point = getWorldPoint(event);
+    if (!point) return;
+    const targetSelection = getTargetSelection(event.target);
+    const additive = "shiftKey" in event.evt ? event.evt.shiftKey : false;
+
+    if (targetSelection) {
+      finishPan();
+      onSelect(targetSelection, additive);
+      return;
+    }
+
+    if (mode === "select" && interactionRef.current !== "object") {
+      beginPan(point.screen);
+    }
+    onCanvasPointerDown(point.world);
+    onSelect(null, additive);
+    if (mode !== "add-furniture" && mode !== "add-zone") {
+      onCanvasClick(point.world);
+    }
+  };
+
+  const handleStagePointerMove = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if ("touches" in event.evt) {
+      event.evt.preventDefault();
+      if (event.evt.touches.length >= 2 && pinchRef.current) {
+        const stage = event.target.getStage();
+        const container = stage?.container();
+        if (!stage || !container) return;
+        const first = event.evt.touches[0];
+        const second = event.evt.touches[1];
+        const rect = container.getBoundingClientRect();
+        const center = {
+          x: (first.clientX + second.clientX) / 2 - rect.left,
+          y: (first.clientY + second.clientY) / 2 - rect.top
+        };
+        const nextDistance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+        const nextScale = Math.max(
+          0.35,
+          Math.min(3.5, pinchRef.current.scale * (nextDistance / Math.max(1, pinchRef.current.distance)))
+        );
+        pinchRef.current.distance = nextDistance;
+        pinchRef.current.scale = nextScale;
+        onViewportChange({
+          scale: nextScale,
+          x: center.x - pinchRef.current.worldPoint.x * nextScale,
+          y: center.y - pinchRef.current.worldPoint.y * nextScale
+        });
+        return;
+      }
+    }
+
+    const point = getWorldPoint(event);
+    if (!point) return;
+    if (panState && interactionRef.current === "pan") {
+      onViewportChange({
+        ...panState.viewportStart,
+        x: panState.viewportStart.x + (point.screen.x - panState.pointerStart.x),
+        y: panState.viewportStart.y + (point.screen.y - panState.pointerStart.y)
+      });
+    }
+    onCanvasMove(point.world);
+  };
+
+  const handleStagePointerUp = (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if ("touches" in event.evt) {
+      event.evt.preventDefault();
+      if (pinchRef.current) {
+        if (event.evt.touches.length < 2) pinchRef.current = null;
+        finishPan();
+        return;
+      }
+    }
+
+    const point = getWorldPoint(event);
+    finishPan();
+    if (!point) return;
+    if (skipNextStagePointerUpRef.current) {
+      skipNextStagePointerUpRef.current = false;
+      return;
+    }
+    if (interactionRef.current !== "object") {
+      onCanvasPointerUp(point.world);
+    }
+  };
 
   const cursorClass =
     mode === "trace-room" || mode === "set-scale" || mode === "add-furniture" || mode === "add-zone"
@@ -337,11 +530,11 @@ export function PlannerCanvas({
         </div>
       </div>
 
-      <div className={`relative overflow-auto rounded-md border border-neutral-200 bg-[#f3f3f1] ${cursorClass}`}>
+      <div ref={stageViewportRef} className={`canvas-stage-viewport ${cursorClass}`}>
         <Stage
           ref={stageRef}
-          width={project.canvas.width}
-          height={project.canvas.height}
+          width={stageSize.width}
+          height={stageSize.height}
           x={viewport.x}
           y={viewport.y}
           scaleX={viewport.scale}
@@ -367,77 +560,12 @@ export function PlannerCanvas({
               y: pointer.y - worldPoint.y * nextScale
             });
           }}
-          onMouseDown={(event) => {
-            setContextMenu(null);
-            const stage = event.target.getStage();
-            const pointer = stage?.getPointerPosition();
-            if (!pointer) return;
-            const point = pointer
-              ? {
-                  x: (pointer.x - viewport.x) / viewport.scale,
-                  y: (pointer.y - viewport.y) / viewport.scale
-                }
-              : null;
-            if (!point) return;
-            const attrs = (event.target as {
-              attrs?: { objectId?: string; objectType?: Exclude<Selection, null>["type"] };
-            }).attrs;
-
-            if (attrs?.objectId && attrs.objectType) {
-              finishPan();
-              onSelect({ type: attrs.objectType, id: attrs.objectId }, event.evt.shiftKey);
-              return;
-            }
-
-            if (mode === "select" && interactionRef.current !== "object") {
-              beginPan(pointer);
-            }
-            onCanvasPointerDown(point);
-            onSelect(null, event.evt.shiftKey);
-            if (mode !== "add-furniture" && mode !== "add-zone") {
-              onCanvasClick(point);
-            }
-          }}
-          onMouseMove={(event) => {
-            const stage = event.target.getStage();
-            const pointer = stage?.getPointerPosition();
-            if (!pointer) return;
-            const point = pointer
-              ? {
-                  x: (pointer.x - viewport.x) / viewport.scale,
-                  y: (pointer.y - viewport.y) / viewport.scale
-                }
-              : null;
-            if (!point) return;
-            if (panState && interactionRef.current === "pan") {
-              onViewportChange({
-                ...panState.viewportStart,
-                x: panState.viewportStart.x + (pointer.x - panState.pointerStart.x),
-                y: panState.viewportStart.y + (pointer.y - panState.pointerStart.y)
-              });
-            }
-            onCanvasMove(point);
-          }}
-          onMouseUp={(event) => {
-            const stage = event.target.getStage();
-            const pointer = stage?.getPointerPosition();
-            if (!pointer) return;
-            const point = pointer
-              ? {
-                  x: (pointer.x - viewport.x) / viewport.scale,
-                  y: (pointer.y - viewport.y) / viewport.scale
-                }
-              : null;
-            if (!point) return;
-            finishPan();
-            if (skipNextStagePointerUpRef.current) {
-              skipNextStagePointerUpRef.current = false;
-              return;
-            }
-            if (interactionRef.current !== "object") {
-              onCanvasPointerUp(point);
-            }
-          }}
+          onMouseDown={handleStagePointerDown}
+          onMouseMove={handleStagePointerMove}
+          onMouseUp={handleStagePointerUp}
+          onTouchStart={handleStagePointerDown}
+          onTouchMove={handleStagePointerMove}
+          onTouchEnd={handleStagePointerUp}
           onMouseLeave={() => {
             finishPan();
           }}
@@ -446,12 +574,10 @@ export function PlannerCanvas({
             const stage = event.target.getStage();
             const pointer = stage?.getPointerPosition();
             if (!pointer) return;
-            const attrs = (event.target as {
-              attrs?: { objectId?: string; objectType?: Exclude<Selection, null>["type"] };
-            }).attrs;
+            const targetSelection = getTargetSelection(event.target);
 
-            if (attrs?.objectId && attrs.objectType) {
-              const nextSelection = { type: attrs.objectType, id: attrs.objectId } as Exclude<Selection, null>;
+            if (targetSelection) {
+              const nextSelection = targetSelection;
               onSelect(nextSelection, false);
               setContextMenu({ x: pointer.x, y: pointer.y, target: nextSelection });
               return;
@@ -482,6 +608,8 @@ export function PlannerCanvas({
           <Layer>
             {room ? (
               <Group
+                objectType="room"
+                objectId={room.id}
                 onMouseDown={(event) => {
                   event.cancelBubble = true;
                   selectObject({ type: "room", id: room.id }, event.evt.shiftKey);
@@ -562,8 +690,8 @@ export function PlannerCanvas({
                         onPreviewRoomVertexMove(index, { x: event.target.x(), y: event.target.y() });
                       }}
                       onDragEnd={(event) => {
-                        finishObjectInteraction();
                         onCommitRoomVertexMove(index, { x: event.target.x(), y: event.target.y() });
+                        commitObjectInteraction();
                       }}
                     />
                     {roomSelected ? (
@@ -584,6 +712,14 @@ export function PlannerCanvas({
                           onMouseDown={(event) => {
                             event.cancelBubble = true;
                             selectObject({ type: "room", id: room.id }, event.evt.shiftKey);
+                            onInsertRoomVertex(edge.index, {
+                              x: (edge.start.x + edge.end.x) / 2,
+                              y: (edge.start.y + edge.end.y) / 2
+                            });
+                          }}
+                          onTap={(event) => {
+                            event.cancelBubble = true;
+                            selectObject({ type: "room", id: room.id });
                             onInsertRoomVertex(edge.index, {
                               x: (edge.start.x + edge.end.x) / 2,
                               y: (edge.start.y + edge.end.y) / 2
@@ -630,12 +766,12 @@ export function PlannerCanvas({
                       beginObjectInteraction();
                     }}
                     onDragEnd={(event) => {
-                      finishObjectInteraction();
                       onCommitRoomMove({
                         x: event.target.x() - roomCenter.x,
                         y: event.target.y() - roomCenter.y
                       });
                       event.target.position({ x: roomCenter.x, y: roomCenter.y });
+                      commitObjectInteraction();
                     }}
                   >
                     <Circle radius={16} fill="#ffffff" stroke="#0f172a" strokeWidth={2} />
@@ -679,6 +815,8 @@ export function PlannerCanvas({
                   return (
                     <Group
                       key={windowObject.id}
+                      objectType="window"
+                      objectId={windowObject.id}
                       x={placement.center.x}
                       y={placement.center.y}
                       draggable
@@ -694,9 +832,9 @@ export function PlannerCanvas({
                         onPreviewWallObjectMove("window", windowObject.id, nextPoint);
                       }}
                       onDragEnd={(event) => {
-                        finishObjectInteraction();
                         const nextPoint = { x: event.target.x(), y: event.target.y() };
                         onCommitWallObjectMove("window", windowObject.id, nextPoint);
+                        commitObjectInteraction();
                       }}
                     >
                       <Line
@@ -753,6 +891,8 @@ export function PlannerCanvas({
               return (
                 <Group
                   key={zone.id}
+                  objectType="zone"
+                  objectId={zone.id}
                   draggable
                   x={0}
                   y={0}
@@ -768,9 +908,9 @@ export function PlannerCanvas({
                     event.target.position({ x: 0, y: 0 });
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     onCommitZoneMove(zone.id, { x: event.target.x() + rect.x, y: event.target.y() + rect.y });
                     event.target.position({ x: 0, y: 0 });
+                    commitObjectInteraction();
                   }}
                 >
                   <Rect
@@ -798,6 +938,8 @@ export function PlannerCanvas({
                   return (
                     <Group
                       key={door.id}
+                      objectType="door"
+                      objectId={door.id}
                       x={swing.hinge.x}
                       y={swing.hinge.y}
                       draggable
@@ -813,9 +955,9 @@ export function PlannerCanvas({
                         onPreviewWallObjectMove("door", door.id, nextPoint);
                       }}
                       onDragEnd={(event) => {
-                        finishObjectInteraction();
                         const nextPoint = { x: event.target.x(), y: event.target.y() };
                         onCommitWallObjectMove("door", door.id, nextPoint);
+                        commitObjectInteraction();
                       }}
                     >
                       {selected ? (
@@ -823,9 +965,15 @@ export function PlannerCanvas({
                           <Rect width={56} height={24} fill="#ffffff" stroke="#7c2d12" strokeWidth={1.5} cornerRadius={8} onMouseDown={(event) => {
                             event.cancelBubble = true;
                             onToggleSelectedDoorSwing();
+                          }} onTap={(event) => {
+                            event.cancelBubble = true;
+                            onToggleSelectedDoorSwing();
                           }} />
                           <Text x={10} y={6} text={door.swing === "clockwise" ? "終点側" : "始点側"} fontSize={11} fill="#7c2d12" />
                           <Rect y={30} width={56} height={24} fill="#ffffff" stroke={door.openDirection === "inward" ? "#1d4ed8" : "#9a3412"} strokeWidth={1.5} cornerRadius={8} onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                            onToggleSelectedDoorOpenDirection();
+                          }} onTap={(event) => {
                             event.cancelBubble = true;
                             onToggleSelectedDoorOpenDirection();
                           }} />
@@ -881,6 +1029,8 @@ export function PlannerCanvas({
               return (
                 <Group
                   key={item.id}
+                  objectType="furniture"
+                  objectId={item.id}
                   x={item.x}
                   y={item.y}
                   rotation={item.rotation}
@@ -893,8 +1043,8 @@ export function PlannerCanvas({
                     beginObjectInteraction();
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     onMoveFurniture(item.id, event.target.x(), event.target.y());
+                    commitObjectInteraction();
                   }}
                 >
                   <Rect
@@ -1094,7 +1244,13 @@ export function PlannerCanvas({
 
           <Layer>
             {selectedFurniture ? (
-              <Group x={selectedFurniture.x} y={selectedFurniture.y} rotation={selectedFurniture.rotation}>
+              <Group
+                objectType="furniture"
+                objectId={selectedFurniture.id}
+                x={selectedFurniture.x}
+                y={selectedFurniture.y}
+                rotation={selectedFurniture.rotation}
+              >
                 <Line
                   points={[
                     0,
@@ -1127,11 +1283,11 @@ export function PlannerCanvas({
                     onRotateSelectedFurniture(rotation - selectedFurniture.rotation);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     event.target.position({
                       x: 0,
                       y: -mmToPx(selectedFurniture.depthMm, project.scalePxPerMm) / 2 - 34
                     });
+                    commitObjectInteraction();
                   }}
                 />
                 <Text
@@ -1165,11 +1321,11 @@ export function PlannerCanvas({
                     onResizeSelectedFurniture(widthMm, selectedFurniture.depthMm);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     event.target.position({
                       x: mmToPx(selectedFurniture.widthMm, project.scalePxPerMm) / 2 - 11,
                       y: -9
                     });
+                    commitObjectInteraction();
                   }}
                 />
                 <Text x={mmToPx(selectedFurniture.widthMm, project.scalePxPerMm) / 2 - 5} y={-6} text="W" fontSize={10} fill="#075985" listening={false} />
@@ -1195,11 +1351,11 @@ export function PlannerCanvas({
                     onResizeSelectedFurniture(selectedFurniture.widthMm, depthMm);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     event.target.position({
                       x: -9,
                       y: mmToPx(selectedFurniture.depthMm, project.scalePxPerMm) / 2 - 11
                     });
+                    commitObjectInteraction();
                   }}
                 />
                 <Text x={-4} y={mmToPx(selectedFurniture.depthMm, project.scalePxPerMm) / 2 - 4} text="D" fontSize={10} fill="#075985" listening={false} />
@@ -1227,17 +1383,17 @@ export function PlannerCanvas({
                     onResizeSelectedFurniture(widthMm, depthMm);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     event.target.position({
                       x: mmToPx(selectedFurniture.widthMm, project.scalePxPerMm) / 2 - 11,
                       y: mmToPx(selectedFurniture.depthMm, project.scalePxPerMm) / 2 - 11
                     });
+                    commitObjectInteraction();
                   }}
                 />
               </Group>
             ) : null}
             {selectedZone ? (
-              <Group>
+              <Group objectType="zone" objectId={selectedZone.id}>
                 <Rect
                   x={getZoneRect(selectedZone, project.scalePxPerMm).x + getZoneRect(selectedZone, project.scalePxPerMm).width - 11}
                   y={getZoneRect(selectedZone, project.scalePxPerMm).y + getZoneRect(selectedZone, project.scalePxPerMm).height / 2 - 9}
@@ -1260,12 +1416,12 @@ export function PlannerCanvas({
                     onResizeSelectedZone(widthMm, selectedZone.depthMm);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     const rect = getZoneRect(selectedZone, project.scalePxPerMm);
                     event.target.position({
                       x: rect.x + rect.width - 11,
                       y: rect.y + rect.height / 2 - 9
                     });
+                    commitObjectInteraction();
                   }}
                 />
                 <Rect
@@ -1290,12 +1446,12 @@ export function PlannerCanvas({
                     onResizeSelectedZone(selectedZone.widthMm, depthMm);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     const rect = getZoneRect(selectedZone, project.scalePxPerMm);
                     event.target.position({
                       x: rect.x + rect.width / 2 - 9,
                       y: rect.y + rect.height - 11
                     });
+                    commitObjectInteraction();
                   }}
                 />
                 <Rect
@@ -1321,12 +1477,12 @@ export function PlannerCanvas({
                     onResizeSelectedZone(widthMm, depthMm);
                   }}
                   onDragEnd={(event) => {
-                    finishObjectInteraction();
                     const rect = getZoneRect(selectedZone, project.scalePxPerMm);
                     event.target.position({
                       x: rect.x + rect.width - 11,
                       y: rect.y + rect.height - 11
                     });
+                    commitObjectInteraction();
                   }}
                 />
               </Group>
@@ -1383,7 +1539,7 @@ export function PlannerCanvas({
         {contextMenu ? (
           <div
             className="absolute z-20 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-xl"
-            style={{ left: Math.min(project.canvas.width - 230, contextMenu.x), top: Math.min(project.canvas.height - 260, contextMenu.y) }}
+            style={{ left: Math.min(stageSize.width - 230, contextMenu.x), top: Math.min(stageSize.height - 260, contextMenu.y) }}
           >
             {contextMenu.target === "canvas" ? (
               <div className="space-y-1">
