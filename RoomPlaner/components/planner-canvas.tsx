@@ -3,6 +3,7 @@
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { Image as KonvaImage, Arc, Circle, Group, Layer, Line, Rect, Stage, Text } from "react-konva";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import {
   getDoorSwingPolygon,
   getRoomEdges,
@@ -297,26 +298,24 @@ export function PlannerCanvas({
         : "cursor-grab";
 
   return (
-    <div className="panel h-full overflow-hidden p-3">
-      <div className="mb-3 flex items-center justify-between px-2">
-        <div>
+    <div className="canvas-panel h-full">
+      <div className="canvas-statusbar">
+        <div className="flex min-w-0 items-center gap-2">
           <div className="panel-title">2D Canvas</div>
-          <div className="mt-1 text-sm text-neutral-600">
-            モード: <span className="font-semibold text-neutral-950">{modeLabel(mode)}</span>
-          </div>
+          <span className="status-count truncate">{modeLabel(mode)}</span>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-neutral-600">
-          <button className="button-soft" onClick={() => onViewportChange({ ...viewport, scale: Math.max(0.35, viewport.scale / 1.2) })}>
-            -
+        <div className="flex min-w-0 items-center justify-end gap-1.5 text-xs text-neutral-600">
+          <button className="icon-button" onClick={() => onViewportChange({ ...viewport, scale: Math.max(0.35, viewport.scale / 1.2) })} aria-label="縮小" title="縮小">
+            <ZoomOut size={16} />
           </button>
-          <button className="button-soft" onClick={() => onViewportChange({ ...viewport, scale: Math.min(3.5, viewport.scale * 1.2) })}>
-            +
+          <button className="icon-button" onClick={() => onViewportChange({ ...viewport, scale: Math.min(3.5, viewport.scale * 1.2) })} aria-label="拡大" title="拡大">
+            <ZoomIn size={16} />
           </button>
-          <button className="button-soft" onClick={() => onViewportChange({ x: 0, y: 0, scale: 1 })}>
-            100%
+          <button className="icon-button" onClick={() => onViewportChange({ x: 0, y: 0, scale: 1 })} aria-label="表示をリセット" title="表示をリセット">
+            <RotateCcw size={16} />
           </button>
           <input
-            className="w-24 accent-neutral-950"
+            className="hidden w-24 accent-neutral-950 sm:block"
             type="range"
             min="35"
             max="350"
@@ -329,16 +328,16 @@ export function PlannerCanvas({
               })
             }
           />
-          <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
+          <div className="hidden rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 md:block">
             1px = {project.scalePxPerMm > 0 ? `${(1 / project.scalePxPerMm).toFixed(1)} mm` : "-"}
           </div>
-          <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
-            Zoom {Math.round(viewport.scale * 100)}%
+          <div className="rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 tabular-nums">
+            {Math.round(viewport.scale * 100)}%
           </div>
         </div>
       </div>
 
-      <div className={`relative overflow-auto rounded-[16px] border border-neutral-200 bg-[#f3f3f1] ${cursorClass}`}>
+      <div className={`relative overflow-auto rounded-md border border-neutral-200 bg-[#f3f3f1] ${cursorClass}`}>
         <Stage
           ref={stageRef}
           width={project.canvas.width}
@@ -1337,10 +1336,10 @@ export function PlannerCanvas({
 
         {selection && selection.type !== "room" && selectionAnchor && quickPanelStyle ? (
           <div
-            className="pointer-events-auto absolute z-10 w-52 rounded-2xl border border-slate-200 bg-white/96 p-3 shadow-lg backdrop-blur"
+            className="pointer-events-auto absolute z-10 w-52 rounded-md border border-slate-200 bg-white/96 p-3 shadow-lg backdrop-blur"
             style={quickPanelStyle}
           >
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Quick Tools</div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Quick Tools</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">
               {selection.type === "furniture"
                 ? selectedFurniture?.name ?? "家具"
@@ -1383,7 +1382,7 @@ export function PlannerCanvas({
 
         {contextMenu ? (
           <div
-            className="absolute z-20 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"
+            className="absolute z-20 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-xl"
             style={{ left: Math.min(project.canvas.width - 230, contextMenu.x), top: Math.min(project.canvas.height - 260, contextMenu.y) }}
           >
             {contextMenu.target === "canvas" ? (
@@ -1430,12 +1429,6 @@ export function PlannerCanvas({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between px-2 text-xs text-slate-500">
-        <div>
-          空白ドラッグでパン。家具と制約ゾーンはドラッグ作成。部屋移動は中央ハンドル、頂点追加は辺中央ハンドルです。
-        </div>
-        <div>{issues.length} 件の警告</div>
-      </div>
     </div>
   );
 }

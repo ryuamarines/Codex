@@ -2,7 +2,26 @@
 
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Boxes,
+  Cloud,
+  Database,
+  LayoutPanelTop,
+  MousePointer2,
+  Plus,
+  Settings2,
+  Shapes,
+  SlidersHorizontal,
+  Upload
+} from "lucide-react";
 import { CloudPanel } from "@/components/cloud-panel";
+import { PlannerAppHeader } from "@/components/planner-app-header";
+import {
+  PlannerMobileNav,
+  PlannerPanelTabs,
+  type PlannerNavigationOption
+} from "@/components/planner-navigation";
 import { sampleProject } from "@/data/sample-project";
 import {
   distance,
@@ -85,6 +104,22 @@ const FURNITURE_LIBRARY: Array<{
   { kind: "generic", name: "汎用家具", widthMm: 1200, depthMm: 600 }
 ];
 
+type LeftPanelTab = "add" | "data" | "sync";
+type RightPanelTab = "edit" | "objects" | "issues";
+type MobileWorkspaceView = "canvas" | "add" | "inspect";
+
+const LEFT_PANEL_OPTIONS: PlannerNavigationOption<LeftPanelTab>[] = [
+  { value: "add", label: "追加", icon: Shapes },
+  { value: "data", label: "データ", icon: Database },
+  { value: "sync", label: "同期", icon: Cloud }
+];
+
+const RIGHT_PANEL_OPTIONS: PlannerNavigationOption<RightPanelTab>[] = [
+  { value: "edit", label: "編集", icon: SlidersHorizontal },
+  { value: "objects", label: "一覧", icon: Boxes },
+  { value: "issues", label: "警告", icon: AlertTriangle }
+];
+
 export function PlannerShell() {
   const {
     firebaseUser,
@@ -106,6 +141,7 @@ export function PlannerShell() {
     storageHasProject,
     storageError,
     storageNotice,
+    storageStatus,
     guestTransfer,
     updateProject,
     applyProjectUpdate,
@@ -161,6 +197,9 @@ export function PlannerShell() {
   const [showMigrationAssistant, setShowMigrationAssistant] = useState(false);
   const [objectSearch, setObjectSearch] = useState("");
   const [selectedFurniturePreset, setSelectedFurniturePreset] = useState(FURNITURE_LIBRARY[0]);
+  const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>("add");
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("edit");
+  const [mobileWorkspaceView, setMobileWorkspaceView] = useState<MobileWorkspaceView>("canvas");
   const selectedObject = useMemo(() => getSelectedObjectDescriptor(project, selection), [project, selection]);
   const setupActions: Array<{ mode: PlannerMode; label: string; disabled?: boolean }> = [
     { mode: "set-scale", label: "スケール設定" },
@@ -906,155 +945,87 @@ export function PlannerShell() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5] p-4 text-neutral-950 md:p-6">
-      <div className="mx-auto flex max-w-[1480px] flex-col gap-4">
-        <header className="panel overflow-hidden">
-          <div className="flex flex-col gap-4 border-b border-neutral-200 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <div className="panel-title">RoomPlaner</div>
-              <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end">
-                <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 md:text-3xl">ダッシュボード</h1>
-                <label className="block min-w-52">
-                  <span className="mb-1 block text-xs text-neutral-500">プロジェクト</span>
-                  <select
-                    className="input"
-                    value={activeProjectId}
-                    onChange={(event) => {
-                      switchProject(event.target.value);
-                      resetTransientUi();
-                      setMode("select");
-                    }}
-                  >
-                    {projects.map((entry) => (
-                      <option key={entry.id} value={entry.id}>{entry.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block min-w-56 max-w-md flex-1">
-                  <span className="mb-1 block text-xs text-neutral-500">プロジェクト名</span>
-                  <input
-                    className="input"
-                    value={project.name}
-                    onChange={(event) =>
-                      updateProject((current) => ({
-                        ...current,
-                        name: event.target.value
-                      }))
-                    }
-                    placeholder="プロジェクト名"
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium text-neutral-700">
-                {firebaseUser ? "アカウント保存" : "ゲスト保存"}
-              </span>
-              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium text-neutral-700">
-                {projects.length}件保存
-              </span>
-              <button className="button-soft" onClick={handleUndo} disabled={undoStack.length === 0}>
-                Undo
-              </button>
-              <button className="button-soft" onClick={handleRedo} disabled={redoStack.length === 0}>
-                Redo
-              </button>
-              <button className="button-soft" onClick={duplicateProject}>
-                複製
-              </button>
-              <button
-                className="button-soft"
-                onClick={() => {
-                  if (!window.confirm(`「${project.name}」を削除しますか？この操作はUndoできません。`)) return;
-                  deleteProject();
-                  resetTransientUi();
-                  setMode("select");
-                }}
-              >
-                削除
-              </button>
-              <button className="button-strong" onClick={() => { createProject(); resetTransientUi(); setMode("select"); }}>
-                + 新規プロジェクト
-              </button>
-            </div>
-          </div>
-          <div className="grid gap-0 border-b border-neutral-200 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="border-b border-neutral-200 px-5 py-4 sm:border-r lg:border-b-0">
-              <div className="text-xs text-neutral-500">Mode</div>
-              <div className="mt-1 text-lg font-semibold">{modeDescriptionShort(mode)}</div>
-            </div>
-            <div className="border-b border-neutral-200 px-5 py-4 lg:border-b-0 lg:border-r">
-              <div className="text-xs text-neutral-500">Objects</div>
-              <div className="mt-1 text-lg font-semibold">{objectIndex.length}</div>
-            </div>
-            <div className="border-b border-neutral-200 px-5 py-4 sm:border-r sm:border-b-0">
-              <div className="text-xs text-neutral-500">Warnings</div>
-              <div className={issues.length > 0 ? "mt-1 text-lg font-semibold text-rose-600" : "mt-1 text-lg font-semibold"}>
-                {issues.length}
-              </div>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-xs text-neutral-500">Zoom</div>
-              <div className="mt-1 text-lg font-semibold">{Math.round(viewport.scale * 100)}%</div>
-            </div>
-          </div>
-          <div className="grid gap-2 px-5 py-4 sm:grid-cols-2 xl:grid-cols-6">
-            <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
-            <input
-              ref={importJsonInputRef}
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={importLegacyJsonProject}
-            />
-            <button className="button-soft" onClick={() => importInputRef.current?.click()}>
-              CSV 読込
-            </button>
-            <button className="button-soft" onClick={() => importJsonInputRef.current?.click()}>
-              旧JSON読込
-            </button>
-            <button className="button-soft" onClick={exportProject}>
-              CSV 書出
-            </button>
-            <button
-              className="button-soft"
-              onClick={() => {
-                if (!window.confirm("現在のプロジェクト内容をサンプルで置き換えますか？")) return;
-                loadProjectState({ ...sampleProject, id: project.id });
-                setMode("select");
-              }}
-            >
-              サンプル
-            </button>
-          </div>
-        </header>
+    <main className="min-h-screen bg-[#f5f5f3] pb-20 text-neutral-950 xl:pb-0">
+      <div className="min-h-screen">
+        <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={importProject} />
+        <input
+          ref={importJsonInputRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={importLegacyJsonProject}
+        />
+        <PlannerAppHeader
+          projects={projects}
+          activeProjectId={activeProjectId}
+          projectName={project.name}
+          projectCount={projects.length}
+          objectCount={objectIndex.length}
+          warningCount={issues.length}
+          storageStatus={storageStatus}
+          signedIn={Boolean(firebaseUser)}
+          canUndo={undoStack.length > 0}
+          canRedo={redoStack.length > 0}
+          onSwitchProject={(projectId) => {
+            switchProject(projectId);
+            resetTransientUi();
+            setMode("select");
+          }}
+          onRenameProject={(name) => updateProject((current) => ({ ...current, name }))}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onCreateProject={() => {
+            createProject();
+            resetTransientUi();
+            setMode("select");
+          }}
+          onDuplicateProject={duplicateProject}
+          onDeleteProject={() => {
+            if (!window.confirm(`「${project.name}」を削除しますか？この操作はUndoできません。`)) return;
+            deleteProject();
+            resetTransientUi();
+            setMode("select");
+          }}
+          onImportCsv={() => importInputRef.current?.click()}
+          onImportJson={() => importJsonInputRef.current?.click()}
+          onExportCsv={exportProject}
+          onLoadSample={() => {
+            if (!window.confirm("現在のプロジェクト内容をサンプルで置き換えますか？")) return;
+            loadProjectState({ ...sampleProject, id: project.id });
+            setMode("select");
+          }}
+        />
 
-        <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
-          <section className="min-h-[780px] min-w-0 space-y-3 xl:col-start-2">
-            <div className="panel flex flex-wrap items-center gap-2 p-3">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canvas Tools</span>
-              <button className={mode === "select" ? "button-strong" : "button-soft"} onClick={() => setMode("select")}>
-                選択
-              </button>
-              {setupActions.map((action) => (
-                <button
-                  key={`canvas-${action.mode}`}
-                  className={mode === action.mode ? "button-strong" : "button-soft"}
-                  onClick={() => setMode(action.mode)}
-                  disabled={action.disabled}
-                >
-                  {action.label}
+        <div className="workspace-layout">
+          <section className={`${mobileWorkspaceView === "canvas" ? "block" : "hidden"} min-h-[calc(100vh-170px)] min-w-0 space-y-2 xl:col-start-2 xl:block xl:min-h-[720px]`}>
+            <div className="canvas-toolbar">
+              <div className="flex min-w-max items-center gap-1.5">
+                <span className="toolbar-label">ツール</span>
+                <button className={mode === "select" ? "tool-button tool-button-active" : "tool-button"} onClick={() => setMode("select")}>
+                  <MousePointer2 size={15} />
+                  選択
                 </button>
-              ))}
-              <div className="ml-auto flex flex-wrap gap-2">
-                <button className="button-soft" onClick={fitToAll}>
-                  全体表示
+                {setupActions.map((action) => (
+                  <button
+                    key={`canvas-${action.mode}`}
+                    className={mode === action.mode ? "tool-button tool-button-active" : "tool-button"}
+                    onClick={() => setMode(action.mode)}
+                    disabled={action.disabled}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+              <div className="ml-auto flex min-w-max items-center gap-1.5">
+                <span className="hidden text-xs font-medium text-neutral-500 md:inline">{modeDescriptionShort(mode)}</span>
+                <button className="tool-button" onClick={fitToAll}>
+                  全体
                 </button>
-                <button className="button-soft" onClick={fitToBackground} disabled={!project.background}>
-                  背景表示
+                <button className="tool-button" onClick={fitToBackground} disabled={!project.background}>
+                  背景
                 </button>
-                <button className="button-soft" onClick={fitToRoom} disabled={!project.room}>
-                  部屋表示
+                <button className="tool-button" onClick={fitToRoom} disabled={!project.room}>
+                  部屋
                 </button>
               </div>
             </div>
@@ -1103,30 +1074,43 @@ export function PlannerShell() {
             />
           </section>
 
-          <aside className="panel h-fit p-4 xl:col-start-1 xl:row-start-1 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:sticky xl:top-4">
-            <div className="panel-title">Add / Setup</div>
-            <CloudPanel
-              firebaseUser={firebaseUser}
-              cloudMessage={cloudMessage}
-              authMessage={authMessage}
-              storageError={storageError}
-              storageNotice={storageNotice}
-              cloudHydrating={cloudHydrating}
-              cloudBusy={cloudBusy}
-              authBusy={authBusy}
-              firebaseConfigured={firebaseConfigured}
-              guestTransfer={guestTransfer}
-              onSignIn={handleSignIn}
-              onSignOut={handleSignOut}
-              onSaveProjectToCloud={saveProjectToCloud}
-              onLoadProjectFromCloud={() => {
-                if (!window.confirm("選択中のプロジェクトをFirestoreの内容で置き換えますか？")) return;
-                void loadProjectFromCloud();
-              }}
-              onImportGuestProjects={importGuestProjects}
-            />
+          <aside className={`${mobileWorkspaceView === "add" ? "block" : "hidden"} workspace-sidebar xl:col-start-1 xl:row-start-1 xl:block`}>
+            <div className="sidebar-heading">
+              <div>
+                <div className="panel-title">Workspace</div>
+                <div className="mt-1 text-base font-semibold text-neutral-950">追加とデータ</div>
+              </div>
+              <span className="status-count">{objectIndex.length}</span>
+            </div>
+            <PlannerPanelTabs value={leftPanelTab} options={LEFT_PANEL_OPTIONS} onChange={setLeftPanelTab} />
+
+            <div className={leftPanelTab === "sync" ? "block" : "hidden"}>
+              <CloudPanel
+                firebaseUser={firebaseUser}
+                cloudMessage={cloudMessage}
+                authMessage={authMessage}
+                storageError={storageError}
+                storageNotice={storageNotice}
+                cloudHydrating={cloudHydrating}
+                cloudBusy={cloudBusy}
+                authBusy={authBusy}
+                firebaseConfigured={firebaseConfigured}
+                guestTransfer={guestTransfer}
+                onSignIn={handleSignIn}
+                onSignOut={handleSignOut}
+                onSaveProjectToCloud={saveProjectToCloud}
+                onLoadProjectFromCloud={() => {
+                  if (!window.confirm("選択中のプロジェクトをFirestoreの内容で置き換えますか？")) return;
+                  void loadProjectFromCloud();
+                }}
+                onImportGuestProjects={importGuestProjects}
+              />
+            </div>
+
+            <div className={leftPanelTab === "add" ? "block" : "hidden"}>
             <div className="mt-4 grid gap-2">
               <label className="button-soft cursor-pointer text-center">
+                <Upload size={15} />
                 背景画像を読み込む
                 <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageUpload} />
               </label>
@@ -1137,7 +1121,10 @@ export function PlannerShell() {
                 <button
                   key={action.mode}
                   className={mode === action.mode ? "button-strong" : "button-soft"}
-                  onClick={() => setMode(action.mode)}
+                  onClick={() => {
+                    setMode(action.mode);
+                    setMobileWorkspaceView("canvas");
+                  }}
                   disabled={action.disabled}
                 >
                   {action.label}
@@ -1145,29 +1132,24 @@ export function PlannerShell() {
               ))}
             </div>
 
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-slate-900">家具ライブラリ</div>
-                <div className="text-xs text-slate-500">クリックで選択して配置</div>
-              </div>
+            <div className="panel-section mt-4">
+              <div className="section-title">家具ライブラリ</div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {FURNITURE_LIBRARY.map((preset) => {
                   const active = selectedFurniturePreset.kind === preset.kind && selectedFurniturePreset.name === preset.name;
                   return (
                     <button
                       key={`${preset.kind}-${preset.name}`}
-                      className={active ? "rounded-2xl border border-slate-900 bg-white p-3 text-left shadow-sm" : "rounded-2xl border border-slate-200 bg-white p-3 text-left"}
+                      className={active ? "library-item library-item-active" : "library-item"}
                       onClick={() => {
                         setSelectedFurniturePreset(preset);
                         setMode("add-furniture");
+                        setMobileWorkspaceView("canvas");
                       }}
                     >
                       <div className="text-sm font-semibold text-slate-900">{preset.name}</div>
                       <div className="mt-1 text-xs text-slate-500">
                         {preset.widthMm} x {preset.depthMm} mm
-                      </div>
-                      <div className="mt-2 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-                        {preset.kind}
                       </div>
                     </button>
                   );
@@ -1175,9 +1157,11 @@ export function PlannerShell() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">現在の操作</div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{modeDescription(mode)}</p>
+            <div className="panel-section mt-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="section-title">現在の操作</div>
+                <span className="status-count">{modeDescriptionShort(mode)}</span>
+              </div>
               {mode === "trace-room" ? (
                 <div className="mt-3 flex gap-2">
                   <button className="button-strong" onClick={completeRoomTrace} disabled={draftRoomPoints.length < 3}>
@@ -1202,21 +1186,7 @@ export function PlannerShell() {
                   </button>
                 </div>
               ) : null}
-              {draftPlacement ? (
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600">
-                  1点目を記録済みです。2点目で確定します。迷ったら下の `下書きをキャンセル` で取り消せます。
-                </div>
-              ) : null}
-              {mode === "select" && project.room ? (
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-600">
-                  部屋輪郭を選ぶと、中央ハンドルで部屋全体を安全に動かせます。辺の中央ハンドルを押すと頂点を追加できます。
-                </div>
-              ) : null}
-              {(mode === "add-furniture" || mode === "add-zone") ? (
-                <div className="mt-3 rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm leading-6 text-cyan-900">
-                  1回目のクリックで始点、2回目のクリックで終点を決めると、背景に合わせた矩形サイズで生成できます。
-                </div>
-              ) : null}
+              {draftPlacement ? <div className="mt-3 text-xs font-medium text-neutral-500">始点を設定済み</div> : null}
               {(draftRoomPoints.length > 0 || scaleDraft.length > 0 || draftPlacement) ? (
                 <button className="mt-3 button-soft w-full" onClick={clearCurrentDraft}>
                   下書きをキャンセル
@@ -1234,31 +1204,20 @@ export function PlannerShell() {
               ) : null}
             </div>
 
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">プロジェクト概要</div>
-              <div className="mt-3 grid gap-2 text-sm text-slate-600">
-                <div>部屋輪郭: {project.room ? `${project.room.points.length} 点` : "未設定"}</div>
-                <div>窓: {project.windows.length}</div>
-                <div>扉: {project.doors.length}</div>
-                <div>制約ゾーン: {project.zones.length}</div>
-                <div>家具: {project.furniture.length}</div>
-                <div>警告: {issues.length}</div>
-                <div>背景画像: {project.background ? `${project.background.width} x ${project.background.height}` : "未設定"}</div>
+            <div className="panel-section mt-4">
+              <div className="section-title">プロジェクト概要</div>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-neutral-600">
+                <SummaryValue label="輪郭" value={project.room ? `${project.room.points.length}点` : "未設定"} />
+                <SummaryValue label="家具" value={project.furniture.length} />
+                <SummaryValue label="窓" value={project.windows.length} />
+                <SummaryValue label="扉" value={project.doors.length} />
+                <SummaryValue label="制約" value={project.zones.length} />
+                <SummaryValue label="警告" value={issues.length} danger={issues.length > 0} />
               </div>
             </div>
 
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">警告内訳</div>
-              <div className="mt-3 grid gap-2 text-sm text-slate-600">
-                <div>家具同士: {issueSummary.furnitureOverlap}</div>
-                <div>壁はみ出し: {issueSummary.wallOverflow}</div>
-                <div>扉可動域: {issueSummary.doorSwing}</div>
-                <div>窓前制約: {issueSummary.windowZone}</div>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">スナップ</div>
+            <div className="panel-section mt-4">
+              <div className="section-title">スナップ</div>
               <div className="mt-3 space-y-3 text-sm text-slate-600">
                 <label className="flex items-center justify-between gap-3">
                   <span>グリッドスナップ</span>
@@ -1282,20 +1241,35 @@ export function PlannerShell() {
                 </label>
               </div>
             </div>
+            </div>
 
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+            <div className={leftPanelTab === "data" ? "block" : "hidden"}>
+              <div className="panel-section mt-4">
+                <div className="section-title">入出力</div>
+                <div className="mt-3 grid gap-2">
+                  <button className="button-soft w-full" onClick={() => importInputRef.current?.click()}>
+                    <Upload size={15} />
+                    CSVを読み込む
+                  </button>
+                  <button className="button-soft w-full" onClick={() => importJsonInputRef.current?.click()}>
+                    <Database size={15} />
+                    旧JSONを読み込む
+                  </button>
+                  <button className="button-soft w-full" onClick={exportProject}>
+                    CSVを書き出す
+                  </button>
+                </div>
+              </div>
+
+            <div className="panel-section mt-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-slate-900">Planner5D 移行アシスタント</div>
+                <div className="section-title">Planner5D 移行</div>
                 <button className="button-soft" onClick={() => setShowMigrationAssistant((current) => !current)}>
                   {showMigrationAssistant ? "閉じる" : "開く"}
                 </button>
               </div>
               {showMigrationAssistant ? (
                 <>
-                  <div className="mt-2 text-sm leading-6 text-slate-600">
-                    DXF などの有料 export を使わず、Planner5D 画面で見える寸法を貼り付けてこちらへ移すための補助です。
-                    スクリーンショットは既存の背景画像読込を使い、ここでは寸法データを半手動で流し込みます。
-                  </div>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <label className="block">
                       <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -1320,9 +1294,6 @@ export function PlannerShell() {
                       onChange={(event) => setMigrationWallPath(event.target.value)}
                     />
                   </label>
-                  <div className="mt-2 text-xs text-slate-500">
-                    例: `right 4200`, `down 2600`, `left 1800` のように 1 行 1 辺。直交部屋を想定します。
-                  </div>
                   <button className="mt-3 button-soft w-full" onClick={importRoomFromPlanner5dPath}>
                     壁パスから部屋を生成
                   </button>
@@ -1337,9 +1308,6 @@ export function PlannerShell() {
                       onChange={(event) => setMigrationFurnitureCsv(event.target.value)}
                     />
                   </label>
-                  <div className="mt-2 text-xs text-slate-500">
-                    形式: `name,width,depth,x,y,rotation`。`x,y` は origin からの中心座標 mm です。
-                  </div>
                   <button className="mt-3 button-soft w-full" onClick={importFurnitureFromPlanner5d}>
                     家具CSVを追加
                   </button>
@@ -1354,18 +1322,11 @@ export function PlannerShell() {
                       onChange={(event) => setMigrationOpeningsCsv(event.target.value)}
                     />
                   </label>
-                  <div className="mt-2 text-xs text-slate-500">
-                    形式: `type,wallIndex,offsetMm,widthMm,swing,openDirection,note`。古い `type,wallIndex,offsetMm,widthMm,swing,note` も読めます。
-                  </div>
                   <button className="mt-3 button-soft w-full" onClick={importOpeningsFromPlanner5d}>
                     窓 / 扉CSVを追加
                   </button>
                 </>
-              ) : (
-                <div className="mt-2 text-sm leading-6 text-slate-600">
-                  必要なときだけ開けるようにして、通常編集の邪魔を減らしました。
-                </div>
-              )}
+              ) : null}
 
               {migrationMessage ? (
                 <div className="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm text-cyan-800">
@@ -1373,30 +1334,28 @@ export function PlannerShell() {
                 </div>
               ) : null}
             </div>
-
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">ショートカット</div>
-              <div className="mt-3 grid gap-2 text-sm text-slate-600">
-                <div>`空白ドラッグ`: パン</div>
-                <div>`Cmd/Ctrl + Z`: Undo</div>
-                <div>`Cmd/Ctrl + Shift + Z`: Redo</div>
-                <div>`Cmd/Ctrl + D`: 家具複製</div>
-                <div>`Q / E`: 家具を 15 度回転</div>
-                <div>`Cmd/Ctrl + 0`: 表示リセット</div>
-                <div>`Arrow`: 選択オブジェクトを微移動</div>
-                <div>`Shift + Arrow`: 大きめに移動</div>
-                <div>`Delete / Backspace`: 選択削除</div>
-                <div>`Escape`: 選択モードに戻る</div>
-              </div>
             </div>
           </aside>
 
-          <aside className="panel h-fit p-4 xl:col-start-3 xl:row-start-1 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:sticky xl:top-4">
-            <div className="panel-title">Inspector</div>
+          <aside className={`${mobileWorkspaceView === "inspect" ? "block" : "hidden"} workspace-sidebar xl:col-start-3 xl:row-start-1 xl:block`}>
+            <div className="sidebar-heading">
+              <div>
+                <div className="panel-title">Inspector</div>
+                <div className="mt-1 text-base font-semibold text-neutral-950">選択と確認</div>
+              </div>
+              <span className={issues.length > 0 ? "status-count status-count-danger" : "status-count"}>{issues.length}</span>
+            </div>
+            <PlannerPanelTabs
+              value={rightPanelTab}
+              options={RIGHT_PANEL_OPTIONS.map((option) => option.value === "issues" ? { ...option, badge: issues.length } : option)}
+              onChange={setRightPanelTab}
+            />
+
+            <div className={rightPanelTab === "edit" ? "block" : "hidden"}>
 
             {project.background ? (
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-sm font-semibold text-slate-900">背景画像</div>
+              <div className="panel-section mt-4">
+                <div className="section-title">背景画像</div>
                 <div className="mt-3 space-y-3 text-sm text-slate-600">
                   <label className="flex items-center justify-between gap-3">
                     <span>表示</span>
@@ -1428,9 +1387,6 @@ export function PlannerShell() {
                       }
                     />
                   </label>
-                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
-                    背景がロック中なら誤って画像を掴みにくくなります。通常はロック推奨です。
-                  </div>
                   <label className="block">
                     <span className="mb-2 block">透明度 {project.background.opacity.toFixed(2)}</span>
                     <input
@@ -1466,12 +1422,9 @@ export function PlannerShell() {
             ) : null}
 
             {project.room ? (
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-sm font-semibold text-slate-900">床表示</div>
-                <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
-                  背景画像と比較したいときは床を薄くしてください。0 にすると床模様をほぼ消せます。
-                </div>
-                <label className="mt-4 block">
+              <div className="panel-section mt-4">
+                <div className="section-title">床表示</div>
+                <label className="mt-3 block">
                   <span className="mb-2 block text-sm text-slate-600">床の透明度 {project.floorOpacity.toFixed(2)}</span>
                   <input
                     className="w-full accent-cyan-600"
@@ -1492,12 +1445,9 @@ export function PlannerShell() {
             ) : null}
 
             {selectedItems.length > 1 ? (
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-sm font-semibold text-slate-900">複数選択</div>
+              <div className="panel-section mt-4">
+                <div className="section-title">複数選択</div>
                 <div className="mt-1 text-sm text-slate-500">{selectedItems.length} 件を選択中</div>
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                  Shift+クリックで追加選択できます。家具と制約ゾーンは矢印キーでまとめて移動できます。
-                </div>
                 {issueMessages.length > 0 ? (
                   <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                     <div className="font-semibold">警告</div>
@@ -1518,17 +1468,14 @@ export function PlannerShell() {
                 </div>
               </div>
             ) : selectedObject ? (
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-sm font-semibold text-slate-900">選択中オブジェクト</div>
+              <div className="panel-section mt-4">
+                <div className="section-title">選択中オブジェクト</div>
                 <div className="mt-1 text-sm text-slate-500">{selectedObject.label}</div>
-                <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600">
-                  選択中の内容は右パネルで数値修正、キャンバス側では位置調整ができます。
-                </div>
 
                 <div className="mt-4 space-y-3">
                   {selectedObject.fields.map((field) => (
                     <label key={field.key} className="block">
-                      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      <span className="mb-1.5 block text-xs font-semibold text-neutral-500">
                         {field.label}
                       </span>
                       {field.type === "select" ? (
@@ -1602,13 +1549,14 @@ export function PlannerShell() {
                 ) : null}
               </div>
             ) : (
-              <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                右パネルでは選択中オブジェクトの幅、位置、回転、メモ、開き方向などを調整できます。
+              <div className="empty-state mt-4">
+                <MousePointer2 size={18} />
+                <span>オブジェクト未選択</span>
               </div>
             )}
 
-            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">スケール情報</div>
+            <div className="panel-section mt-4">
+              <div className="section-title">表示</div>
               <div className="mt-3 space-y-2 text-sm text-slate-600">
                 <div>現在の縮尺: 1px = {pxToMm(1, project.scalePxPerMm).toFixed(1)} mm</div>
                 <div>家具 1000mm 幅 = {mmToPx(1000, project.scalePxPerMm).toFixed(1)} px</div>
@@ -1657,12 +1605,11 @@ export function PlannerShell() {
                 </button>
               </div>
             </div>
+            </div>
 
-            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">オブジェクト一覧</div>
-              <div className="mt-2 text-sm leading-6 text-slate-600">
-                見失ったときはここから選択して、表示範囲へ呼び戻せます。
-              </div>
+            <div className={rightPanelTab === "objects" ? "block" : "hidden"}>
+            <div className="panel-section mt-4">
+              <div className="section-title">オブジェクト一覧</div>
               <input
                 className="input mt-3"
                 value={objectSearch}
@@ -1677,14 +1624,14 @@ export function PlannerShell() {
               <div className="mt-3 space-y-4">
                 {filteredObjectGroups.length > 0 ? filteredObjectGroups.map((group) => (
                   <div key={group.label}>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    <div className="mb-2 text-xs font-semibold text-neutral-500">
                       {group.label} {group.items.length}
                     </div>
                     <div className="max-h-72 space-y-2 overflow-auto pr-1">
                       {group.items.map((item) => (
                         <div
                           key={`${item.type}-${item.id}`}
-                          className={`rounded-2xl border bg-white px-3 py-3 ${
+                          className={`rounded-md border bg-white px-3 py-3 ${
                             selection?.type === item.type && selection.id === item.id
                               ? "border-cyan-300 ring-2 ring-cyan-100"
                               : "border-slate-200"
@@ -1742,26 +1689,39 @@ export function PlannerShell() {
                     </div>
                   </div>
                 )) : (
-                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600">
+                  <div className="empty-state">
                     条件に合うオブジェクトがありません。
                   </div>
                 )}
               </div>
             </div>
+            </div>
 
-            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">警告一覧 ({issues.length})</div>
+            <div className={rightPanelTab === "issues" ? "block" : "hidden"}>
+            <div className="panel-section mt-4">
+              <div className="section-title">警告内訳</div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <SummaryValue label="家具同士" value={issueSummary.furnitureOverlap} danger={issueSummary.furnitureOverlap > 0} />
+                <SummaryValue label="壁はみ出し" value={issueSummary.wallOverflow} danger={issueSummary.wallOverflow > 0} />
+                <SummaryValue label="扉可動域" value={issueSummary.doorSwing} danger={issueSummary.doorSwing > 0} />
+                <SummaryValue label="窓前制約" value={issueSummary.windowZone} danger={issueSummary.windowZone > 0} />
+              </div>
+            </div>
+            <div className="panel-section mt-4">
+              <div className="section-title">警告一覧 ({issues.length})</div>
               <div className="mt-3 space-y-2">
                 {issues.length > 0 ? (
                   issues.slice(0, 8).map((issue, index) => (
                     <button
                       key={`${issue.id}-${issue.kind}-${index}`}
-                      className="block w-full rounded-2xl border border-rose-200 bg-white px-3 py-3 text-left text-sm text-slate-700 transition hover:border-rose-300 hover:bg-rose-50"
-                      onClick={() => selectSingle({ type: issue.type, id: issue.id })}
+                      className="block w-full rounded-md border border-rose-200 bg-white px-3 py-3 text-left text-sm text-slate-700 transition hover:border-rose-300 hover:bg-rose-50"
+                      onClick={() => {
+                        selectSingle({ type: issue.type, id: issue.id });
+                        setRightPanelTab("edit");
+                      }}
                     >
                       <div className="font-semibold text-rose-700">{issueKindLabel(issue)}</div>
                       <div className="mt-1">{issue.message}</div>
-                      <div className="mt-2 text-xs text-slate-500">クリックで対象を選択します</div>
                     </button>
                   ))
                 ) : (
@@ -1771,30 +1731,38 @@ export function PlannerShell() {
                 )}
               </div>
             </div>
+            </div>
           </aside>
         </div>
+        <PlannerMobileNav
+          value={mobileWorkspaceView}
+          options={[
+            { value: "canvas", label: "キャンバス", icon: LayoutPanelTop },
+            { value: "add", label: "追加", icon: Plus },
+            { value: "inspect", label: "編集", icon: Settings2, badge: issues.length }
+          ]}
+          onChange={setMobileWorkspaceView}
+        />
       </div>
     </main>
   );
 }
 
-function modeDescription(mode: PlannerMode) {
-  switch (mode) {
-    case "trace-room":
-      return "キャンバス上を点打ちして部屋の輪郭を作ります。3点以上で完了できます。作成後は選択モードで輪郭移動、頂点ドラッグ、辺からの頂点追加ができます。";
-    case "add-window":
-      return "壁の近くをクリックすると窓を配置します。右のパネルで幅やメモを調整できます。";
-    case "add-door":
-      return "壁の近くをクリックすると扉を配置します。開き方向も後から変更できます。";
-    case "add-zone":
-      return "背景上でドラッグして、矩形サイズつきの窓前制約ゾーンを追加できます。";
-    case "add-furniture":
-      return "背景上でドラッグして、矩形サイズつきの家具を追加できます。";
-    case "set-scale":
-      return "背景画像上などで2点をクリックし、その実寸を mm で入力して縮尺を決めます。";
-    default:
-      return "家具のドラッグ移動や各オブジェクトの選択・編集ができます。";
-  }
+function SummaryValue({
+  label,
+  value,
+  danger = false
+}: {
+  label: string;
+  value: string | number;
+  danger?: boolean;
+}) {
+  return (
+    <div className="summary-value">
+      <span className="text-neutral-500">{label}</span>
+      <strong className={danger ? "text-rose-700" : "text-neutral-950"}>{value}</strong>
+    </div>
+  );
 }
 
 function modeDescriptionShort(mode: PlannerMode) {

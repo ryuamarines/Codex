@@ -1,6 +1,14 @@
 "use client";
 
 import type { User } from "firebase/auth";
+import {
+  CloudDownload,
+  CloudUpload,
+  LoaderCircle,
+  LogIn,
+  LogOut,
+  UserRound
+} from "lucide-react";
 
 type CloudPanelProps = {
   firebaseUser: User | null;
@@ -38,46 +46,34 @@ export function CloudPanel({
   onImportGuestProjects
 }: CloudPanelProps) {
   return (
-    <div className="mt-4 rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
+    <div className="panel-section mt-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-neutral-950">アカウント / クラウド</div>
-          <div className="mt-2 text-sm text-neutral-600">
-            {firebaseUser ? `ログイン中: ${firebaseUser.displayName || firebaseUser.email || firebaseUser.uid}` : "未ログイン"}
+        <div className="min-w-0">
+          <div className="section-title">アカウント保存</div>
+          <div className="mt-2 flex min-w-0 items-center gap-2 text-sm text-neutral-700">
+            <UserRound className="shrink-0 text-neutral-500" size={16} />
+            <span className="truncate">
+              {firebaseUser ? firebaseUser.displayName || firebaseUser.email || firebaseUser.uid : "ゲスト保存"}
+            </span>
           </div>
         </div>
-        <div
-          className={
-            firebaseUser
-              ? "rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
-              : "rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-500"
-          }
-        >
-          {firebaseUser ? "ONLINE" : "OFFLINE"}
-        </div>
+        <span className={firebaseUser ? "status-count status-count-success" : "status-count"}>
+          {firebaseUser ? "同期可" : "ゲスト"}
+        </span>
       </div>
-      <div className="mt-2 rounded-2xl border border-neutral-200 bg-white px-3 py-3 text-xs leading-5 text-neutral-500">
-        {firebaseUser
-          ? "このアカウント専用のブラウザ保存と Firestore 保存を使います。"
-          : "ログイン前はこのブラウザのゲスト保存を使います。"}
+
+      <div className="mt-3 space-y-2" aria-live="polite">
+        {cloudMessage ? <div className="status-message">{cloudMessage}</div> : null}
+        {authMessage ? <div className="status-message status-message-warning">{authMessage}</div> : null}
+        {storageNotice ? <div className="status-message status-message-success">{storageNotice}</div> : null}
+        {storageError ? <div className="status-message status-message-warning">{storageError}</div> : null}
       </div>
-      {cloudMessage ? (
-        <div className="mt-3 rounded-2xl border border-neutral-200 bg-white p-3 text-sm text-neutral-700">{cloudMessage}</div>
-      ) : null}
-      {authMessage ? (
-        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{authMessage}</div>
-      ) : null}
-      {storageNotice ? (
-        <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{storageNotice}</div>
-      ) : null}
-      {storageError ? (
-        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{storageError}</div>
-      ) : null}
+
       {firebaseUser && guestTransfer.available ? (
-        <div className="mt-3 rounded-2xl border border-neutral-300 bg-white p-3">
-          <div className="text-sm font-semibold text-neutral-950">ゲストデータがあります</div>
-          <div className="mt-1 text-xs leading-5 text-neutral-600">
-            ログイン前に作成した{guestTransfer.count}件を、このアカウントへコピーできます。ゲスト側も残ります。
+        <div className="mt-3 border-t border-neutral-200 pt-3">
+          <div className="flex items-center justify-between gap-2 text-sm font-semibold text-neutral-950">
+            <span>ゲストデータ</span>
+            <span className="status-count">{guestTransfer.count}件</span>
           </div>
           <button className="button-strong mt-3 w-full" onClick={onImportGuestProjects} disabled={authBusy || cloudBusy}>
             ゲストプロジェクトを引き継ぐ
@@ -85,28 +81,30 @@ export function CloudPanel({
         </div>
       ) : null}
       {cloudHydrating ? (
-        <div className="mt-3 rounded-2xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-600">
-          Firestore の保存内容を確認しています。読込中でもログアウトはできます。
+        <div className="status-message mt-3 flex items-center gap-2">
+          <LoaderCircle className="animate-spin" size={15} />
+          クラウドを確認中
         </div>
       ) : null}
       <div className="mt-3 grid gap-2">
         {firebaseUser ? (
           <>
-            <p className="text-xs leading-5 text-neutral-500">
-              Firestoreとの読込・保存は、現在選択している1件が対象です。
-            </p>
             <button className="button-soft w-full" onClick={onLoadProjectFromCloud} disabled={cloudBusy || authBusy}>
-              選択中へFirestoreから読込
+              <CloudDownload size={16} />
+              クラウドから読込
             </button>
             <button className="button-soft w-full" onClick={onSaveProjectToCloud} disabled={cloudBusy || authBusy}>
-              選択中をFirestoreに保存
+              <CloudUpload size={16} />
+              クラウドへ保存
             </button>
             <button className="button-danger w-full" onClick={onSignOut} disabled={authBusy}>
+              <LogOut size={16} />
               ログアウト
             </button>
           </>
         ) : (
           <button className="button-strong w-full" onClick={onSignIn} disabled={!firebaseConfigured || cloudBusy || authBusy}>
+            <LogIn size={16} />
             Googleでログイン
           </button>
         )}

@@ -30,6 +30,8 @@ type GuestTransferState = {
   count: number;
 };
 
+export type PlannerStorageStatus = "loading" | "ready" | "saving" | "saved" | "error";
+
 const EMPTY_GUEST_TRANSFER: GuestTransferState = { available: false, count: 0 };
 
 export function usePlannerProject({ authResolved, userId }: UsePlannerProjectParams) {
@@ -40,6 +42,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
   const [storageHasProject, setStorageHasProject] = useState(false);
   const [storageError, setStorageError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
+  const [storageStatus, setStorageStatus] = useState<PlannerStorageStatus>("loading");
   const [guestTransfer, setGuestTransfer] = useState<GuestTransferState>(EMPTY_GUEST_TRANSFER);
   const [undoStack, setUndoStack] = useState<PlannerProject[]>([]);
   const [redoStack, setRedoStack] = useState<PlannerProject[]>([]);
@@ -93,6 +96,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
 
     cancelPendingSave();
     setStorageNotice("");
+    setStorageStatus("loading");
     setLoadedScope(null);
     setWorkspaceIndex(null);
     setGuestTransfer(EMPTY_GUEST_TRANSFER);
@@ -107,6 +111,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       setWorkspaceIndex(loaded.index);
       setProject(loaded.activeProject);
       setStorageHasProject(loaded.persisted);
+      setStorageStatus(loaded.errors.length > 0 ? "error" : loaded.persisted ? "saved" : "ready");
       setUndoStack([]);
       setRedoStack([]);
       setLoadedScope(expectedScope);
@@ -139,6 +144,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       setWorkspaceIndex(fallbackIndex);
       setProject(fallback);
       setStorageHasProject(false);
+      setStorageStatus("error");
       setLoadedScope(expectedScope);
       setStorageError([...transitionErrors, errorMessage(error)].join("\n"));
     }
@@ -168,8 +174,10 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
         persistedProjectRef.current = projectRef.current;
         applyIndex(nextIndex);
         setStorageHasProject(true);
+        setStorageStatus("saved");
         setStorageError("");
       } catch (error) {
+        setStorageStatus("error");
         setStorageError(`ブラウザ保存に失敗しました: ${errorMessage(error)}`);
       } finally {
         saveTimerRef.current = null;
@@ -196,9 +204,11 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       persistedProjectRef.current = projectRef.current;
       applyIndex(nextIndex);
       setStorageHasProject(true);
+      setStorageStatus("saved");
       setStorageError("");
       return nextIndex;
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(`ブラウザ保存に失敗しました: ${errorMessage(error)}`);
       return null;
     }
@@ -220,6 +230,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     setProject((current) => {
       const next = updater(current);
       projectRef.current = next;
+      if (next !== current) setStorageStatus("saving");
       if (recordHistory && next !== current) {
         setUndoStack((history) => [...history.slice(-39), current]);
         setRedoStack([]);
@@ -242,6 +253,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     setUndoStack((history) => [...history.slice(-39), current]);
     setRedoStack([]);
     projectRef.current = normalized;
+    setStorageStatus("saving");
     setProject(normalized);
   }, []);
 
@@ -256,8 +268,10 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       persistedProjectRef.current = normalized;
       applyIndex(nextIndex);
       setStorageHasProject(true);
+      setStorageStatus("saved");
       setStorageError("");
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(`クラウドデータのブラウザ保存に失敗しました: ${errorMessage(error)}`);
     }
     applyActiveProject(normalized);
@@ -275,9 +289,11 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       skipInitialSaveScopeRef.current = scope;
       persistedProjectRef.current = nextProject;
       applyActiveProject(nextProject);
+      setStorageStatus("saved");
       setStorageNotice("");
       setStorageError("");
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(errorMessage(error));
     }
   }, [applyActiveProject, applyIndex, flushCurrentProject]);
@@ -295,9 +311,11 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       persistedProjectRef.current = nextProject;
       applyActiveProject(nextProject);
       setStorageHasProject(true);
+      setStorageStatus("saved");
       setStorageNotice("新しいプロジェクトを作成しました。以前のプロジェクトも一覧に残っています。");
       setStorageError("");
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(errorMessage(error));
     }
   }, [applyActiveProject, applyIndex, flushCurrentProject]);
@@ -318,9 +336,11 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       skipInitialSaveScopeRef.current = scope;
       persistedProjectRef.current = duplicate;
       applyActiveProject(duplicate);
+      setStorageStatus("saved");
       setStorageNotice("現在のプロジェクトを複製しました。");
       setStorageError("");
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(errorMessage(error));
     }
   }, [applyActiveProject, applyIndex, flushCurrentProject]);
@@ -343,9 +363,11 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       persistedProjectRef.current = nextProject;
       applyActiveProject(nextProject);
       setStorageHasProject(true);
+      setStorageStatus("saved");
       setStorageNotice("プロジェクトを削除しました。");
       setStorageError("");
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(errorMessage(error));
     }
   }, [applyActiveProject, applyIndex, flushCurrentProject]);
@@ -368,10 +390,12 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       persistedProjectRef.current = nextProject;
       applyActiveProject(nextProject);
       setStorageHasProject(true);
+      setStorageStatus("saved");
       setGuestTransfer(EMPTY_GUEST_TRANSFER);
       setStorageNotice(`${result.importedProjects.length}件のゲストプロジェクトをコピーしました。ゲスト側のデータも残しています。`);
       setStorageError("");
     } catch (error) {
+      setStorageStatus("error");
       setStorageError(errorMessage(error));
     }
   }, [applyActiveProject, applyIndex, flushCurrentProject]);
@@ -385,6 +409,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       if (!previous) return history;
       setRedoStack((redoHistory) => [...redoHistory, projectRef.current]);
       projectRef.current = previous;
+      setStorageStatus("saving");
       setProject(previous);
       return history.slice(0, -1);
     });
@@ -396,6 +421,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
       if (!next) return history;
       setUndoStack((undoHistory) => [...undoHistory.slice(-39), projectRef.current]);
       projectRef.current = next;
+      setStorageStatus("saving");
       setProject(next);
       return history.slice(0, -1);
     });
@@ -413,6 +439,7 @@ export function usePlannerProject({ authResolved, userId }: UsePlannerProjectPar
     storageHasProject,
     storageError,
     storageNotice,
+    storageStatus,
     guestTransfer,
     updateProject,
     applyProjectUpdate,
