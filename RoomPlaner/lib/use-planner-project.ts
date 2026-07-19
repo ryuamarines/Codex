@@ -1,307 +1,436 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sampleProject } from "@/data/sample-project";
-import { observeFirebaseUser } from "@/lib/firebase/auth";
 import { detectCollisions } from "@/lib/geometry";
-import type { ConstraintZone, DoorObject, FurnitureKind, FurnitureObject, PlannerProject, RoomShape, WindowObject } from "@/lib/types";
+import {
+  buildPlannerStorageScope,
+  createEmptyPlannerProject,
+  importGuestWorkspace,
+  inspectGuestWorkspace,
+  loadPlannerWorkspace,
+  persistPlannerProject,
+  readPlannerProject,
+  removePlannerProject,
+  setActivePlannerProject,
+  type PlannerProjectSummary,
+  type PlannerStorageScope,
+  type PlannerWorkspaceIndex
+} from "@/lib/planner-workspace-storage";
+import { clonePlannerProject, parsePlannerProject, parsePlannerProjectJson } from "@/lib/project-schema";
+import type { PlannerProject } from "@/lib/types";
 
-const STORAGE_KEY_BASE = "roomplaner.mpp.v1";
-const GUEST_STORAGE_KEY = `${STORAGE_KEY_BASE}.guest`;
+type UsePlannerProjectParams = {
+  authResolved: boolean;
+  userId: string | null;
+};
 
-function buildStorageKey(userId: string | null) {
-  return userId ? `${STORAGE_KEY_BASE}.user.${userId}` : GUEST_STORAGE_KEY;
-}
+type GuestTransferState = {
+  available: boolean;
+  count: number;
+};
 
-export function usePlannerProject() {
+const EMPTY_GUEST_TRANSFER: GuestTransferState = { available: false, count: 0 };
+
+export function usePlannerProject({ authResolved, userId }: UsePlannerProjectParams) {
+  const expectedScope = buildPlannerStorageScope(userId);
   const [project, setProject] = useState<PlannerProject>(sampleProject);
-  const [authResolved, setAuthResolved] = useState(false);
-  const [storageKey, setStorageKey] = useState(GUEST_STORAGE_KEY);
-  const [storageReady, setStorageReady] = useState(false);
+  const [workspaceIndex, setWorkspaceIndex] = useState<PlannerWorkspaceIndex | null>(null);
+  const [loadedScope, setLoadedScope] = useState<PlannerStorageScope | null>(null);
   const [storageHasProject, setStorageHasProject] = useState(false);
   const [storageError, setStorageError] = useState("");
+  const [storageNotice, setStorageNotice] = useState("");
+  const [guestTransfer, setGuestTransfer] = useState<GuestTransferState>(EMPTY_GUEST_TRANSFER);
   const [undoStack, setUndoStack] = useState<PlannerProject[]>([]);
   const [redoStack, setRedoStack] = useState<PlannerProject[]>([]);
   const projectRef = useRef(project);
-  const loadedStorageKeyRef = useRef<string | null>(null);
-  const skipInitialSaveForStorageKeyRef = useRef<string | null>(null);
+  const persistedProjectRef = useRef<PlannerProject | null>(null);
+  const indexRef = useRef<PlannerWorkspaceIndex | null>(null);
+  const scopeRef = useRef<PlannerStorageScope | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const skipInitialSaveScopeRef = useRef<PlannerStorageScope | null>(null);
+  const storageReady = authResolved && loadedScope === expectedScope && workspaceIndex !== null;
+
+  const cancelPendingSave = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
+
+  const applyIndex = useCallback((index: PlannerWorkspaceIndex) => {
+    indexRef.current = index;
+    setWorkspaceIndex(index);
+  }, []);
+
+  const applyActiveProject = useCallback((nextProject: PlannerProject) => {
+    projectRef.current = nextProject;
+    setProject(nextProject);
+    setUndoStack([]);
+    setRedoStack([]);
+  }, []);
+
+  useEffect(() => {
+    if (!authResolved) return;
+
+    const transitionErrors: string[] = [];
+    const previousScope = scopeRef.current;
+    const previousIndex = indexRef.current;
+    if (
+      previousScope
+      && previousIndex
+      && previousScope !== expectedScope
+      && persistedProjectRef.current !== projectRef.current
+    ) {
+      try {
+        const current = { ...projectRef.current, id: previousIndex.activeProjectId };
+        indexRef.current = persistPlannerProject(window.localStorage, previousScope, previousIndex, current);
+        persistedProjectRef.current = projectRef.current;
+      } catch (error) {
+        transitionErrors.push(`保存先の切替前に編集中データを保存できませんでした: ${errorMessage(error)}`);
+      }
+    }
+
+    cancelPendingSave();
+    setStorageNotice("");
+    setLoadedScope(null);
+    setWorkspaceIndex(null);
+    setGuestTransfer(EMPTY_GUEST_TRANSFER);
+
+    try {
+      const loaded = loadPlannerWorkspace(window.localStorage, expectedScope);
+      scopeRef.current = expectedScope;
+      indexRef.current = loaded.index;
+      projectRef.current = loaded.activeProject;
+      persistedProjectRef.current = loaded.activeProject;
+      skipInitialSaveScopeRef.current = expectedScope;
+      setWorkspaceIndex(loaded.index);
+      setProject(loaded.activeProject);
+      setStorageHasProject(loaded.persisted);
+      setUndoStack([]);
+      setRedoStack([]);
+      setLoadedScope(expectedScope);
+
+      if (loaded.migratedLegacy) {
+        setStorageNotice("旧形式のブラウザ保存を新しい複数プロジェクト形式へ移行しました。旧データも残しています。");
+      }
+      setStorageError([...transitionErrors, ...loaded.errors].join("\n"));
+
+      if (userId) {
+        const guest = inspectGuestWorkspace(window.localStorage, loaded.index.importedGuestRevision);
+        setGuestTransfer({ available: guest.available, count: guest.count });
+      }
+    } catch (error) {
+      scopeRef.current = expectedScope;
+      const fallback = createEmptyPlannerProject("復旧用プロジェクト");
+      const now = Date.now();
+      const fallbackIndex: PlannerWorkspaceIndex = {
+        schemaVersion: 2,
+        activeProjectId: fallback.id,
+        updatedAtMs: now,
+        contentRevision: now,
+        importedGuestRevision: 0,
+        projects: [{ id: fallback.id, name: fallback.name, updatedAtMs: now }]
+      };
+      indexRef.current = fallbackIndex;
+      projectRef.current = fallback;
+      persistedProjectRef.current = fallback;
+      skipInitialSaveScopeRef.current = expectedScope;
+      setWorkspaceIndex(fallbackIndex);
+      setProject(fallback);
+      setStorageHasProject(false);
+      setLoadedScope(expectedScope);
+      setStorageError([...transitionErrors, errorMessage(error)].join("\n"));
+    }
+  }, [authResolved, cancelPendingSave, expectedScope, userId]);
 
   useEffect(() => {
     projectRef.current = project;
   }, [project]);
 
   useEffect(() => {
-    return observeFirebaseUser((user) => {
-      setStorageKey(buildStorageKey(user?.uid ?? null));
-      setAuthResolved(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!authResolved) return;
-    setStorageReady(false);
-    setStorageError("");
-    loadedStorageKeyRef.current = null;
-    setUndoStack([]);
-    setRedoStack([]);
-
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-
-      if (!raw) {
-        setStorageHasProject(false);
-        setProject(sampleProject);
-        return;
-      }
-
-      setStorageHasProject(true);
-      setProject(normalizeProject(JSON.parse(raw) as PlannerProject));
-    } catch (error) {
-      try {
-        window.localStorage.removeItem(storageKey);
-      } catch {
-        // Ignore cleanup failures. The read error is the useful signal for the UI.
-      }
-      setStorageHasProject(false);
-      setProject(sampleProject);
-      setStorageError(error instanceof Error ? error.message : "保存済みデータの読み込みに失敗しました。");
-    } finally {
-      loadedStorageKeyRef.current = storageKey;
-      skipInitialSaveForStorageKeyRef.current = storageKey;
-      setStorageReady(true);
-    }
-  }, [authResolved, storageKey]);
-
-  useEffect(() => {
-    if (!authResolved || !storageReady || loadedStorageKeyRef.current !== storageKey) return;
-    if (skipInitialSaveForStorageKeyRef.current === storageKey) {
-      skipInitialSaveForStorageKeyRef.current = null;
+    if (!storageReady || !indexRef.current || loadedScope !== expectedScope) return;
+    if (skipInitialSaveScopeRef.current === loadedScope) {
+      skipInitialSaveScopeRef.current = null;
       return;
     }
+    if (persistedProjectRef.current === projectRef.current) return;
 
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(project));
-      setStorageError("");
-    } catch (error) {
-      setStorageError(
-        error instanceof Error
-          ? `ブラウザ保存に失敗しました: ${error.message}`
-          : "ブラウザ保存に失敗しました。背景画像が大きすぎる可能性があります。"
-      );
-    }
-  }, [authResolved, project, storageKey, storageReady]);
+    cancelPendingSave();
+    saveTimerRef.current = window.setTimeout(() => {
+      const scope = scopeRef.current;
+      const index = indexRef.current;
+      if (!scope || scope !== expectedScope || !index) return;
+
+      try {
+        const nextProject = { ...projectRef.current, id: index.activeProjectId };
+        const nextIndex = persistPlannerProject(window.localStorage, scope, index, nextProject);
+        persistedProjectRef.current = projectRef.current;
+        applyIndex(nextIndex);
+        setStorageHasProject(true);
+        setStorageError("");
+      } catch (error) {
+        setStorageError(`ブラウザ保存に失敗しました: ${errorMessage(error)}`);
+      } finally {
+        saveTimerRef.current = null;
+      }
+    }, 300);
+
+    return cancelPendingSave;
+  }, [applyIndex, cancelPendingSave, expectedScope, loadedScope, project, storageReady]);
+
+  useEffect(() => cancelPendingSave, [cancelPendingSave]);
 
   const issues = useMemo(() => detectCollisions(project), [project]);
 
-  const applyProjectUpdate = (
+  const flushCurrentProject = useCallback((options?: { force?: boolean }) => {
+    cancelPendingSave();
+    const scope = scopeRef.current;
+    const index = indexRef.current;
+    if (!scope || !index) return index;
+    if (!options?.force && persistedProjectRef.current === projectRef.current) return index;
+
+    try {
+      const current = { ...projectRef.current, id: index.activeProjectId };
+      const nextIndex = persistPlannerProject(window.localStorage, scope, index, current);
+      persistedProjectRef.current = projectRef.current;
+      applyIndex(nextIndex);
+      setStorageHasProject(true);
+      setStorageError("");
+      return nextIndex;
+    } catch (error) {
+      setStorageError(`ブラウザ保存に失敗しました: ${errorMessage(error)}`);
+      return null;
+    }
+  }, [applyIndex, cancelPendingSave]);
+
+  useEffect(() => {
+    const flushBeforeLeaving = () => {
+      flushCurrentProject();
+    };
+    window.addEventListener("pagehide", flushBeforeLeaving);
+    return () => window.removeEventListener("pagehide", flushBeforeLeaving);
+  }, [flushCurrentProject]);
+
+  const applyProjectUpdate = useCallback((
     updater: (current: PlannerProject) => PlannerProject,
     options?: { recordHistory?: boolean }
   ) => {
     const recordHistory = options?.recordHistory ?? true;
     setProject((current) => {
       const next = updater(current);
+      projectRef.current = next;
       if (recordHistory && next !== current) {
         setUndoStack((history) => [...history.slice(-39), current]);
         setRedoStack([]);
       }
       return next;
     });
-  };
+  }, []);
 
-  const updateProject = (updater: (current: PlannerProject) => PlannerProject) => {
+  const updateProject = useCallback((updater: (current: PlannerProject) => PlannerProject) => {
     applyProjectUpdate(updater, { recordHistory: true });
-  };
+  }, [applyProjectUpdate]);
 
-  const replaceProject = (nextProject: PlannerProject) => {
+  const replaceProject = useCallback((nextProject: PlannerProject) => {
+    const index = indexRef.current;
+    const normalized = parsePlannerProject({
+      ...nextProject,
+      id: index?.activeProjectId ?? nextProject.id
+    });
     const current = projectRef.current;
     setUndoStack((history) => [...history.slice(-39), current]);
     setRedoStack([]);
-    setProject(nextProject);
-  };
+    projectRef.current = normalized;
+    setProject(normalized);
+  }, []);
 
-  const importProjectJson = (raw: string) => {
-    const parsed = normalizeProject(JSON.parse(raw) as PlannerProject);
-    if (!parsed.canvas || !Array.isArray(parsed.furniture) || !("scalePxPerMm" in parsed)) {
-      throw new Error("invalid planner project");
+  const hydrateProject = useCallback((nextProject: PlannerProject) => {
+    const scope = scopeRef.current;
+    const index = indexRef.current;
+    if (!scope || !index) return;
+    const normalized = parsePlannerProject({ ...nextProject, id: index.activeProjectId });
+
+    try {
+      const nextIndex = persistPlannerProject(window.localStorage, scope, index, normalized);
+      persistedProjectRef.current = normalized;
+      applyIndex(nextIndex);
+      setStorageHasProject(true);
+      setStorageError("");
+    } catch (error) {
+      setStorageError(`クラウドデータのブラウザ保存に失敗しました: ${errorMessage(error)}`);
     }
-    return parsed;
-  };
+    applyActiveProject(normalized);
+  }, [applyActiveProject, applyIndex]);
 
-  const exportProjectJson = () => JSON.stringify(project, null, 2);
+  const switchProject = useCallback((projectId: string) => {
+    const scope = scopeRef.current;
+    const currentIndex = flushCurrentProject();
+    if (!scope || !currentIndex || projectId === currentIndex.activeProjectId) return;
 
-  const undo = () => {
+    try {
+      const nextProject = readPlannerProject(window.localStorage, scope, projectId);
+      const nextIndex = setActivePlannerProject(window.localStorage, scope, currentIndex, projectId);
+      applyIndex(nextIndex);
+      skipInitialSaveScopeRef.current = scope;
+      persistedProjectRef.current = nextProject;
+      applyActiveProject(nextProject);
+      setStorageNotice("");
+      setStorageError("");
+    } catch (error) {
+      setStorageError(errorMessage(error));
+    }
+  }, [applyActiveProject, applyIndex, flushCurrentProject]);
+
+  const createProject = useCallback(() => {
+    const scope = scopeRef.current;
+    const currentIndex = flushCurrentProject({ force: true });
+    if (!scope || !currentIndex) return;
+    const nextProject = createEmptyPlannerProject();
+
+    try {
+      const nextIndex = persistPlannerProject(window.localStorage, scope, currentIndex, nextProject);
+      applyIndex(nextIndex);
+      skipInitialSaveScopeRef.current = scope;
+      persistedProjectRef.current = nextProject;
+      applyActiveProject(nextProject);
+      setStorageHasProject(true);
+      setStorageNotice("新しいプロジェクトを作成しました。以前のプロジェクトも一覧に残っています。");
+      setStorageError("");
+    } catch (error) {
+      setStorageError(errorMessage(error));
+    }
+  }, [applyActiveProject, applyIndex, flushCurrentProject]);
+
+  const duplicateProject = useCallback(() => {
+    const scope = scopeRef.current;
+    const currentIndex = flushCurrentProject({ force: true });
+    if (!scope || !currentIndex) return;
+    const duplicate = {
+      ...clonePlannerProject(projectRef.current),
+      id: createEmptyPlannerProject().id,
+      name: `${projectRef.current.name} のコピー`
+    };
+
+    try {
+      const nextIndex = persistPlannerProject(window.localStorage, scope, currentIndex, duplicate);
+      applyIndex(nextIndex);
+      skipInitialSaveScopeRef.current = scope;
+      persistedProjectRef.current = duplicate;
+      applyActiveProject(duplicate);
+      setStorageNotice("現在のプロジェクトを複製しました。");
+      setStorageError("");
+    } catch (error) {
+      setStorageError(errorMessage(error));
+    }
+  }, [applyActiveProject, applyIndex, flushCurrentProject]);
+
+  const deleteProject = useCallback(() => {
+    const scope = scopeRef.current;
+    let currentIndex = flushCurrentProject({ force: true });
+    if (!scope || !currentIndex) return;
+    const deletingId = currentIndex.activeProjectId;
+
+    try {
+      if (currentIndex.projects.length === 1) {
+        const replacement = createEmptyPlannerProject();
+        currentIndex = persistPlannerProject(window.localStorage, scope, currentIndex, replacement);
+      }
+      const nextIndex = removePlannerProject(window.localStorage, scope, currentIndex, deletingId);
+      const nextProject = readPlannerProject(window.localStorage, scope, nextIndex.activeProjectId);
+      applyIndex(nextIndex);
+      skipInitialSaveScopeRef.current = scope;
+      persistedProjectRef.current = nextProject;
+      applyActiveProject(nextProject);
+      setStorageHasProject(true);
+      setStorageNotice("プロジェクトを削除しました。");
+      setStorageError("");
+    } catch (error) {
+      setStorageError(errorMessage(error));
+    }
+  }, [applyActiveProject, applyIndex, flushCurrentProject]);
+
+  const importGuestProjects = useCallback(() => {
+    const scope = scopeRef.current;
+    const currentIndex = flushCurrentProject({ force: true });
+    if (!scope || scope === "guest" || !currentIndex) return;
+
+    try {
+      const result = importGuestWorkspace(window.localStorage, scope, currentIndex);
+      if (result.importedProjects.length === 0) {
+        setGuestTransfer(EMPTY_GUEST_TRANSFER);
+        setStorageNotice("引き継げるゲストプロジェクトはありませんでした。");
+        return;
+      }
+      const nextProject = result.importedProjects[0];
+      applyIndex(result.index);
+      skipInitialSaveScopeRef.current = scope;
+      persistedProjectRef.current = nextProject;
+      applyActiveProject(nextProject);
+      setStorageHasProject(true);
+      setGuestTransfer(EMPTY_GUEST_TRANSFER);
+      setStorageNotice(`${result.importedProjects.length}件のゲストプロジェクトをコピーしました。ゲスト側のデータも残しています。`);
+      setStorageError("");
+    } catch (error) {
+      setStorageError(errorMessage(error));
+    }
+  }, [applyActiveProject, applyIndex, flushCurrentProject]);
+
+  const importProjectJson = useCallback((raw: string) => parsePlannerProjectJson(raw), []);
+  const exportProjectJson = useCallback(() => JSON.stringify(projectRef.current, null, 2), []);
+
+  const undo = useCallback(() => {
     setUndoStack((history) => {
       const previous = history[history.length - 1];
       if (!previous) return history;
       setRedoStack((redoHistory) => [...redoHistory, projectRef.current]);
+      projectRef.current = previous;
       setProject(previous);
       return history.slice(0, -1);
     });
-  };
+  }, []);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     setRedoStack((history) => {
       const next = history[history.length - 1];
       if (!next) return history;
       setUndoStack((undoHistory) => [...undoHistory.slice(-39), projectRef.current]);
+      projectRef.current = next;
       setProject(next);
       return history.slice(0, -1);
     });
-  };
-
-  const clearPersistedProject = () => {
-    try {
-      window.localStorage.removeItem(storageKey);
-      setStorageError("");
-    } catch (error) {
-      setStorageError(error instanceof Error ? error.message : "ブラウザ保存データの削除に失敗しました。");
-    }
-  };
+  }, []);
 
   return {
     project,
+    projects: workspaceIndex?.projects ?? ([] as PlannerProjectSummary[]),
+    activeProjectId: workspaceIndex?.activeProjectId ?? project.id,
     issues,
     undoStack,
     redoStack,
     storageReady,
+    storageScope: loadedScope,
     storageHasProject,
     storageError,
+    storageNotice,
+    guestTransfer,
     updateProject,
     applyProjectUpdate,
     replaceProject,
+    hydrateProject,
     importProjectJson,
     exportProjectJson,
     undo,
     redo,
-    clearPersistedProject
+    switchProject,
+    createProject,
+    duplicateProject,
+    deleteProject,
+    importGuestProjects,
+    flushCurrentProject
   };
 }
 
-function normalizeProject(project: PlannerProject): PlannerProject {
-  const room = normalizeRoom(project.room);
-
-  return {
-    ...project,
-    canvas: project.canvas ?? sampleProject.canvas,
-    scalePxPerMm: Number.isFinite(project.scalePxPerMm) && project.scalePxPerMm > 0 ? project.scalePxPerMm : sampleProject.scalePxPerMm,
-    floorOpacity:
-      Number.isFinite(project.floorOpacity) && project.floorOpacity >= 0 && project.floorOpacity <= 1
-        ? project.floorOpacity
-        : sampleProject.floorOpacity,
-    background: project.background ?? null,
-    room,
-    windows: Array.isArray(project.windows) ? project.windows.map((item) => normalizeWindow(item, room)).filter(isWindowObject) : [],
-    zones: Array.isArray(project.zones) ? project.zones.map(normalizeZone) : [],
-    doors: Array.isArray(project.doors) ? project.doors.map((item) => normalizeDoor(item, room)).filter(isDoorObject) : [],
-    furniture: Array.isArray(project.furniture) ? project.furniture.map(normalizeFurniture) : []
-  };
-}
-
-function normalizeRoom(room: PlannerProject["room"]): RoomShape | null {
-  if (!room || !Array.isArray(room.points) || room.points.length < 3) {
-    return null;
-  }
-
-  const points = room.points
-    .map((point) => ({
-      x: finiteNumber(point.x),
-      y: finiteNumber(point.y)
-    }))
-    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
-
-  return points.length >= 3 ? { ...room, points } : null;
-}
-
-function normalizeWindow(item: WindowObject, room: RoomShape | null): WindowObject | null {
-  if (!room || room.points.length < 3) {
-    return null;
-  }
-
-  return {
-    ...item,
-    wallIndex: normalizeWallIndex(item.wallIndex, room),
-    offset: finiteNumber(item.offset),
-    widthMm: positiveNumber(item.widthMm, 800),
-    note: item.note ?? ""
-  };
-}
-
-function normalizeDoor(item: DoorObject, room: RoomShape | null): DoorObject | null {
-  if (!room || room.points.length < 3) {
-    return null;
-  }
-
-  return {
-    ...item,
-    wallIndex: normalizeWallIndex(item.wallIndex, room),
-    offset: finiteNumber(item.offset),
-    widthMm: positiveNumber(item.widthMm, 800),
-    swing: item.swing === "clockwise" ? "clockwise" : "counterclockwise",
-    openDirection: item.openDirection === "outward" ? "outward" : "inward",
-    note: item.note ?? ""
-  };
-}
-
-function normalizeZone(item: ConstraintZone): ConstraintZone {
-  return {
-    ...item,
-    x: finiteNumber(item.x),
-    y: finiteNumber(item.y),
-    widthMm: positiveNumber(item.widthMm, 200),
-    depthMm: positiveNumber(item.depthMm, 200),
-    note: item.note ?? ""
-  };
-}
-
-function normalizeFurniture(item: FurnitureObject): FurnitureObject {
-  return {
-    ...item,
-    name: item.name || "家具",
-    kind: normalizeFurnitureKind(item.kind),
-    x: finiteNumber(item.x),
-    y: finiteNumber(item.y),
-    widthMm: positiveNumber(item.widthMm, 200),
-    depthMm: positiveNumber(item.depthMm, 200),
-    rotation: finiteNumber(item.rotation)
-  };
-}
-
-function normalizeFurnitureKind(kind: FurnitureObject["kind"] | undefined): FurnitureKind {
-  const allowedKinds: FurnitureKind[] = [
-    "generic",
-    "bed",
-    "desk",
-    "table",
-    "chair",
-    "sofa",
-    "wardrobe",
-    "cabinet",
-    "shelf",
-    "appliance",
-    "rug",
-    "plant"
-  ];
-
-  return allowedKinds.includes(kind ?? "generic") ? (kind ?? "generic") : "generic";
-}
-
-function normalizeWallIndex(value: number, room: RoomShape) {
-  const maxIndex = Math.max(0, room.points.length - 1);
-  return Math.min(maxIndex, Math.max(0, Math.trunc(finiteNumber(value))));
-}
-
-function finiteNumber(value: number, fallback = 0) {
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function positiveNumber(value: number, fallback: number) {
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function isWindowObject(value: WindowObject | null): value is WindowObject {
-  return value !== null;
-}
-
-function isDoorObject(value: DoorObject | null): value is DoorObject {
-  return value !== null;
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "保存操作に失敗しました。";
 }

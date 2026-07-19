@@ -5,12 +5,12 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 
 const ROOMPLAN_COLLECTION = "roomPlans";
 const FIRESTORE_DOC_SOFT_LIMIT_BYTES = 900_000;
-const ROOMPLAN_SCHEMA_VERSION = 1;
+const ROOMPLAN_SCHEMA_VERSION = 2;
 
 function buildCloudProject(project: PlannerProject) {
   return {
     ...project,
-    background: project.background ? null : project.background
+    background: null
   } satisfies PlannerProject;
 }
 
@@ -19,6 +19,8 @@ function estimateJsonBytes(value: unknown) {
 }
 
 export class FirestoreRoomPlanRepository {
+  static readonly schemaVersion = ROOMPLAN_SCHEMA_VERSION;
+
   async load(user: Pick<User, "uid">) {
     const db = getFirebaseDb();
     if (!db) {
@@ -40,7 +42,15 @@ export class FirestoreRoomPlanRepository {
       throw new Error("Firestore の保存データ所有者が現在のユーザーと一致しません。");
     }
 
-    return (data.project ?? null) as PlannerProject | null;
+    if (!("project" in data) || data.project === null || data.project === undefined) {
+      return null;
+    }
+
+    return {
+      schemaVersion: typeof data.schemaVersion === "number" ? data.schemaVersion : 1,
+      updatedAtMs: typeof data.updatedAtMs === "number" ? data.updatedAtMs : 0,
+      project: data.project as unknown
+    };
   }
 
   async save(user: Pick<User, "uid" | "displayName" | "email">, project: PlannerProject) {

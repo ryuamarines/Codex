@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloudPanel } from "@/components/cloud-panel";
 import { sampleProject } from "@/data/sample-project";
 import {
@@ -45,6 +45,7 @@ import {
 } from "@/lib/planner5d-migration";
 import { exportProjectCsv, importProjectCsv } from "@/lib/project-csv";
 import { usePlannerProject } from "@/lib/use-planner-project";
+import { useRoomPlanerAuth } from "@/lib/use-roomplaner-auth";
 import { useRoomPlanerCloud } from "@/lib/use-roomplaner-cloud";
 import { usePlannerUi } from "@/lib/use-planner-ui";
 import type {
@@ -86,22 +87,41 @@ const FURNITURE_LIBRARY: Array<{
 
 export function PlannerShell() {
   const {
+    firebaseUser,
+    authResolved,
+    authBusy,
+    authMessage,
+    signIn,
+    signOut
+  } = useRoomPlanerAuth();
+  const {
     project,
+    projects,
+    activeProjectId,
     issues,
     undoStack,
     redoStack,
     storageReady,
+    storageScope,
     storageHasProject,
     storageError,
+    storageNotice,
+    guestTransfer,
     updateProject,
     applyProjectUpdate,
     replaceProject,
+    hydrateProject,
     importProjectJson,
     exportProjectJson,
     undo,
     redo,
-    clearPersistedProject
-  } = usePlannerProject();
+    switchProject,
+    createProject,
+    duplicateProject,
+    deleteProject,
+    importGuestProjects,
+    flushCurrentProject
+  } = usePlannerProject({ authResolved, userId: firebaseUser?.uid ?? null });
   const {
     mode,
     setMode,
@@ -165,28 +185,45 @@ export function PlannerShell() {
     [objectIndex, objectSearch]
   );
 
-  const loadProjectState = (nextProject: PlannerProject) => {
+  const loadProjectState = useCallback((nextProject: PlannerProject) => {
     replaceProject(nextProject);
     resetTransientUi();
-  };
+  }, [replaceProject, resetTransientUi]);
+
+  const hydrateProjectState = useCallback((nextProject: PlannerProject) => {
+    hydrateProject(nextProject);
+    resetTransientUi();
+  }, [hydrateProject, resetTransientUi]);
 
   const {
-    firebaseUser,
     cloudMessage,
     cloudBusy,
     cloudHydrating,
+    cloudReady,
     firebaseConfigured,
-    signIn,
-    signOut,
     saveProjectToCloud,
     loadProjectFromCloud
   } = useRoomPlanerCloud({
+    firebaseUser,
+    authResolved,
     project,
+    hydrateProjectState,
     loadProjectState,
     parseProject: importProjectJson,
     storageReady,
+    storageScope,
     storageHasProject
   });
+
+  const handleSignIn = useCallback(() => {
+    if (!flushCurrentProject()) return;
+    void signIn();
+  }, [flushCurrentProject, signIn]);
+
+  const handleSignOut = useCallback(() => {
+    if (!flushCurrentProject()) return;
+    void signOut();
+  }, [flushCurrentProject, signOut]);
 
   const handleUndo = () => {
     undo();
@@ -710,6 +747,10 @@ export function PlannerShell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!authResolved || !storageReady || !cloudReady) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       const isTypingTarget =
         target instanceof HTMLInputElement ||
@@ -826,9 +867,43 @@ export function PlannerShell() {
     clearSelection,
     setDraftPlacement,
     clearCurrentDraft,
+    authResolved,
+    storageReady,
+    cloudReady,
     snapEnabled,
     snapSizePx
   ]);
+
+  const workspaceReady = authResolved && storageReady && cloudReady;
+  if (!workspaceReady) {
+    const loadingTitle = !authResolved
+      ? "アカウントを確認しています"
+      : !storageReady
+        ? "ブラウザ保存を読み込んでいます"
+        : "クラウド保存を確認しています";
+
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f7f7f5] p-4 text-neutral-950">
+        <div className="panel w-full max-w-lg p-6">
+          <div className="panel-title">RoomPlaner</div>
+          <h1 className="mt-3 text-xl font-semibold">{loadingTitle}</h1>
+          <p className="mt-3 text-sm leading-6 text-neutral-600">
+            保存先が確定するまで編集を停止し、別アカウントのデータが混ざらないようにしています。
+          </p>
+          {cloudHydrating && cloudMessage ? (
+            <div className="mt-4 rounded-[10px] border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+              {cloudMessage}
+            </div>
+          ) : null}
+          {firebaseUser ? (
+            <button className="button-soft mt-5 w-full" onClick={handleSignOut} disabled={authBusy}>
+              ログアウト
+            </button>
+          ) : null}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#f7f7f5] p-4 text-neutral-950 md:p-6">
@@ -837,19 +912,38 @@ export function PlannerShell() {
           <div className="flex flex-col gap-4 border-b border-neutral-200 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="panel-title">RoomPlaner</div>
-              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end">
                 <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 md:text-3xl">ダッシュボード</h1>
-                <input
-                  className="input max-w-md"
-                  value={project.name}
-                  onChange={(event) =>
-                    updateProject((current) => ({
-                      ...current,
-                      name: event.target.value
-                    }))
-                  }
-                  placeholder="プロジェクト名"
-                />
+                <label className="block min-w-52">
+                  <span className="mb-1 block text-xs text-neutral-500">プロジェクト</span>
+                  <select
+                    className="input"
+                    value={activeProjectId}
+                    onChange={(event) => {
+                      switchProject(event.target.value);
+                      resetTransientUi();
+                      setMode("select");
+                    }}
+                  >
+                    {projects.map((entry) => (
+                      <option key={entry.id} value={entry.id}>{entry.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block min-w-56 max-w-md flex-1">
+                  <span className="mb-1 block text-xs text-neutral-500">プロジェクト名</span>
+                  <input
+                    className="input"
+                    value={project.name}
+                    onChange={(event) =>
+                      updateProject((current) => ({
+                        ...current,
+                        name: event.target.value
+                      }))
+                    }
+                    placeholder="プロジェクト名"
+                  />
+                </label>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -857,7 +951,7 @@ export function PlannerShell() {
                 {firebaseUser ? "アカウント保存" : "ゲスト保存"}
               </span>
               <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-medium text-neutral-700">
-                {storageReady ? "保存準備完了" : "保存確認中"}
+                {projects.length}件保存
               </span>
               <button className="button-soft" onClick={handleUndo} disabled={undoStack.length === 0}>
                 Undo
@@ -865,25 +959,21 @@ export function PlannerShell() {
               <button className="button-soft" onClick={handleRedo} disabled={redoStack.length === 0}>
                 Redo
               </button>
+              <button className="button-soft" onClick={duplicateProject}>
+                複製
+              </button>
               <button
-                className="button-strong"
+                className="button-soft"
                 onClick={() => {
-                  const emptyProject: PlannerProject = {
-                    ...sampleProject,
-                    id: `project-${Date.now()}`,
-                    name: "新規プロジェクト",
-                    background: null,
-                    room: null,
-                    windows: [],
-                    zones: [],
-                    doors: [],
-                    furniture: [],
-                    scalePxPerMm: 0.1
-                  };
-                  loadProjectState(emptyProject);
+                  if (!window.confirm(`「${project.name}」を削除しますか？この操作はUndoできません。`)) return;
+                  deleteProject();
+                  resetTransientUi();
                   setMode("select");
                 }}
               >
+                削除
+              </button>
+              <button className="button-strong" onClick={() => { createProject(); resetTransientUi(); setMode("select"); }}>
                 + 新規プロジェクト
               </button>
             </div>
@@ -929,9 +1019,9 @@ export function PlannerShell() {
             <button
               className="button-soft"
               onClick={() => {
-                loadProjectState(sampleProject);
+                if (!window.confirm("現在のプロジェクト内容をサンプルで置き換えますか？")) return;
+                loadProjectState({ ...sampleProject, id: project.id });
                 setMode("select");
-                clearPersistedProject();
               }}
             >
               サンプル
@@ -1018,14 +1108,22 @@ export function PlannerShell() {
             <CloudPanel
               firebaseUser={firebaseUser}
               cloudMessage={cloudMessage}
+              authMessage={authMessage}
               storageError={storageError}
+              storageNotice={storageNotice}
               cloudHydrating={cloudHydrating}
               cloudBusy={cloudBusy}
+              authBusy={authBusy}
               firebaseConfigured={firebaseConfigured}
-              onSignIn={signIn}
-              onSignOut={signOut}
+              guestTransfer={guestTransfer}
+              onSignIn={handleSignIn}
+              onSignOut={handleSignOut}
               onSaveProjectToCloud={saveProjectToCloud}
-              onLoadProjectFromCloud={loadProjectFromCloud}
+              onLoadProjectFromCloud={() => {
+                if (!window.confirm("選択中のプロジェクトをFirestoreの内容で置き換えますか？")) return;
+                void loadProjectFromCloud();
+              }}
+              onImportGuestProjects={importGuestProjects}
             />
             <div className="mt-4 grid gap-2">
               <label className="button-soft cursor-pointer text-center">

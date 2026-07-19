@@ -468,9 +468,6 @@ export function PlannerCanvas({
             {gridLines.horizontal.map((y) => (
               <Line key={`hy-${y}`} points={[0, y, project.canvas.width, y]} stroke="#d8dee8" strokeWidth={y % 500 === 0 ? 1.4 : 0.8} />
             ))}
-          </Layer>
-
-          <Layer listening={Boolean(project.background && !project.background.locked)}>
             {project.background && project.background.visible && backgroundImage ? (
               <KonvaImage
                 image={backgroundImage}
@@ -676,9 +673,6 @@ export function PlannerCanvas({
                 ))}
               </>
             ) : null}
-          </Layer>
-
-          <Layer>
             {room
               ? project.windows.map((windowObject) => {
                   const placement = getWindowSegment(room.points, windowObject, project.scalePxPerMm);
@@ -1057,9 +1051,6 @@ export function PlannerCanvas({
                     );
                   })
               : null}
-          </Layer>
-
-          <Layer listening={false}>
             {scaleDraft.map((point, index) => (
               <Circle key={`scale-${index}`} x={point.x} y={point.y} radius={6} fill="#7c3aed" />
             ))}

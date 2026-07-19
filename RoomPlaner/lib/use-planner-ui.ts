@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { PlacementDraft, PlannerMode, Point, Selection, SelectionItem, ViewportState } from "@/lib/types";
 
 export function usePlannerUi() {
@@ -15,25 +15,25 @@ export function usePlannerUi() {
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [snapSizePx, setSnapSizePx] = useState(20);
 
-  const resetTransientUi = () => {
+  const clearSelection = useCallback(() => {
+    setSelection(null);
+    setSelectedItems([]);
+  }, []);
+
+  const resetTransientUi = useCallback(() => {
     clearSelection();
     setDraftRoomPoints([]);
     setScaleDraft([]);
     setDraftPlacement(null);
     setViewport({ x: 0, y: 0, scale: 1 });
-  };
+  }, [clearSelection]);
 
-  const clearSelection = () => {
-    setSelection(null);
-    setSelectedItems([]);
-  };
-
-  const selectSingle = (next: Selection) => {
+  const selectSingle = useCallback((next: Selection) => {
     setSelection(next);
     setSelectedItems(next ? [next] : []);
-  };
+  }, []);
 
-  const toggleSelection = (next: Selection) => {
+  const toggleSelection = useCallback((next: Selection) => {
     if (!next) {
       clearSelection();
       return;
@@ -47,7 +47,7 @@ export function usePlannerUi() {
       setSelection(updated.length > 0 ? updated[updated.length - 1] : null);
       return updated;
     });
-  };
+  }, [clearSelection]);
 
   return {
     mode,

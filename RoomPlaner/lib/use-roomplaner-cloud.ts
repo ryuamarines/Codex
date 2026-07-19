@@ -2,16 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
-import { observeFirebaseUser, signInWithGoogle, signOutFromFirebase } from "@/lib/firebase/auth";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import { FirestoreRoomPlanRepository } from "@/lib/firebase/firestore-roomplan-repository";
+import { buildPlannerStorageScope, type PlannerStorageScope } from "@/lib/planner-workspace-storage";
 import type { PlannerProject } from "@/lib/types";
 
 type UseRoomPlanerCloudParams = {
+  firebaseUser: User | null;
+  authResolved: boolean;
   project: PlannerProject;
+  hydrateProjectState: (project: PlannerProject) => void;
   loadProjectState: (project: PlannerProject) => void;
   parseProject: (raw: string) => PlannerProject;
   storageReady: boolean;
+  storageScope: PlannerStorageScope | null;
   storageHasProject: boolean;
 };
 
@@ -19,13 +23,13 @@ function getCloudErrorMessage(error: unknown) {
   if (typeof error === "object" && error && "code" in error) {
     const code = String(error.code);
     if (code === "permission-denied") {
-      return "Firestore の権限設定で保存が拒否されています。Firebase Console の Firestore Rules で roomPlans への read/write を許可してください。";
+      return "Firestoreの権限設定で保存が拒否されています。Firebase ConsoleのFirestore Rulesを確認してください。";
     }
     if (code === "unavailable") {
-      return "Firestore に接続できませんでした。ネットワークか Firebase 側の状態を確認してください。";
+      return "Firestoreに接続できませんでした。ネットワークかFirebase側の状態を確認してください。";
     }
     if (code === "deadline-exceeded") {
-      return "Firestore の応答が遅いため中断しました。少し待ってからもう一度試してください。";
+      return "Firestoreの応答が遅いため中断しました。現在のブラウザデータで編集を続けられます。";
     }
   }
 
@@ -49,167 +53,187 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
 }
 
 export function useRoomPlanerCloud({
+  firebaseUser,
+  authResolved,
   project,
+  hydrateProjectState,
   loadProjectState,
   parseProject,
   storageReady,
+  storageScope,
   storageHasProject
 }: UseRoomPlanerCloudParams) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [cloudMessage, setCloudMessage] = useState(
-    isFirebaseConfigured() ? "" : "Firebase 環境変数を入れると、Googleログインとクラウド保存を使えます。"
+    isFirebaseConfigured() ? "" : "Firebase環境変数を入れると、Googleログインとクラウド保存を使えます。"
   );
   const [cloudBusy, setCloudBusy] = useState(false);
-  const [cloudHydrating, setCloudHydrating] = useState(false);
-  const hydratedUserIdRef = useRef<string | null>(null);
+  const [hydratingScope, setHydratingScope] = useState<PlannerStorageScope | null>(null);
+  const [readyScope, setReadyScope] = useState<PlannerStorageScope | null>(null);
+  const expectedScope = buildPlannerStorageScope(firebaseUser?.uid ?? null);
+  const activeContextRef = useRef({ userId: firebaseUser?.uid ?? null, projectId: project.id, project });
+  const cloudOperationRef = useRef(0);
+  activeContextRef.current = { userId: firebaseUser?.uid ?? null, projectId: project.id, project };
+  const cloudHydrating = hydratingScope === expectedScope;
+  const cloudReady = authResolved && storageReady && storageScope === expectedScope && readyScope === expectedScope;
+
+  const contextIsCurrent = (userId: string, projectId: string, projectSnapshot?: PlannerProject) => {
+    const current = activeContextRef.current;
+    return current.userId === userId
+      && current.projectId === projectId
+      && (!projectSnapshot || current.project === projectSnapshot);
+  };
 
   useEffect(() => {
-    return observeFirebaseUser((user) => {
-      setFirebaseUser(user);
-
-      if (!user) {
-        hydratedUserIdRef.current = null;
-        setCloudBusy(false);
-        setCloudHydrating(false);
-      }
-    });
-  }, []);
+    cloudOperationRef.current += 1;
+    setCloudBusy(false);
+  }, [firebaseUser?.uid]);
 
   useEffect(() => {
-    if (!firebaseUser || cloudHydrating || !storageReady) {
+    if (!authResolved || !storageReady || storageScope !== expectedScope || readyScope === expectedScope) {
       return;
     }
 
-    if (hydratedUserIdRef.current === firebaseUser.uid) {
+    if (!firebaseUser) {
+      setHydratingScope(null);
+      setReadyScope(expectedScope);
+      if (isFirebaseConfigured()) setCloudMessage("");
       return;
     }
 
     if (storageHasProject) {
-      hydratedUserIdRef.current = firebaseUser.uid;
-      setCloudMessage("このブラウザには保存済みデータがあります。必要な場合だけ Firestore から読込 を使ってください。");
+      setHydratingScope(null);
+      setReadyScope(expectedScope);
+      setCloudMessage("このアカウントのブラウザ保存を読み込みました。クラウド読込は必要な場合だけ実行してください。");
       return;
     }
 
     let active = true;
-
     const hydrate = async () => {
       try {
-        setCloudHydrating(true);
+        setHydratingScope(expectedScope);
         const repository = new FirestoreRoomPlanRepository();
-        const cloudProject = await withTimeout(repository.load(firebaseUser), 8000);
+        const cloudRecord = await withTimeout(repository.load(firebaseUser), 8000);
         if (!active) return;
 
-        hydratedUserIdRef.current = firebaseUser.uid;
-
-        if (!cloudProject) {
-          setCloudMessage("このアカウントにはまだ保存済みプロジェクトがありません。");
+        if (!cloudRecord) {
+          setCloudMessage("このアカウントには保存済みプロジェクトがありません。サンプルから開始できます。");
           return;
         }
 
-        loadProjectState(parseProject(JSON.stringify(cloudProject)));
-        setCloudMessage("このアカウントの保存済みプロジェクトを自動で読み込みました。");
+        const parsed = parseProject(JSON.stringify(cloudRecord.project));
+        hydrateProjectState(parsed);
+
+        if (cloudRecord.schemaVersion < FirestoreRoomPlanRepository.schemaVersion) {
+          setCloudMessage(
+            "旧形式のクラウドデータを安全に読み込み、ブラウザ保存へ移行しました。クラウド原本は変更していません。"
+          );
+        } else {
+          setCloudMessage("このアカウントのクラウドプロジェクトを読み込みました。");
+        }
       } catch (error) {
-        if (!active) return;
-        setCloudMessage(getCloudErrorMessage(error));
+        if (active) setCloudMessage(getCloudErrorMessage(error));
       } finally {
         if (active) {
-          setCloudHydrating(false);
+          setHydratingScope(null);
+          setReadyScope(expectedScope);
         }
       }
     };
 
     void hydrate();
-
     return () => {
       active = false;
     };
-  }, [cloudHydrating, firebaseUser, loadProjectState, parseProject, storageHasProject, storageReady]);
-
-  const setMessage = (message: string) => {
-    setCloudMessage(message);
-  };
-
-  const signIn = async () => {
-    try {
-      setCloudBusy(true);
-      await signInWithGoogle();
-      setMessage("Google ログインを開始しました。");
-    } catch (error) {
-      setMessage(getCloudErrorMessage(error));
-    } finally {
-      setCloudBusy(false);
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      setCloudBusy(true);
-      await signOutFromFirebase();
-      hydratedUserIdRef.current = null;
-      setFirebaseUser(null);
-      setMessage("ログアウトしました。");
-    } catch (error) {
-      setMessage(getCloudErrorMessage(error));
-    } finally {
-      setCloudBusy(false);
-    }
-  };
+  }, [
+    authResolved,
+    expectedScope,
+    firebaseUser,
+    hydrateProjectState,
+    parseProject,
+    readyScope,
+    storageHasProject,
+    storageReady,
+    storageScope
+  ]);
 
   const saveProjectToCloud = async () => {
     if (!firebaseUser) {
-      setMessage("先に Google ログインしてください。");
+      setCloudMessage("先にGoogleログインしてください。");
       return;
     }
+    const targetUserId = firebaseUser.uid;
+    const targetProjectId = project.id;
+    const targetProject = project;
+    const operationId = ++cloudOperationRef.current;
 
     try {
       setCloudBusy(true);
       const repository = new FirestoreRoomPlanRepository();
       const result = await withTimeout(repository.save(firebaseUser, project), 8000);
-      setMessage(
+      if (cloudOperationRef.current !== operationId) return;
+      if (!contextIsCurrent(targetUserId, targetProjectId)) return;
+      if (!contextIsCurrent(targetUserId, targetProjectId, targetProject)) {
+        setCloudMessage("保存中に編集されたため、最新の変更はまだFirestoreへ保存されていません。もう一度保存してください。");
+        return;
+      }
+      setCloudMessage(
         result.backgroundOmitted
-          ? "Firestore に保存しました。背景画像は容量制限のためクラウド保存から除外しています。"
-          : "現在のプロジェクトを Firestore に保存しました。"
+          ? "Firestoreに保存しました。背景画像は容量制限のためクラウド保存から除外しています。"
+          : "現在のプロジェクトをFirestoreに保存しました。"
       );
     } catch (error) {
-      setMessage(getCloudErrorMessage(error));
+      if (cloudOperationRef.current === operationId && contextIsCurrent(targetUserId, targetProjectId)) {
+        setCloudMessage(getCloudErrorMessage(error));
+      }
     } finally {
-      setCloudBusy(false);
+      if (cloudOperationRef.current === operationId) setCloudBusy(false);
     }
   };
 
   const loadProjectFromCloud = async () => {
     if (!firebaseUser) {
-      setMessage("先に Google ログインしてください。");
+      setCloudMessage("先にGoogleログインしてください。");
       return;
     }
+    const targetUserId = firebaseUser.uid;
+    const targetProjectId = project.id;
+    const targetProject = project;
+    const operationId = ++cloudOperationRef.current;
 
     try {
       setCloudBusy(true);
       const repository = new FirestoreRoomPlanRepository();
-      const cloudProject = await withTimeout(repository.load(firebaseUser), 8000);
-      if (!cloudProject) {
-        setMessage("Firestore に保存済みのプロジェクトが見つかりませんでした。");
+      const cloudRecord = await withTimeout(repository.load(firebaseUser), 8000);
+      if (cloudOperationRef.current !== operationId) return;
+      if (!contextIsCurrent(targetUserId, targetProjectId)) return;
+      if (!contextIsCurrent(targetUserId, targetProjectId, targetProject)) {
+        setCloudMessage("読込中に編集されたため、Firestoreの内容は反映しませんでした。もう一度読込を実行してください。");
         return;
       }
-      loadProjectState(parseProject(JSON.stringify(cloudProject)));
-      setMessage("Firestore からプロジェクトを読み込みました。");
+      if (!cloudRecord) {
+        setCloudMessage("Firestoreに保存済みのプロジェクトが見つかりませんでした。");
+        return;
+      }
+      const parsed = parseProject(JSON.stringify(cloudRecord.project));
+      loadProjectState(parsed);
+      setCloudMessage("Firestoreから現在のプロジェクトへ読み込みました。");
     } catch (error) {
-      setMessage(getCloudErrorMessage(error));
+      if (cloudOperationRef.current === operationId && contextIsCurrent(targetUserId, targetProjectId)) {
+        setCloudMessage(getCloudErrorMessage(error));
+      }
     } finally {
-      setCloudBusy(false);
+      if (cloudOperationRef.current === operationId) setCloudBusy(false);
     }
   };
 
   return {
-    firebaseUser,
     cloudMessage,
     cloudBusy,
     cloudHydrating,
+    cloudReady,
     firebaseConfigured: isFirebaseConfigured(),
-    signIn,
-    signOut,
     saveProjectToCloud,
     loadProjectFromCloud,
-    setCloudMessage: setMessage
+    setCloudMessage
   };
 }

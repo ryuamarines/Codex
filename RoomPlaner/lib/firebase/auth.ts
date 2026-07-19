@@ -1,5 +1,6 @@
 import {
   browserLocalPersistence,
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
@@ -10,7 +11,10 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
-export function observeFirebaseUser(callback: (user: User | null) => void) {
+export function observeFirebaseUser(
+  callback: (user: User | null) => void,
+  onError?: (error: unknown) => void
+) {
   const auth = getFirebaseAuth();
 
   if (!auth) {
@@ -18,7 +22,33 @@ export function observeFirebaseUser(callback: (user: User | null) => void) {
     return () => undefined;
   }
 
-  return onAuthStateChanged(auth, callback);
+  let active = true;
+  let unsubscribe: () => void = () => undefined;
+
+  void setPersistence(auth, browserLocalPersistence)
+    .catch((error) => {
+      if (active) onError?.(error);
+    })
+    .then(() => {
+      if (!active) return;
+      unsubscribe = onAuthStateChanged(
+        auth,
+        callback,
+        (error) => {
+          if (!active) return;
+          onError?.(error);
+          callback(null);
+        }
+      );
+      void getRedirectResult(auth).catch((error) => {
+        if (active) onError?.(error);
+      });
+    });
+
+  return () => {
+    active = false;
+    unsubscribe();
+  };
 }
 
 export async function signInWithGoogle() {
