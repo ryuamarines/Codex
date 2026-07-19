@@ -51,6 +51,7 @@ export function useLiveCloudSync({
   const [cloudHydrateRetryNonce, setCloudHydrateRetryNonce] = useState(0);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [firebaseAuthReady, setFirebaseAuthReady] = useState(!isFirebaseConfigured());
+  const [cloudHydrationSettled, setCloudHydrationSettled] = useState(!isFirebaseConfigured());
   const [authMessage, setAuthMessage] = useState(
     isFirebaseConfigured() ? "" : "Firebase の環境変数を入れるとクラウド同期を有効にできます。"
   );
@@ -532,6 +533,7 @@ export function useLiveCloudSync({
     return observeFirebaseUser((user) => {
       setFirebaseUser(user);
       setFirebaseAuthReady(true);
+      setCloudHydrationSettled(!user);
     });
   }, []);
 
@@ -545,6 +547,7 @@ export function useLiveCloudSync({
       cloudSnapshotReadyRef.current = false;
       autoSaveBlockedRef.current = false;
       imageSyncWarningKeyRef.current = "";
+      setCloudHydrationSettled(!firebaseUser);
       if (!firebaseUser) {
         setCloudDriveFolderId("");
       }
@@ -557,6 +560,7 @@ export function useLiveCloudSync({
       return;
     }
 
+    setCloudHydrationSettled(false);
     let cancelled = false;
 
     async function autoHydrateFromCloud() {
@@ -594,6 +598,7 @@ export function useLiveCloudSync({
 
           lastSyncedEntriesRef.current = [];
           cloudSnapshotReadyRef.current = true;
+          setCloudHydrationSettled(true);
           autoSaveBlockedRef.current = currentLooksLikeFallback;
           autoHydratedUserIdRef.current = user.uid;
           cloudHydrateRetryCountRef.current = 0;
@@ -603,6 +608,7 @@ export function useLiveCloudSync({
         const cloudHash = hashEntries(cloudEntries);
         lastSyncedEntriesRef.current = cloudEntries;
         cloudSnapshotReadyRef.current = true;
+        setCloudHydrationSettled(true);
 
         if (hasPendingLocalChanges) {
           autoSaveBlockedRef.current = true;
@@ -634,6 +640,7 @@ export function useLiveCloudSync({
         if (!cancelled) {
           autoHydratedUserIdRef.current = user.uid;
           cloudSnapshotReadyRef.current = false;
+          setCloudHydrationSettled(true);
           setSyncStatus("クラウド読込失敗");
           showAuthMessage(
             error instanceof Error
@@ -822,6 +829,7 @@ export function useLiveCloudSync({
   return {
     firebaseUser,
     firebaseAuthReady,
+    cloudHydrationSettled,
     authMessage,
     syncStatus,
     lastSyncedAtLabel,

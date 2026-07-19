@@ -220,6 +220,7 @@ export function LiveLogPage() {
   const {
     firebaseUser,
     firebaseAuthReady,
+    cloudHydrationSettled,
     authMessage,
     syncStatus,
     lastSyncedAtLabel,
@@ -1706,6 +1707,11 @@ export function LiveLogPage() {
     >
       <LiveLogPageContent
         activeView={activeView}
+        recordsReady={
+          firebaseAuthReady &&
+          localEntriesReady &&
+          (!firebaseUser || cloudHydrationSettled)
+        }
         selectedEntry={selectedEntry}
         isDetailDrawerOpen={isDetailDrawerOpen}
         detailPhotoInputRef={detailPhotoInputRef}

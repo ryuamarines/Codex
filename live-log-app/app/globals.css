@@ -1817,6 +1817,33 @@ select {
   gap: 18px;
 }
 
+.archiveDataLoading {
+  display: grid;
+  min-height: min(420px, calc(100vh - 190px));
+  place-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.archiveDataLoading > div {
+  display: grid;
+  max-width: 420px;
+  gap: 8px;
+}
+
+.archiveDataLoading h2,
+.archiveDataLoading p {
+  margin: 0;
+}
+
+.archiveDataLoading h2 {
+  font-size: clamp(1.5rem, 2vw, 2rem);
+}
+
+.archiveDataLoading p:last-child {
+  color: var(--muted);
+}
+
 .archiveTimelineSummaryRow,
 .archiveTimelineDetailColumn {
   display: grid;

@@ -42,6 +42,7 @@ type BulkEditInput = {
 
 type LiveLogPageContentProps = {
   activeView: ActiveView;
+  recordsReady: boolean;
   selectedEntry: LiveEntry | null;
   isDetailDrawerOpen: boolean;
   detailPhotoInputRef: RefObject<HTMLInputElement | null>;
@@ -189,6 +190,7 @@ type LiveLogPageContentProps = {
 export function LiveLogPageContent(props: LiveLogPageContentProps) {
   const {
     activeView,
+    recordsReady,
     selectedEntry,
     isDetailDrawerOpen,
     detailPhotoInputRef,
@@ -303,6 +305,18 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
     getLeadArtist,
     onExportCsv
   } = props;
+
+  if (!recordsReady) {
+    return (
+      <section className="archiveDataLoading" role="status" aria-live="polite">
+        <div>
+          <p className="eyebrow">Loading</p>
+          <h2>記録を読み込んでいます</h2>
+          <p>端末とクラウドの保存内容を確認中です。</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>
