@@ -1,6 +1,7 @@
 import type { User } from "firebase/auth";
 import type { LiveEntry } from "@/lib/types";
 import type { CloudDriveSettings } from "@/lib/live-image-cloud-metadata";
+import type { CloudEntryChanges } from "@/lib/live-cloud-changes";
 import { FirestoreLiveEntryRepository } from "@/lib/firebase/firestore-repository";
 
 export type CloudArchive = {
@@ -67,6 +68,21 @@ export async function saveCloudEntries(
 
   try {
     return await repository.save(user, entries, settings, expectedRevision);
+  } catch (error) {
+    throw normalizeCloudError(error, "write");
+  }
+}
+
+export async function saveCloudEntryChanges(
+  user: Pick<User, "uid" | "displayName" | "email">,
+  changes: CloudEntryChanges,
+  settings?: CloudDriveSettings,
+  expectedRevision?: number
+) {
+  const repository = new FirestoreLiveEntryRepository();
+
+  try {
+    return await repository.applyChanges(user, changes, settings, expectedRevision);
   } catch (error) {
     throw normalizeCloudError(error, "write");
   }

@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
-import { sampleEntries } from "@/data/live-entries";
 import { LocalArchiveImageService, type ArchiveImageService } from "@/lib/archive-image-service";
+import {
+  createCloudEntryChanges,
+  hasCloudEntryChanges,
+  rebaseCloudEntryChanges
+} from "@/lib/live-cloud-changes";
 import {
   hashEntries,
   hasUnsyncedLocalChanges,
@@ -18,11 +22,10 @@ import {
   signOutFromFirebase
 } from "@/lib/firebase/auth";
 import {
-  deleteCloudEntry,
+  CloudConflictError,
   isCloudConflictError,
   loadCloudEntries,
-  saveCloudEntries,
-  saveCloudEntry,
+  saveCloudEntryChanges,
   saveCloudSettings
 } from "@/lib/live-cloud-service";
 import type { LiveEntry } from "@/lib/types";
@@ -33,16 +36,21 @@ type UseLiveCloudSyncParams = {
   entries: LiveEntry[];
   setEntries: React.Dispatch<React.SetStateAction<LiveEntry[]>>;
   localEntriesReady: boolean;
+  localEntriesUserId: string | null;
 };
+
+const EMPTY_ENTRIES: LiveEntry[] = [];
 
 export function useLiveCloudSync({
   entries,
   setEntries,
-  localEntriesReady
+  localEntriesReady,
+  localEntriesUserId
 }: UseLiveCloudSyncParams) {
   const [driveFolderSaveRetryNonce, setDriveFolderSaveRetryNonce] = useState(0);
   const [cloudHydrateRetryNonce, setCloudHydrateRetryNonce] = useState(0);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [firebaseAuthReady, setFirebaseAuthReady] = useState(!isFirebaseConfigured());
   const [authMessage, setAuthMessage] = useState(
     isFirebaseConfigured() ? "" : "Firebase の環境変数を入れるとクラウド同期を有効にできます。"
   );
@@ -62,6 +70,15 @@ export function useLiveCloudSync({
   const authMessageTimeoutRef = useRef<number | null>(null);
   const imageSyncWarningKeyRef = useRef("");
   const lastSavedDriveFolderIdRef = useRef("");
+  const lastSyncedEntriesRef = useRef<LiveEntry[]>([]);
+  const currentEntriesRef = useRef(entries);
+  const cloudSnapshotReadyRef = useRef(false);
+  const autoSaveBlockedRef = useRef(false);
+  const cloudWriteQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const localEntriesMatchCurrentUser =
+    localEntriesUserId !== null && localEntriesUserId === (firebaseUser?.uid ?? "");
+
+  currentEntriesRef.current = entries;
 
   const confirmCloudSync = useCallback(
     (cloudEntries: LiveEntry[]) => {
@@ -127,21 +144,110 @@ export function useLiveCloudSync({
     );
   }
 
-  const persistEntriesToCloud = useCallback(
+  const persistEntriesImmediately = useCallback(
     async (nextEntries: LiveEntry[]) => {
-      if (!firebaseUser || typeof window === "undefined") {
+      if (!firebaseUser || !localEntriesMatchCurrentUser || typeof window === "undefined") {
         return;
       }
 
-      const saveResult = await saveCloudEntries(firebaseUser, nextEntries, {
-        driveFolderId: cloudDriveFolderId
-      }, cloudRevisionRef.current);
+      if (!cloudSnapshotReadyRef.current) {
+        const cloudArchive = await loadCloudEntries(firebaseUser);
+        cloudRevisionRef.current = cloudArchive.revision;
+        lastSyncedEntriesRef.current = cloudArchive.entries;
+        lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
+        cloudSnapshotReadyRef.current = true;
+      }
+
+      const baseEntries = lastSyncedEntriesRef.current;
+      let syncedEntries = nextEntries;
+      let changes = createCloudEntryChanges(baseEntries, nextEntries);
+      let expectedRevision = cloudRevisionRef.current;
+      let settingsChanged = cloudDriveFolderId !== lastSavedDriveFolderIdRef.current;
+
+      try {
+        if (hasCloudEntryChanges(changes) || settingsChanged) {
+          const saveResult = await saveCloudEntryChanges(
+            firebaseUser,
+            changes,
+            { driveFolderId: cloudDriveFolderId },
+            expectedRevision
+          );
+          expectedRevision = saveResult.revision;
+        }
+      } catch (error) {
+        if (!isCloudConflictError(error)) {
+          throw error;
+        }
+
+        const latestCloudArchive = await loadCloudEntries(firebaseUser);
+        const rebased = rebaseCloudEntryChanges(
+          baseEntries,
+          nextEntries,
+          latestCloudArchive.entries
+        );
+
+        if (rebased.conflictingEntryIds.length > 0) {
+          autoSaveBlockedRef.current = true;
+          throw new CloudConflictError(
+            `同じ記録が別の端末でも更新されています。競合した ${rebased.conflictingEntryIds.length} 件を確認してから同期してください。`
+          );
+        }
+
+        changes = rebased.changes;
+        syncedEntries = rebased.entries;
+        expectedRevision = latestCloudArchive.revision;
+        settingsChanged =
+          cloudDriveFolderId !== (latestCloudArchive.settings.driveFolderId ?? "");
+
+        if (hasCloudEntryChanges(changes) || settingsChanged) {
+          const saveResult = await saveCloudEntryChanges(
+            firebaseUser,
+            changes,
+            { driveFolderId: cloudDriveFolderId },
+            expectedRevision
+          );
+          expectedRevision = saveResult.revision;
+        }
+      }
+
+      cloudRevisionRef.current = expectedRevision;
+      lastSyncedEntriesRef.current = syncedEntries;
       lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
-      cloudRevisionRef.current = saveResult.revision;
-      lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, nextEntries);
+      autoSaveBlockedRef.current = false;
+      lastSyncedHashRef.current = writeCloudSyncState(
+        window.localStorage,
+        firebaseUser.uid,
+        syncedEntries
+      );
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
+
+      const currentEntries = currentEntriesRef.current;
+      const uiRebase = rebaseCloudEntryChanges(nextEntries, currentEntries, syncedEntries);
+
+      if (
+        uiRebase.conflictingEntryIds.length === 0 &&
+        hashEntries(uiRebase.entries) !== hashEntries(currentEntries)
+      ) {
+        currentEntriesRef.current = uiRebase.entries;
+        setEntries(uiRebase.entries);
+      }
     },
-    [cloudDriveFolderId, firebaseUser]
+    [cloudDriveFolderId, firebaseUser, localEntriesMatchCurrentUser, setEntries]
+  );
+
+  const persistEntriesToCloud = useCallback(
+    (nextEntries: LiveEntry[]) => {
+      const queuedWrite = cloudWriteQueueRef.current.then(
+        () => persistEntriesImmediately(nextEntries),
+        () => persistEntriesImmediately(nextEntries)
+      );
+      cloudWriteQueueRef.current = queuedWrite.then(
+        () => undefined,
+        () => undefined
+      );
+      return queuedWrite;
+    },
+    [persistEntriesImmediately]
   );
 
   const handleSaveCurrentToCloud = useCallback(
@@ -154,6 +260,7 @@ export function useLiveCloudSync({
       const nextEntries = overrideEntries ?? entries;
 
       try {
+        autoSaveBlockedRef.current = false;
         await persistEntriesToCloud(nextEntries);
         setSyncStatus("クラウド同期済み");
         showAuthMessage("この端末の変更をクラウドへ保存しました。");
@@ -179,83 +286,13 @@ export function useLiveCloudSync({
   );
 
   const persistEntryToCloud = useCallback(
-    async (nextEntries: LiveEntry[], nextEntry: LiveEntry) => {
-      if (!firebaseUser || typeof window === "undefined") {
-        return;
-      }
-
-      let saveResult;
-
-      try {
-        saveResult = await saveCloudEntry(
-          firebaseUser,
-          nextEntry,
-          {
-            driveFolderId: cloudDriveFolderId
-          },
-          cloudRevisionRef.current
-        );
-      } catch (error) {
-        if (!isCloudConflictError(error)) {
-          throw error;
-        }
-
-        const latestCloudArchive = await loadCloudEntries(firebaseUser);
-        cloudRevisionRef.current = latestCloudArchive.revision;
-        saveResult = await saveCloudEntry(
-          firebaseUser,
-          nextEntry,
-          {
-            driveFolderId: cloudDriveFolderId
-          },
-          cloudRevisionRef.current
-        );
-      }
-
-      lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
-      cloudRevisionRef.current = saveResult.revision;
-    },
-    [cloudDriveFolderId, firebaseUser]
+    (nextEntries: LiveEntry[], _nextEntry: LiveEntry) => persistEntriesToCloud(nextEntries),
+    [persistEntriesToCloud]
   );
 
   const deleteEntryFromCloud = useCallback(
-    async (nextEntries: LiveEntry[], entryId: string) => {
-      if (!firebaseUser || typeof window === "undefined") {
-        return;
-      }
-
-      let saveResult;
-
-      try {
-        saveResult = await deleteCloudEntry(
-          firebaseUser,
-          entryId,
-          {
-            driveFolderId: cloudDriveFolderId
-          },
-          cloudRevisionRef.current
-        );
-      } catch (error) {
-        if (!isCloudConflictError(error)) {
-          throw error;
-        }
-
-        const latestCloudArchive = await loadCloudEntries(firebaseUser);
-        cloudRevisionRef.current = latestCloudArchive.revision;
-        saveResult = await deleteCloudEntry(
-          firebaseUser,
-          entryId,
-          {
-            driveFolderId: cloudDriveFolderId
-          },
-          cloudRevisionRef.current
-        );
-      }
-
-      lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
-      cloudRevisionRef.current = saveResult.revision;
-    },
-    [cloudDriveFolderId, firebaseUser]
+    (nextEntries: LiveEntry[], _entryId: string) => persistEntriesToCloud(nextEntries),
+    [persistEntriesToCloud]
   );
 
   const {
@@ -301,7 +338,12 @@ export function useLiveCloudSync({
   }, []);
 
   useEffect(() => {
-    if (!firebaseUser || !localEntriesReady) {
+    if (
+      !firebaseUser ||
+      !localEntriesReady ||
+      !localEntriesMatchCurrentUser ||
+      !cloudSnapshotReadyRef.current
+    ) {
       return;
     }
 
@@ -309,19 +351,60 @@ export function useLiveCloudSync({
       return;
     }
 
-    void saveCloudSettings(
-      firebaseUser,
-      {
-        driveFolderId: cloudDriveFolderId
-      },
-      cloudRevisionRef.current
-    )
+    const user = firebaseUser;
+    const folderIdToSave = cloudDriveFolderId;
+    const persistSettings = async () => {
+      let saveResult;
+
+      try {
+        saveResult = await saveCloudSettings(
+          user,
+          { driveFolderId: folderIdToSave },
+          cloudRevisionRef.current
+        );
+      } catch (error) {
+        if (!isCloudConflictError(error)) {
+          throw error;
+        }
+
+        const latestCloudArchive = await loadCloudEntries(user);
+        cloudRevisionRef.current = latestCloudArchive.revision;
+
+        if (hashEntries(latestCloudArchive.entries) !== hashEntries(lastSyncedEntriesRef.current)) {
+          autoSaveBlockedRef.current = true;
+          setSyncStatus("クラウド競合");
+          throw new CloudConflictError(
+            "別の端末で記録が更新されています。記録を同期してからDrive保存先を再設定してください。"
+          );
+        }
+
+        saveResult = await saveCloudSettings(
+          user,
+          { driveFolderId: folderIdToSave },
+          cloudRevisionRef.current
+        );
+      }
+
+      lastSavedDriveFolderIdRef.current = folderIdToSave;
+      cloudRevisionRef.current = saveResult.revision;
+      driveFolderSaveRetryCountRef.current = 0;
+    };
+    const queuedWrite = cloudWriteQueueRef.current.then(persistSettings, persistSettings);
+    cloudWriteQueueRef.current = queuedWrite.then(
+      () => undefined,
+      () => undefined
+    );
+
+    void queuedWrite
       .then((saveResult) => {
-        lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
-        cloudRevisionRef.current = saveResult.revision;
-        driveFolderSaveRetryCountRef.current = 0;
+        return saveResult;
       })
-      .catch(() => {
+      .catch((error) => {
+        if (isCloudConflictError(error)) {
+          showAuthMessage(error.message, 7000);
+          return;
+        }
+
         if (driveFolderSaveRetryCountRef.current >= 3) {
           showAuthMessage("Drive 保存先のクラウド保存に失敗しました。しばらくしてからもう一度試してください。", 7000);
           return;
@@ -336,10 +419,17 @@ export function useLiveCloudSync({
           setDriveFolderSaveRetryNonce((current) => current + 1);
         }, 2000);
       });
-  }, [cloudDriveFolderId, driveFolderSaveRetryNonce, firebaseUser, localEntriesReady, showAuthMessage]);
+  }, [
+    cloudDriveFolderId,
+    driveFolderSaveRetryNonce,
+    firebaseUser,
+    localEntriesMatchCurrentUser,
+    localEntriesReady,
+    showAuthMessage
+  ]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !localEntriesReady) {
+    if (typeof window === "undefined" || !localEntriesReady || !localEntriesMatchCurrentUser) {
       return;
     }
 
@@ -357,7 +447,7 @@ export function useLiveCloudSync({
       window.localStorage,
       firebaseUser.uid,
       entries,
-      sampleEntries
+      EMPTY_ENTRIES
     );
 
     const unsyncedImageCount = countUnsyncedImages(entries.flatMap((entry) => entry.images));
@@ -378,10 +468,17 @@ export function useLiveCloudSync({
     }
 
     setSyncStatus(hasPendingLocalChanges ? "未同期の変更あり" : "クラウド同期済み");
-  }, [driveFolderId, entries, firebaseUser, hasDriveSession, localEntriesReady]);
+  }, [
+    driveFolderId,
+    entries,
+    firebaseUser,
+    hasDriveSession,
+    localEntriesMatchCurrentUser,
+    localEntriesReady
+  ]);
 
   useEffect(() => {
-    if (!firebaseUser || !localEntriesReady) {
+    if (!firebaseUser || !localEntriesReady || !localEntriesMatchCurrentUser) {
       return;
     }
 
@@ -417,7 +514,15 @@ export function useLiveCloudSync({
     }
 
     imageSyncWarningKeyRef.current = "";
-  }, [driveFolderId, entries, firebaseUser, hasDriveSession, localEntriesReady, showAuthMessage]);
+  }, [
+    driveFolderId,
+    entries,
+    firebaseUser,
+    hasDriveSession,
+    localEntriesMatchCurrentUser,
+    localEntriesReady,
+    showAuthMessage
+  ]);
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
@@ -426,15 +531,19 @@ export function useLiveCloudSync({
 
     return observeFirebaseUser((user) => {
       setFirebaseUser(user);
+      setFirebaseAuthReady(true);
     });
   }, []);
 
   useEffect(() => {
-    if (!firebaseUser || !localEntriesReady) {
+    if (!firebaseUser || !localEntriesReady || !localEntriesMatchCurrentUser) {
       autoHydratedUserIdRef.current = "";
       cloudHydrateRetryCountRef.current = 0;
       cloudRevisionRef.current = 0;
       lastSavedDriveFolderIdRef.current = "";
+      lastSyncedEntriesRef.current = [];
+      cloudSnapshotReadyRef.current = false;
+      autoSaveBlockedRef.current = false;
       imageSyncWarningKeyRef.current = "";
       if (!firebaseUser) {
         setCloudDriveFolderId("");
@@ -467,11 +576,11 @@ export function useLiveCloudSync({
           window.localStorage,
           user.uid,
           entries,
-          sampleEntries
+          EMPTY_ENTRIES
         );
 
         if (cloudEntries.length === 0) {
-          const currentLooksLikeFallback = hashEntries(entries) === hashEntries(sampleEntries);
+          const currentLooksLikeFallback = entries.length === 0;
 
           if (!hasPendingLocalChanges && currentLooksLikeFallback && cloudHydrateRetryCountRef.current < 3) {
             cloudHydrateRetryCountRef.current += 1;
@@ -483,35 +592,55 @@ export function useLiveCloudSync({
             return;
           }
 
+          lastSyncedEntriesRef.current = [];
+          cloudSnapshotReadyRef.current = true;
+          autoSaveBlockedRef.current = currentLooksLikeFallback;
           autoHydratedUserIdRef.current = user.uid;
+          cloudHydrateRetryCountRef.current = 0;
           return;
         }
 
         const cloudHash = hashEntries(cloudEntries);
+        lastSyncedEntriesRef.current = cloudEntries;
+        cloudSnapshotReadyRef.current = true;
 
         if (hasPendingLocalChanges) {
+          autoSaveBlockedRef.current = true;
+          autoHydratedUserIdRef.current = user.uid;
           showAuthMessage("この端末に未同期変更があります。クラウド同期前に内容を確認してください。", 7000);
           return;
         }
 
         const currentHash = hashEntries(entries);
-        const sampleHash = hashEntries(sampleEntries);
+        const sampleHash = hashEntries(EMPTY_ENTRIES);
 
         if (currentHash !== cloudHash && currentHash !== sampleHash) {
+          autoSaveBlockedRef.current = true;
+          autoHydratedUserIdRef.current = user.uid;
           showAuthMessage("この端末の内容とクラウドが異なります。同期タブで内容を確認してから更新してください。", 7000);
           return;
         }
 
         suppressCloudSyncEffectRef.current = true;
+        autoSaveBlockedRef.current = false;
+        currentEntriesRef.current = cloudEntries;
         setEntries(cloudEntries);
         lastSyncedHashRef.current = cloudHash;
         writeCloudSyncState(window.localStorage, user.uid, cloudEntries);
         updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
         autoHydratedUserIdRef.current = user.uid;
         cloudHydrateRetryCountRef.current = 0;
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           autoHydratedUserIdRef.current = user.uid;
+          cloudSnapshotReadyRef.current = false;
+          setSyncStatus("クラウド読込失敗");
+          showAuthMessage(
+            error instanceof Error
+              ? error.message
+              : "クラウドの記録を読み込めませんでした。通信状態を確認して再試行してください。",
+            7000
+          );
         }
       }
     }
@@ -525,10 +654,24 @@ export function useLiveCloudSync({
         cloudHydrateRetryTimeoutRef.current = null;
       }
     };
-  }, [cloudHydrateRetryNonce, entries, firebaseUser, localEntriesReady, setEntries]);
+  }, [
+    cloudHydrateRetryNonce,
+    entries,
+    firebaseUser,
+    localEntriesMatchCurrentUser,
+    localEntriesReady,
+    setEntries,
+    showAuthMessage
+  ]);
 
   useEffect(() => {
-    if (!firebaseUser || !localEntriesReady) {
+    if (
+      !firebaseUser ||
+      !localEntriesReady ||
+      !localEntriesMatchCurrentUser ||
+      !cloudSnapshotReadyRef.current ||
+      autoSaveBlockedRef.current
+    ) {
       return;
     }
 
@@ -548,14 +691,12 @@ export function useLiveCloudSync({
     }
 
     autoSaveTimeoutRef.current = window.setTimeout(async () => {
+      if (hashEntries(entries) === lastSyncedHashRef.current) {
+        return;
+      }
+
       try {
-        const saveResult = await saveCloudEntries(firebaseUser, entries, {
-          driveFolderId: cloudDriveFolderId
-        }, cloudRevisionRef.current);
-        lastSavedDriveFolderIdRef.current = cloudDriveFolderId;
-        cloudRevisionRef.current = saveResult.revision;
-        lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, entries);
-        updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
+        await persistEntriesToCloud(entries);
         setSyncStatus("クラウド同期済み");
       } catch (error) {
         if (isCloudConflictError(error)) {
@@ -578,7 +719,14 @@ export function useLiveCloudSync({
         window.clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [cloudDriveFolderId, entries, firebaseUser, localEntriesReady]);
+  }, [
+    entries,
+    firebaseUser,
+    localEntriesMatchCurrentUser,
+    localEntriesReady,
+    persistEntriesToCloud,
+    showAuthMessage
+  ]);
 
   const {
     pendingImageUploadRef,
@@ -589,7 +737,7 @@ export function useLiveCloudSync({
     entries,
     setEntries,
     firebaseUser,
-    localEntriesReady,
+    localEntriesReady: localEntriesReady && localEntriesMatchCurrentUser,
     hasDriveSession,
     driveFolderId,
     onAuthExpired: handleDriveAuthExpiry,
@@ -617,8 +765,8 @@ export function useLiveCloudSync({
   }
 
   async function handleGoogleSignOut() {
-    await signOutFromFirebase();
     await clearDriveState();
+    await signOutFromFirebase();
     showAuthMessage("ログアウトしました。ローカル保存は引き続き使えます。");
   }
 
@@ -637,6 +785,9 @@ export function useLiveCloudSync({
       }
 
       if (cloudEntries.length === 0) {
+        lastSyncedEntriesRef.current = [];
+        cloudRevisionRef.current = cloudArchive.revision;
+        cloudSnapshotReadyRef.current = true;
         showAuthMessage("クラウド上にまだ保存データはありません。");
         return;
       }
@@ -647,10 +798,15 @@ export function useLiveCloudSync({
       }
 
       suppressCloudSyncEffectRef.current = true;
+      autoSaveBlockedRef.current = false;
+      cloudSnapshotReadyRef.current = true;
+      lastSyncedEntriesRef.current = cloudEntries;
+      currentEntriesRef.current = cloudEntries;
       setEntries(cloudEntries);
       setCloudDriveFolderId(cloudArchive.settings.driveFolderId ?? "");
       lastSavedDriveFolderIdRef.current = cloudArchive.settings.driveFolderId ?? "";
       cloudRevisionRef.current = cloudArchive.revision;
+      autoHydratedUserIdRef.current = firebaseUser.uid;
       lastSyncedHashRef.current = writeCloudSyncState(window.localStorage, firebaseUser.uid, cloudEntries);
       updateLastSyncedAtLabel(readCloudSyncState(window.localStorage).syncedAt);
 
@@ -665,6 +821,7 @@ export function useLiveCloudSync({
 
   return {
     firebaseUser,
+    firebaseAuthReady,
     authMessage,
     syncStatus,
     lastSyncedAtLabel,

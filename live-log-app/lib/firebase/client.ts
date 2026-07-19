@@ -1,6 +1,11 @@
 import { getApps, initializeApp } from "firebase/app";
 import type { FirebaseApp } from "firebase/app";
 import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  type AppCheck
+} from "firebase/app-check";
+import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
   browserSessionPersistence,
@@ -57,6 +62,38 @@ function resolveFirebaseConfig(config: FirebaseConfig): FirebaseConfig {
 
 let cachedApp: FirebaseApp | null | undefined;
 let cachedAuth: Auth | null | undefined;
+let cachedAppCheck: AppCheck | null | undefined;
+
+function initializeFirebaseAppCheck(app: FirebaseApp) {
+  if (cachedAppCheck !== undefined || typeof window === "undefined") {
+    return cachedAppCheck ?? null;
+  }
+
+  const siteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY?.trim();
+
+  if (!siteKey) {
+    cachedAppCheck = null;
+    return cachedAppCheck;
+  }
+
+  try {
+    cachedAppCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: true
+    });
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+
+    if (code === "appCheck/already-initialized") {
+      return null;
+    }
+
+    console.error("Firebase App Check の初期化に失敗しました。", error);
+    cachedAppCheck = null;
+  }
+
+  return cachedAppCheck;
+}
 
 export function getFirebaseApp() {
   if (cachedApp !== undefined) {
@@ -71,6 +108,7 @@ export function getFirebaseApp() {
   }
 
   cachedApp = getApps()[0] ?? initializeApp(config);
+  initializeFirebaseAppCheck(cachedApp);
   return cachedApp;
 }
 

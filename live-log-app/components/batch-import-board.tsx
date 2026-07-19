@@ -1,9 +1,10 @@
 "use client";
 
-import { ChangeEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createBatchImportItems,
   extractCandidatesFromText,
+  inferBatchImageTypeFromText,
   mapBatchTypeToEntryImageType,
   refreshBatchImportItem
 } from "@/lib/batch-image-import";
@@ -11,6 +12,7 @@ import {
   type ArchiveImageService
 } from "@/lib/archive-image-service";
 import { runImageOcr } from "@/lib/image-ocr-service";
+import { markRegisteredBatchItems } from "@/lib/batch-import-state";
 import { mergeImagesWithDedup } from "@/lib/live-entry-actions";
 import { createEntry, parseArtists } from "@/lib/live-entry-utils";
 import type {
@@ -34,6 +36,7 @@ type BatchImportBoardItem = BatchImportItem & {
   ocrStatus: "idle" | "processing" | "done" | "error";
   ocrText: string;
   ocrConfidence: number | null;
+  ocrProgress: number;
   ocrError?: string;
 };
 
@@ -75,6 +78,7 @@ export function BatchImportBoard({
     "複数画像を投入すると、仮分類・候補抽出・既存公演との照合を一覧で整理できます。OCR は端末内で実行し、結果は確認用にだけ使います。"
   );
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const previewUrlsRef = useRef(new Set<string>());
 
   const selectedCount = useMemo(() => items.filter((item) => item.selected).length, [items]);
   const pendingCount = useMemo(
@@ -82,6 +86,16 @@ export function BatchImportBoard({
     [items]
   );
   const approvedCount = useMemo(() => items.filter((item) => item.approved).length, [items]);
+  const isOcrRunning = items.some((item) => item.ocrStatus === "processing");
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of previewUrlsRef.current) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      previewUrlsRef.current.clear();
+    };
+  }, []);
 
   function updateItem(itemId: string, updater: (item: BatchImportBoardItem) => BatchImportBoardItem) {
     setItems((current) => current.map((item) => (item.id === itemId ? updater(item) : item)));
@@ -129,8 +143,10 @@ export function BatchImportBoard({
       approved: false,
       ocrStatus: "idle" as const,
       ocrText: "",
-      ocrConfidence: null
+      ocrConfidence: null,
+      ocrProgress: 0
     }));
+    nextItems.forEach((item) => previewUrlsRef.current.add(item.previewUrl));
     setItems((current) => [...nextItems, ...current]);
     setMessage(`${files.length} 枚を取り込み候補へ追加しました。`);
     event.target.value = "";
@@ -168,14 +184,24 @@ export function BatchImportBoard({
     updateItem(itemId, (current) => ({
       ...current,
       ocrStatus: "processing",
+      ocrProgress: 0,
       ocrError: undefined
     }));
 
     try {
-      const result = await runImageOcr(target.file, target.imageType);
+      const result = await runImageOcr(target.file, target.imageType, {
+        timeoutMs: 60_000,
+        onProgress(completed, total) {
+          updateItem(itemId, (current) => ({
+            ...current,
+            ocrProgress: total > 0 ? completed / total : 0
+          }));
+        }
+      });
+      const inferredImageType = inferBatchImageTypeFromText(result.text, target.imageType);
       const extractedFromOcr = extractCandidatesFromText(
         result.text,
-        target.imageType,
+        inferredImageType,
         entries,
         target.extracted.titleFragment || target.fileName.replace(/\.[^.]+$/, "")
       );
@@ -184,6 +210,7 @@ export function BatchImportBoard({
         const refreshed = refreshBatchImportItem(
           {
             ...current,
+            imageType: inferredImageType,
             extracted: {
               ...current.extracted,
               ...mergeExtractedCandidates(current.extracted, extractedFromOcr),
@@ -199,6 +226,7 @@ export function BatchImportBoard({
           ocrStatus: "done",
           ocrText: result.text,
           ocrConfidence: result.confidence,
+          ocrProgress: 1,
           ocrError: undefined
         };
       });
@@ -206,6 +234,7 @@ export function BatchImportBoard({
       updateItem(itemId, (current) => ({
         ...current,
         ocrStatus: "error",
+        ocrProgress: 0,
         ocrError: error instanceof Error ? error.message : "OCR に失敗しました。"
       }));
     }
@@ -247,9 +276,11 @@ export function BatchImportBoard({
     let applied = 0;
     let skipped = 0;
     let duplicateCount = 0;
+    const completedItemIds = new Set<string>();
 
     for (const item of targets) {
       if (item.reviewState === "excluded") {
+        completedItemIds.add(item.id);
         applied += 1;
         continue;
       }
@@ -280,6 +311,7 @@ export function BatchImportBoard({
 
             return { ...entry, images: merged.images };
           });
+          completedItemIds.add(item.id);
         } catch {
           skipped += 1;
         }
@@ -309,6 +341,7 @@ export function BatchImportBoard({
           });
 
           nextEntries = [{ ...nextEntry, images: [image] }, ...nextEntries];
+          completedItemIds.add(item.id);
           applied += 1;
         } catch {
           skipped += 1;
@@ -321,18 +354,7 @@ export function BatchImportBoard({
     }
 
     onApply(nextEntries);
-    setItems((current) =>
-      current.map((item) =>
-        item.selected
-          ? {
-              ...item,
-              selected: false,
-              approved: false,
-              reviewState: item.reviewState === "excluded" ? "excluded" : "confirmed"
-            }
-          : item
-      )
-    );
+    setItems((current) => markRegisteredBatchItems(current, completedItemIds));
 
     if (skipped > 0 || duplicateCount > 0) {
       const parts = [`${applied} 件を確定しました。`];
@@ -414,6 +436,7 @@ export function BatchImportBoard({
       const merged = mergeImagesWithDedup(matchedEntry?.images ?? [], [image]);
 
       if (merged.addedCount === 0) {
+        releasePreviewUrl(target.previewUrl);
         setItems((current) => current.filter((item) => item.id !== itemId));
         setItemActionState(itemId, null);
         setMessage(`「${matchedEntry?.title ?? "既存公演"}」には同じ画像があるため追加していません。`);
@@ -421,6 +444,7 @@ export function BatchImportBoard({
         return;
       }
 
+      releasePreviewUrl(target.previewUrl);
       setItems((current) => current.filter((item) => item.id !== itemId));
       setItemActionState(itemId, null);
       onApply((current) =>
@@ -464,6 +488,11 @@ export function BatchImportBoard({
     });
   }
 
+  function releasePreviewUrl(previewUrl: string) {
+    URL.revokeObjectURL(previewUrl);
+    previewUrlsRef.current.delete(previewUrl);
+  }
+
   function applyBulkReviewState() {
     if (selectedCount === 0) {
       setMessage("状態を変える画像を選んでください。");
@@ -493,7 +522,7 @@ export function BatchImportBoard({
             <button className="actionButton" type="button" onClick={() => inputRef.current?.click()}>
               画像を追加
             </button>
-            <button className="toolButton" type="button" onClick={runOcrForSelected}>
+            <button className="toolButton" type="button" onClick={runOcrForSelected} disabled={isOcrRunning}>
               選択に OCR
             </button>
             <button className="toolButton" type="button" onClick={recheckSelectedItems}>
@@ -594,7 +623,13 @@ export function BatchImportBoard({
                   <div className="batchBadgeRow">
                     {item.approved ? <span className="batchBadge batchBadgeReady">候補確定済み</span> : null}
                     <span className="batchBadge">{TYPE_LABELS[item.imageType]}</span>
-                    <span className="batchBadge">{Math.round(item.extracted.confidence * 100)}%</span>
+                    <span className="batchBadge">
+                      {item.extracted.confidence >= 0.7
+                        ? "候補: 高"
+                        : item.extracted.confidence >= 0.45
+                          ? "候補: 中"
+                          : "候補: 要確認"}
+                    </span>
                   </div>
                 </div>
 
@@ -605,13 +640,18 @@ export function BatchImportBoard({
                       {item.ocrStatus === "idle"
                         ? "未実行"
                         : item.ocrStatus === "processing"
-                          ? "実行中"
+                          ? `実行中 ${Math.round(item.ocrProgress * 100)}%`
                           : item.ocrStatus === "done"
                             ? `反映済み ${item.ocrConfidence !== null ? `${Math.round(item.ocrConfidence * 100)}%` : ""}`
                             : "エラー"}
                     </span>
                   </div>
-                  <button className="toolButton" type="button" onClick={() => runOcrForItem(item.id)}>
+                  <button
+                    className="toolButton"
+                    type="button"
+                    disabled={isOcrRunning}
+                    onClick={() => runOcrForItem(item.id)}
+                  >
                     この画像に OCR
                   </button>
                 </div>

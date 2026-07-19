@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { createImage } from "@/lib/live-entry-utils";
-import type { LiveEntryImage } from "@/lib/types";
 import { readDriveSession } from "@/lib/server/drive-session";
+import { verifyFirebaseRequest } from "@/lib/server/firebase-request-auth";
 import { isSafeGoogleDriveId, rejectCrossOriginRequest } from "@/lib/server/request-security";
 
 type UploadRequestBody = {
   folderId?: string;
-  image?: LiveEntryImage;
+  caption?: string;
+  mimeType?: string;
+  byteLength?: number;
 };
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const rejected = rejectCrossOriginRequest(request);
@@ -20,7 +20,16 @@ export async function POST(request: Request) {
     return rejected;
   }
 
-  const session = await readDriveSession();
+  const user = await verifyFirebaseRequest(request);
+
+  if (!user) {
+    return NextResponse.json(
+      { message: "Google ログインを確認できませんでした。再ログインしてください。" },
+      { status: 401 }
+    );
+  }
+
+  const session = await readDriveSession(user.uid);
 
   if (!session.accessToken) {
     return NextResponse.json(
@@ -29,18 +38,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const contentLength = Number(request.headers.get("content-length") ?? "0");
-
-  if (contentLength > MAX_REQUEST_BYTES) {
-    return NextResponse.json(
-      { message: "画像データが大きすぎます。8MB以下の画像で試してください。" },
-      { status: 413 }
-    );
-  }
-
   const body = (await request.json().catch(() => null)) as UploadRequestBody | null;
   const folderId = body?.folderId?.trim() ?? "";
-  const image = body?.image;
+  const mimeType = body?.mimeType?.trim().toLowerCase() ?? "";
+  const byteLength = body?.byteLength ?? 0;
 
   if (!folderId || !isSafeGoogleDriveId(folderId)) {
     return NextResponse.json(
@@ -49,44 +50,35 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!image || !image.src?.startsWith("data:")) {
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType)) {
     return NextResponse.json(
-      { message: "Drive へ送る元画像データが見つかりませんでした。" },
-      { status: 400 }
+      { message: "Google Drive に保存できる画像形式は JPEG / PNG / WebP / GIF です。" },
+      { status: 415 }
+    );
+  }
+
+  if (!Number.isSafeInteger(byteLength) || byteLength <= 0 || byteLength > MAX_IMAGE_BYTES) {
+    return NextResponse.json(
+      { message: "画像データが大きすぎます。8MB以下の画像で試してください。" },
+      { status: 413 }
     );
   }
 
   try {
-    const blob = dataUrlToBlob(image.src);
-
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(blob.type)) {
-      return NextResponse.json(
-        { message: "Google Drive に保存できる画像形式は JPEG / PNG / WebP / GIF です。" },
-        { status: 415 }
-      );
-    }
-
-    if (blob.buffer.byteLength > MAX_IMAGE_BYTES) {
-      return NextResponse.json(
-        { message: "画像データが大きすぎます。8MB以下の画像で試してください。" },
-        { status: 413 }
-      );
-    }
-
-    const fileName = sanitizeFileName(image.caption ?? "image", blob.type);
-    const boundary = `live-log-${Math.random().toString(36).slice(2)}`;
+    const fileName = sanitizeFileName(body?.caption ?? "image", mimeType);
     const metadata = { name: fileName, parents: [folderId] };
-    const bodyBuffer = buildMultipartBody(boundary, metadata, blob);
 
     const response = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,thumbnailLink,mimeType",
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink,thumbnailLink,mimeType",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.accessToken}`,
-          "Content-Type": `multipart/related; boundary=${boundary}`
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": mimeType,
+          "X-Upload-Content-Length": String(byteLength)
         },
-        body: bodyBuffer
+        body: JSON.stringify(metadata)
       }
     );
 
@@ -95,25 +87,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ message }, { status: response.status });
     }
 
-    const data = (await response.json()) as {
-      id: string;
-      webViewLink?: string;
-      thumbnailLink?: string;
-    };
+    const uploadUrl = response.headers.get("location") ?? "";
 
-    const driveWebUrl = data.webViewLink ?? `https://drive.google.com/file/d/${data.id}/view`;
-    const driveThumbnailUrl =
-      data.thumbnailLink ?? `https://drive.google.com/thumbnail?id=${data.id}&sz=w1600`;
+    if (!isSafeGoogleUploadUrl(uploadUrl)) {
+      return NextResponse.json(
+        { message: "Google Drive のアップロード先を確認できませんでした。もう一度試してください。" },
+        { status: 502 }
+      );
+    }
 
-    return NextResponse.json({
-      image: {
-        ...createImage(driveThumbnailUrl, image.type, image.caption),
-        id: image.id,
-        driveFileId: data.id,
-        driveWebUrl,
-        driveThumbnailUrl
-      }
-    });
+    return NextResponse.json(
+      { uploadUrl },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     return NextResponse.json(
       {
@@ -127,42 +113,6 @@ export async function POST(request: Request) {
   }
 }
 
-function dataUrlToBlob(dataUrl: string) {
-  const match = dataUrl.match(/^data:(.+?);base64,(.+)$/);
-
-  if (!match) {
-    throw new Error("画像データの形式が不正です。");
-  }
-
-  const [, rawMimeType, base64] = match;
-  const mimeType = rawMimeType.toLowerCase();
-
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64) || base64.length % 4 !== 0) {
-    throw new Error("画像データの形式が不正です。");
-  }
-
-  return {
-    type: mimeType,
-    buffer: Buffer.from(base64, "base64")
-  };
-}
-
-function buildMultipartBody(
-  boundary: string,
-  metadata: { name: string; parents: string[] },
-  blob: { type: string; buffer: Buffer }
-) {
-  const head =
-    `--${boundary}\r\n` +
-    "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
-    `${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: ${blob.type || "image/jpeg"}\r\n\r\n`;
-  const tail = `\r\n--${boundary}--`;
-
-  return Buffer.concat([Buffer.from(head), blob.buffer, Buffer.from(tail)]);
-}
-
 function sanitizeFileName(value: string, mimeType: string) {
   const base = value.replace(/\.[^.]+$/, "").replace(/\s+/g, "-").replace(/[^\w.-]/g, "") || "image";
   const extension =
@@ -174,6 +124,21 @@ function sanitizeFileName(value: string, mimeType: string) {
           ? "gif"
           : "jpg";
   return `${base}.${extension}`;
+}
+
+function isSafeGoogleUploadUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "www.googleapis.com" &&
+      url.pathname === "/upload/drive/v3/files" &&
+      url.searchParams.get("uploadType") === "resumable" &&
+      Boolean(url.searchParams.get("upload_id"))
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function readDriveErrorMessage(response: Response) {

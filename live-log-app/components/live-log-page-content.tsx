@@ -12,6 +12,7 @@ import { LiveLogTimelineView } from "@/components/live-log-timeline-view";
 import type { YearlyAggregateKey } from "@/components/yearly-summary-panel";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { AggregateBucket, TrendBucket } from "@/lib/live-analytics";
+import type { AddImageReview, AddPhotoType } from "@/lib/live-add-flow";
 import type { AnalyticsTileId, PositionedDashboardTile, TileHeight, TileSize } from "@/lib/analytics-dashboard";
 import type { LiveEntry } from "@/lib/types";
 
@@ -31,17 +32,6 @@ type ManualEntryInput = {
   artistsText: string;
   genre: string;
   memo: string;
-};
-
-type PhotoUploadInput = {
-  title: string;
-  date: string;
-  place: string;
-  venue: string;
-  artistsText: string;
-  genre: string;
-  memo: string;
-  photoType: "signboard" | "eticket" | "paperTicket";
 };
 
 type BulkEditInput = {
@@ -126,11 +116,10 @@ type LiveLogPageContentProps = {
   csvMessage: string;
   imageMessage: string;
   manualForm: ManualEntryInput;
-  photoForm: PhotoUploadInput;
+  addImageReview: AddImageReview | null;
   bulkEdit: BulkEditInput;
   placeOptions: string[];
   genreOptions: string[];
-  driveFolderLabel: string;
   csvInputRef: RefObject<HTMLInputElement | null>;
   photoInputRef: RefObject<HTMLInputElement | null>;
   entries: LiveEntry[];
@@ -168,8 +157,11 @@ type LiveLogPageContentProps = {
   onManualSubmit(event: FormEvent<HTMLFormElement>): void;
   onCsvImport(event: ChangeEvent<HTMLInputElement>): void;
   onPhotoImport(event: ChangeEvent<HTMLInputElement>): void;
+  onOpenAddPhotoPicker(photoType: AddPhotoType): void;
+  onClearAddImageReview(): void;
+  onRetryAddImageOcr(): void;
+  onAttachAddImageToMatch(): void;
   onUpdateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]): void;
-  onUpdatePhotoForm<K extends keyof PhotoUploadInput>(key: K, value: PhotoUploadInput[K]): void;
   onUpdateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]): void;
   onApplyBulkUpdate(): void;
   onDeleteSelectedEntries(): void;
@@ -242,11 +234,10 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
     csvMessage,
     imageMessage,
     manualForm,
-    photoForm,
+    addImageReview,
     bulkEdit,
     placeOptions,
     genreOptions,
-    driveFolderLabel,
     csvInputRef,
     photoInputRef,
     entries,
@@ -284,8 +275,11 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
     onManualSubmit,
     onCsvImport,
     onPhotoImport,
+    onOpenAddPhotoPicker,
+    onClearAddImageReview,
+    onRetryAddImageOcr,
+    onAttachAddImageToMatch,
     onUpdateForm,
-    onUpdatePhotoForm,
     onUpdateBulkEdit,
     onApplyBulkUpdate,
     onDeleteSelectedEntries,
@@ -513,18 +507,19 @@ export function LiveLogPageContent(props: LiveLogPageContentProps) {
         <LiveLogAddView
           imageMessage={imageMessage}
           manualForm={manualForm}
-          photoForm={photoForm}
+          addImageReview={addImageReview}
           placeOptions={placeOptions}
           genreOptions={genreOptions}
-          driveFolderLabel={driveFolderLabel}
           photoInputRef={photoInputRef}
           entries={entries}
           imageService={imageService}
           onManualSubmit={onManualSubmit}
           onPhotoImport={onPhotoImport}
+          onOpenAddPhotoPicker={onOpenAddPhotoPicker}
+          onClearAddImageReview={onClearAddImageReview}
+          onRetryAddImageOcr={onRetryAddImageOcr}
+          onAttachAddImageToMatch={onAttachAddImageToMatch}
           onUpdateForm={onUpdateForm}
-          onUpdatePhotoForm={onUpdatePhotoForm}
-          onConfigureDriveFolder={() => onSetActiveView("sync")}
           onBatchApply={onBatchApply}
           onLinkedToEntry={(entryId) => {
             onSetQuery("");

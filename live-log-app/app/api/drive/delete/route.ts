@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readDriveSession } from "@/lib/server/drive-session";
+import { verifyFirebaseRequest } from "@/lib/server/firebase-request-auth";
 import { isSafeGoogleDriveId, rejectCrossOriginRequest } from "@/lib/server/request-security";
 
 export async function POST(request: Request) {
@@ -9,7 +10,16 @@ export async function POST(request: Request) {
     return rejected;
   }
 
-  const session = await readDriveSession();
+  const user = await verifyFirebaseRequest(request);
+
+  if (!user) {
+    return NextResponse.json(
+      { message: "Google ログインを確認できませんでした。再ログインしてください。" },
+      { status: 401 }
+    );
+  }
+
+  const session = await readDriveSession(user.uid);
 
   if (!session.accessToken) {
     return NextResponse.json(

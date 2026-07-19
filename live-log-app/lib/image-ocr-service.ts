@@ -5,14 +5,23 @@ export type OcrResult = {
   confidence: number;
 };
 
-let workerPromise: Promise<{
+export type OcrRunOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  onProgress?(completed: number, total: number): void;
+};
+
+type OcrWorker = {
   recognize(file: File): Promise<{ data: { text: string; confidence: number } }>;
   setParameters(params: {
     preserve_interword_spaces?: string;
     tessedit_pageseg_mode?: string;
     user_defined_dpi?: string;
   }): Promise<unknown>;
-}> | null = null;
+  terminate(): Promise<unknown>;
+};
+
+let workerPromise: Promise<OcrWorker> | null = null;
 
 const TESSERACT_ASSET_PATH = "/tesseract";
 const PAGE_SEGMENT_MODE = {
@@ -25,42 +34,79 @@ type PreparedOcrVariant = {
   pageSegmentationMode: (typeof PAGE_SEGMENT_MODE)[keyof typeof PAGE_SEGMENT_MODE];
 };
 
-export async function runImageOcr(file: File, imageType: BatchImageType): Promise<OcrResult> {
-  const worker = await getWorker();
-  const preparedVariants = await prepareFilesForOcr(file, imageType);
-  let bestResult: OcrResult = { text: "", confidence: 0 };
-  let bestScore = -1;
-  let currentPageSegmentationMode = "";
+export async function runImageOcr(
+  file: File,
+  imageType: BatchImageType,
+  options: OcrRunOptions = {}
+): Promise<OcrResult> {
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs ?? 45_000;
+  const abortFromCaller = () => controller.abort(options.signal?.reason);
+  const timeoutId = window.setTimeout(
+    () => controller.abort(new Error("OCR が時間内に完了しませんでした。画像を切り抜いて再試行してください。")),
+    timeoutMs
+  );
+  options.signal?.addEventListener("abort", abortFromCaller, { once: true });
 
-  for (const prepared of preparedVariants) {
-    if (prepared.pageSegmentationMode !== currentPageSegmentationMode) {
-      await worker.setParameters({
-        preserve_interword_spaces: "1",
-        tessedit_pageseg_mode: prepared.pageSegmentationMode,
-        user_defined_dpi: "300"
-      });
-      currentPageSegmentationMode = prepared.pageSegmentationMode;
+  try {
+    throwIfOcrAborted(controller.signal);
+    const worker = await getWorker();
+    throwIfOcrAborted(controller.signal);
+    const preparedVariants = await prepareFilesForOcr(file, imageType);
+    let bestResult: OcrResult = { text: "", confidence: 0 };
+    let bestScore = -1;
+    let currentPageSegmentationMode = "";
+
+    for (let index = 0; index < preparedVariants.length; index += 1) {
+      const prepared = preparedVariants[index];
+      throwIfOcrAborted(controller.signal);
+
+      if (prepared.pageSegmentationMode !== currentPageSegmentationMode) {
+        await runWorkerOperation(
+          worker,
+          worker.setParameters({
+            preserve_interword_spaces: "1",
+            tessedit_pageseg_mode: prepared.pageSegmentationMode,
+            user_defined_dpi: "300"
+          }),
+          controller.signal
+        );
+        currentPageSegmentationMode = prepared.pageSegmentationMode;
+      }
+
+      const result = await runWorkerOperation(
+        worker,
+        worker.recognize(prepared.file),
+        controller.signal
+      );
+      const candidate = {
+        text: result.data.text ?? "",
+        confidence: Number.isFinite(result.data.confidence) ? result.data.confidence / 100 : 0
+      };
+      const score = scoreOcrResult(candidate, imageType);
+
+      if (score > bestScore) {
+        bestResult = candidate;
+        bestScore = score;
+      }
+
+      options.onProgress?.(index + 1, preparedVariants.length);
+
+      if (index >= 1 && isStrongOcrResult(bestResult, imageType)) {
+        break;
+      }
     }
 
-    const result = await worker.recognize(prepared.file);
-    const candidate = {
-      text: result.data.text ?? "",
-      confidence: Number.isFinite(result.data.confidence) ? result.data.confidence / 100 : 0
-    };
-    const score = scoreOcrResult(candidate, imageType);
-
-    if (score > bestScore) {
-      bestResult = candidate;
-      bestScore = score;
-    }
+    return bestResult;
+  } finally {
+    window.clearTimeout(timeoutId);
+    options.signal?.removeEventListener("abort", abortFromCaller);
   }
-
-  return bestResult;
 }
 
 async function getWorker() {
   if (!workerPromise) {
-    workerPromise = import("tesseract.js").then(({ createWorker }) =>
+    const nextWorkerPromise = import("tesseract.js").then(({ createWorker }) =>
       createWorker("jpn+eng", 1, {
         corePath: `${TESSERACT_ASSET_PATH}/core`,
         langPath: `${TESSERACT_ASSET_PATH}/lang`,
@@ -69,9 +115,72 @@ async function getWorker() {
         gzip: true
       })
     );
+    workerPromise = nextWorkerPromise.catch((error) => {
+      workerPromise = null;
+      throw error;
+    });
   }
 
   return workerPromise;
+}
+
+function runWorkerOperation<T>(worker: OcrWorker, operation: Promise<T>, signal: AbortSignal) {
+  if (signal.aborted) {
+    return Promise.reject(createOcrAbortError(signal));
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      workerPromise = null;
+      void worker.terminate().catch(() => undefined);
+      reject(createOcrAbortError(signal));
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    operation.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+function throwIfOcrAborted(signal: AbortSignal) {
+  if (signal.aborted) {
+    throw createOcrAbortError(signal);
+  }
+}
+
+function createOcrAbortError(signal: AbortSignal) {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new Error("OCR を中断しました。別の画像で再試行できます。");
+}
+
+function isStrongOcrResult(result: OcrResult, imageType: BatchImageType) {
+  const compactText = normalizeOcrSignalText(result.text);
+  const hasDate = /(20\d{2}[\/.\-年]\d{1,2}[\/.\-月]\d{1,2})|(\d{1,2}月\d{1,2}日)/.test(compactText);
+  const hasVenue = /(会場|venue|zepp|hall|ホール|club|livehouse|ライブハウス|o-east|quattro|blaze|loft)/i.test(
+    compactText
+  );
+  const hasEventSignal = /(open|start|開場|開演|live|tour|festival|fes|公演|出演)/i.test(compactText);
+
+  if (imageType === "ticket") {
+    return result.confidence >= 0.52 && hasDate && (hasVenue || hasEventSignal);
+  }
+
+  return result.confidence >= 0.58 && (hasDate || hasVenue) && hasEventSignal;
+}
+
+function normalizeOcrSignalText(value: string) {
+  return value
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/\s+/g, "");
 }
 
 async function prepareFilesForOcr(file: File, imageType: BatchImageType) {
@@ -83,11 +192,7 @@ async function prepareFilesForOcr(file: File, imageType: BatchImageType) {
   }
 
   const baseCanvas = document.createElement("canvas");
-  const maxEdge = imageType === "ticket" ? 2600 : 1800;
-  const scale = Math.max(
-    1,
-    Math.min(imageType === "ticket" ? 2.9 : 2, maxEdge / Math.max(loaded.width, loaded.height))
-  );
+  const scale = calculateOcrScale(loaded.width, loaded.height, imageType);
   const width = Math.max(1, Math.round(loaded.width * scale));
   const height = Math.max(1, Math.round(loaded.height * scale));
   baseCanvas.width = width;
@@ -122,13 +227,6 @@ async function prepareFilesForOcr(file: File, imageType: BatchImageType) {
   });
 
   if (imageType !== "other") {
-    const thresholdStrong = cloneImageData(baseImage);
-    applyThreshold(thresholdStrong, imageType === "ticket" ? 182 : 160);
-    variants.push({
-      file: await imageDataToFile(thresholdStrong, file, "ocr-high-contrast"),
-      pageSegmentationMode: fullPageSegmentationMode
-    });
-
     const adaptive = cloneImageData(baseImage);
     applyGrayscale(adaptive);
     applyAdaptiveThreshold(adaptive, imageType === "ticket" ? 18 : 14);
@@ -139,21 +237,6 @@ async function prepareFilesForOcr(file: File, imageType: BatchImageType) {
   }
 
   if (imageType === "ticket") {
-    const thresholdSoft = cloneImageData(baseImage);
-    applyThreshold(thresholdSoft, 155);
-    variants.push({
-      file: await imageDataToFile(thresholdSoft, file, "ocr-soft-threshold"),
-      pageSegmentationMode: fullPageSegmentationMode
-    });
-
-    const invertedSoft = cloneImageData(baseImage);
-    applyThreshold(invertedSoft, 132);
-    invertImageData(invertedSoft);
-    variants.push({
-      file: await imageDataToFile(invertedSoft, file, "ocr-inverted-soft"),
-      pageSegmentationMode: fullPageSegmentationMode
-    });
-
     const croppedTop = cropImageData(baseImage, 0, 0, width, Math.round(height * 0.72));
     applyGrayscale(croppedTop, 1.28);
     applyAutoContrast(croppedTop);
@@ -175,23 +258,15 @@ async function prepareFilesForOcr(file: File, imageType: BatchImageType) {
       file: await imageDataToFile(croppedCenter, file, "ocr-ticket-center"),
       pageSegmentationMode: PAGE_SEGMENT_MODE.block
     });
-
-    const croppedBottom = cropImageData(
-      baseImage,
-      0,
-      Math.round(height * 0.36),
-      width,
-      Math.round(height * 0.54)
-    );
-    applyGrayscale(croppedBottom, 1.24);
-    applyAutoContrast(croppedBottom);
-    variants.push({
-      file: await imageDataToFile(croppedBottom, file, "ocr-ticket-bottom"),
-      pageSegmentationMode: PAGE_SEGMENT_MODE.block
-    });
   }
 
   return variants;
+}
+
+export function calculateOcrScale(width: number, height: number, imageType: BatchImageType) {
+  const maxEdge = imageType === "ticket" ? 2600 : 1800;
+  const maxUpscale = imageType === "ticket" ? 2.4 : 1.8;
+  return Math.min(maxUpscale, maxEdge / Math.max(1, width, height));
 }
 
 function cloneImageData(source: ImageData) {
@@ -221,18 +296,6 @@ function applyGrayscale(imageData: ImageData, contrastBoost = 1) {
     data[i] = normalized;
     data[i + 1] = normalized;
     data[i + 2] = normalized;
-  }
-}
-
-function applyThreshold(imageData: ImageData, thresholdValue: number) {
-  const data = imageData.data;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const luminance = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    const value = luminance > thresholdValue ? 255 : 0;
-    data[i] = value;
-    data[i + 1] = value;
-    data[i + 2] = value;
   }
 }
 
@@ -333,16 +396,6 @@ function applyAdaptiveThreshold(imageData: ImageData, bias: number) {
   }
 }
 
-function invertImageData(imageData: ImageData) {
-  const data = imageData.data;
-
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = 255 - data[i];
-    data[i + 1] = 255 - data[i + 1];
-    data[i + 2] = 255 - data[i + 2];
-  }
-}
-
 function imageDataToFile(imageData: ImageData, file: File, suffix: string) {
   const canvas = document.createElement("canvas");
   canvas.width = imageData.width;
@@ -371,21 +424,24 @@ function imageDataToFile(imageData: ImageData, file: File, suffix: string) {
   });
 }
 
-function scoreOcrResult(result: OcrResult, imageType: BatchImageType) {
+export function scoreOcrResult(result: OcrResult, imageType: BatchImageType) {
   const text = result.text ?? "";
   const confidence = result.confidence ?? 0;
-  const normalized = text
-    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+  const normalized = text.replace(
+    /[０-９]/g,
+    (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0)
+  );
+  const digitNormalized = normalized
     .replace(/[OＯo]/g, "0")
     .replace(/[Iｌl]/g, "1")
     .replace(/[Ss]/g, "5");
-  const dateSignals = normalized.match(/(20\d{2}\s*[\/.\-年]\s*\d{1,2}\s*[\/.\-月]\s*\d{1,2})|(\d{1,2}\s*月\s*\d{1,2}\s*日)/g)?.length ?? 0;
-  const timeSignals = normalized.match(/\d{1,2}\s*[:時]\s*\d{2}/g)?.length ?? 0;
+  const dateSignals = digitNormalized.match(/(20\d{2}\s*[\/.\-年]\s*\d{1,2}\s*[\/.\-月]\s*\d{1,2})|(\d{1,2}\s*月\s*\d{1,2}\s*日)/g)?.length ?? 0;
+  const timeSignals = digitNormalized.match(/\d{1,2}\s*[:時]\s*\d{2}/g)?.length ?? 0;
   const keywordSignals =
     (/(open|start|開場|開演|会場|venue|出演|live)/gi.exec(normalized) ? 1 : 0) +
     (normalized.match(/(open|start|開場|開演|会場|venue|出演|live)/gi)?.length ?? 0);
   const lengthScore = Math.min(normalized.replace(/\s+/g, "").length / 180, 1);
-  const slashDateBonus = /\b20\d{2}\s*[\/.\-]\s*\d{1,2}\s*[\/.\-]\s*\d{1,2}\b/.test(normalized) ? 0.08 : 0;
+  const slashDateBonus = /\b20\d{2}\s*[\/.\-]\s*\d{1,2}\s*[\/.\-]\s*\d{1,2}\b/.test(digitNormalized) ? 0.08 : 0;
   const ticketLabelBonus =
     imageType === "ticket" && /(発券|入場|整理番号|座席|ticket|qr)/i.test(normalized) ? 0.09 : 0;
   const timeRangeBonus =

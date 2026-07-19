@@ -228,26 +228,36 @@ export function useDriveImageSync({
         await onPersistEntries(nextEntries);
       }
     } catch (error) {
-      if (isCloudConflictError(error)) {
-        throw error;
-      }
+      const errorMessage =
+        error instanceof Error ? error.message : "Google Drive への画像保存に失敗しました。";
+      const erroredEntries = replaceImageSyncState(entriesRef.current, entryId, imageId, (image) =>
+        image.driveFileId
+          ? {
+              ...image,
+              storageStatus: "cloud",
+              uploadError: undefined
+            }
+          : {
+              ...image,
+              storageStatus: "error",
+              uploadError: errorMessage
+            }
+      );
+      entriesRef.current = erroredEntries;
+      setEntries(erroredEntries);
 
       if (isDriveSessionExpiredError(error)) {
         onAuthExpired("Google Drive 連携が切れています。ログインと同期で Drive連携更新 を押してください。");
-        throw error;
       }
 
-      const erroredEntries = replaceImageSyncState(entriesRef.current, entryId, imageId, (image) => ({
-        ...image,
-        storageStatus: "error",
-        uploadError:
-          error instanceof Error ? error.message : "Google Drive への画像保存に失敗しました。"
-      }));
-      entriesRef.current = erroredEntries;
-      setEntries(erroredEntries);
-      if (onPersistEntries) {
-        await onPersistEntries(erroredEntries);
+      if (onPersistEntries && !isCloudConflictError(error)) {
+        try {
+          await onPersistEntries(erroredEntries);
+        } catch {
+          // The local error state remains available for a later retry.
+        }
       }
+
       throw error;
     } finally {
       pendingImageUploadRef.current = false;
@@ -300,23 +310,25 @@ export function useDriveImageSync({
   async function handleRetryImageSync(entryId: string, imageId: string) {
     if (!firebaseUser) {
       showMessage("画像の Drive 再同期には Google ログインが必要です。");
-      return;
+      return false;
     }
 
     if (pendingImageUploadRef.current) {
       showMessage("別の画像を同期中です。少し待ってから再試行してください。");
-      return;
+      return false;
     }
 
     try {
       await syncEntryImageToDrive(firebaseUser, entryId, imageId);
+      return true;
     } catch (error) {
       if (isDriveSessionExpiredError(error)) {
         onAuthExpired("Google Drive 連携が切れています。ログインと同期で Drive連携更新 を押してください。");
-        return;
+        return false;
       }
 
       showMessage(error instanceof Error ? error.message : "画像の Drive 再同期に失敗しました。", 7000);
+      return false;
     }
   }
 
@@ -337,11 +349,23 @@ export function useDriveImageSync({
       return;
     }
 
+    let succeededCount = 0;
+
     for (const image of retryTargets) {
-      await handleRetryImageSync(entryId, image.id);
+      if (await handleRetryImageSync(entryId, image.id)) {
+        succeededCount += 1;
+      }
     }
 
-    showMessage(`「${targetEntry.title}」の未同期画像 ${retryTargets.length} 件を再同期しました。`);
+    if (succeededCount === retryTargets.length) {
+      showMessage(`「${targetEntry.title}」の未同期画像 ${succeededCount} 件を再同期しました。`);
+      return;
+    }
+
+    showMessage(
+      `「${targetEntry.title}」は ${succeededCount} 件を同期し、${retryTargets.length - succeededCount} 件が未完了です。`,
+      7000
+    );
   }
 
   async function handleDeleteImage(entryId: string, imageId: string) {

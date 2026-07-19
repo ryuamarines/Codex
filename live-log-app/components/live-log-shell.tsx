@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 type ActiveView = "home" | "timeline" | "add" | "artists" | "venues" | "sync";
 type ThemeMode = "system" | "light" | "dark";
@@ -65,6 +65,13 @@ export function LiveLogShell({
   onCycleThemeMode,
   children
 }: LiveLogShellProps) {
+  const mobileMoreRef = useRef<HTMLDetailsElement | null>(null);
+
+  function selectMobileMoreView(view: "venues" | "sync") {
+    mobileMoreRef.current?.removeAttribute("open");
+    onSelectView(view);
+  }
+
   return (
     <main className="archiveAppShell">
       <aside className="archiveSidebar">
@@ -179,20 +186,26 @@ export function LiveLogShell({
         >
           アーティスト
         </button>
-        <button
-          className={activeView === "venues" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
-          type="button"
-          onClick={() => onSelectView("venues")}
-        >
-          会場
-        </button>
-        <button
-          className={activeView === "sync" ? "mobileNavButton activeMobileNavButton" : "mobileNavButton"}
-          type="button"
-          onClick={() => onSelectView("sync")}
-        >
-          同期
-        </button>
+        <details className="mobileMoreNav" ref={mobileMoreRef}>
+          <summary
+            className={
+              activeView === "venues" || activeView === "sync"
+                ? "mobileNavButton activeMobileNavButton"
+                : "mobileNavButton"
+            }
+            aria-label="その他の画面"
+          >
+            その他
+          </summary>
+          <div className="mobileMoreMenu">
+            <button type="button" onClick={() => selectMobileMoreView("venues")}>
+              会場
+            </button>
+            <button type="button" onClick={() => selectMobileMoreView("sync")}>
+              同期 / バックアップ
+            </button>
+          </div>
+        </details>
       </nav>
     </main>
   );

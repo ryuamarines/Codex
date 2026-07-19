@@ -10,6 +10,7 @@ export type LiveRestorePoint = {
 };
 
 const RESTORE_POINTS_KEY = "live-log.restore-points";
+const CLOUD_SYNC_USER_KEY = "live-log-cloud-sync-user";
 const MAX_RESTORE_POINTS = 8;
 
 function createRestorePointId() {
@@ -40,8 +41,15 @@ function normalizeRestorePoint(value: unknown): LiveRestorePoint | null {
   };
 }
 
-export function loadRestorePoints(storage: Storage) {
-  const rawValue = storage.getItem(RESTORE_POINTS_KEY);
+export function loadRestorePoints(storage: Storage, userId?: string) {
+  const scopedStorageKey = createScopedRestorePointsKey(userId);
+  const scopedValue = storage.getItem(scopedStorageKey);
+  const lastSyncedUserId = storage.getItem(CLOUD_SYNC_USER_KEY) ?? "";
+  const canMigrateLegacyData = userId
+    ? !lastSyncedUserId || lastSyncedUserId === userId
+    : !lastSyncedUserId;
+  const rawValue = scopedValue ?? (canMigrateLegacyData ? storage.getItem(RESTORE_POINTS_KEY) : null);
+  const sourceStorageKey = scopedValue === null ? RESTORE_POINTS_KEY : scopedStorageKey;
 
   if (!rawValue) {
     return [];
@@ -53,22 +61,37 @@ export function loadRestorePoints(storage: Storage) {
       return [];
     }
 
-    return parsed
+    const points = parsed
       .map(normalizeRestorePoint)
       .filter((point): point is LiveRestorePoint => Boolean(point))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, MAX_RESTORE_POINTS);
+
+    if (sourceStorageKey === RESTORE_POINTS_KEY) {
+      try {
+        storage.setItem(scopedStorageKey, JSON.stringify(points));
+      } catch {
+        // Keep the legacy restore points intact when scoped migration cannot be stored.
+      }
+    }
+
+    return points;
   } catch {
-    storage.removeItem(RESTORE_POINTS_KEY);
+    storage.removeItem(sourceStorageKey);
     return [];
   }
 }
 
-export function saveRestorePoint(storage: Storage, label: string, entries: LiveEntry[]) {
+export function saveRestorePoint(
+  storage: Storage,
+  label: string,
+  entries: LiveEntry[],
+  userId?: string
+) {
   const sanitizedEntries = sanitizeEntries(entries);
 
   if (sanitizedEntries.length === 0) {
-    return loadRestorePoints(storage);
+    return loadRestorePoints(storage, userId);
   }
 
   const nextPoint: LiveRestorePoint = {
@@ -78,15 +101,29 @@ export function saveRestorePoint(storage: Storage, label: string, entries: LiveE
     entryCount: sanitizedEntries.length,
     entries: sanitizedEntries
   };
-  const points = [nextPoint, ...loadRestorePoints(storage)].slice(0, MAX_RESTORE_POINTS);
-  storage.setItem(RESTORE_POINTS_KEY, JSON.stringify(points));
+  const points = [nextPoint, ...loadRestorePoints(storage, userId)].slice(0, MAX_RESTORE_POINTS);
+  try {
+    storage.setItem(createScopedRestorePointsKey(userId), JSON.stringify(points));
+  } catch {
+    return points.slice(1);
+  }
   return points;
 }
 
-export function deleteRestorePoint(storage: Storage, restorePointId: string) {
-  const points = loadRestorePoints(storage).filter((point) => point.id !== restorePointId);
-  storage.setItem(RESTORE_POINTS_KEY, JSON.stringify(points));
+export function deleteRestorePoint(storage: Storage, restorePointId: string, userId?: string) {
+  const points = loadRestorePoints(storage, userId).filter((point) => point.id !== restorePointId);
+  try {
+    storage.setItem(createScopedRestorePointsKey(userId), JSON.stringify(points));
+  } catch {
+    return loadRestorePoints(storage, userId);
+  }
   return points;
+}
+
+function createScopedRestorePointsKey(userId?: string) {
+  return userId
+    ? `${RESTORE_POINTS_KEY}.user.${userId}`
+    : `${RESTORE_POINTS_KEY}.anonymous`;
 }
 
 export function formatRestorePointCreatedAt(value: string) {

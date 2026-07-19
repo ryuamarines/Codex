@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { RecordListTable } from "@/components/record-list-table";
 import type { LiveEntry } from "@/lib/types";
 
@@ -17,6 +17,7 @@ const LIST_COLUMN_OPTIONS: Array<{ key: ListColumn; label: string }> = [
   { key: "genre", label: "形式" },
   { key: "photos", label: "写真" }
 ];
+const TIMELINE_PAGE_SIZE = 24;
 
 type TimelineGroup = {
   monthKey: string;
@@ -89,6 +90,41 @@ export function LiveLogTimelineView({
   formatWeekday,
   getLeadArtist
 }: TimelineViewProps) {
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(timelineEntries.length / TIMELINE_PAGE_SIZE));
+  const safePageIndex = Math.min(pageIndex, pageCount - 1);
+  const pageStart = safePageIndex * TIMELINE_PAGE_SIZE;
+  const visibleTimelineEntries = useMemo(
+    () => timelineEntries.slice(pageStart, pageStart + TIMELINE_PAGE_SIZE),
+    [pageStart, timelineEntries]
+  );
+  const visibleTimelineEntryIds = useMemo(
+    () => new Set(visibleTimelineEntries.map((entry) => entry.id)),
+    [visibleTimelineEntries]
+  );
+  const visibleTimelineGroups = useMemo(
+    () =>
+      timelineGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((entry) => visibleTimelineEntryIds.has(entry.id))
+        }))
+        .filter((group) => group.items.length > 0),
+    [timelineGroups, visibleTimelineEntryIds]
+  );
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [query, selectedYear, timelinePresentation]);
+
+  useEffect(() => {
+    const selectedIndex = timelineEntries.findIndex((entry) => entry.id === selectedEntryId);
+
+    if (selectedIndex >= 0) {
+      setPageIndex(Math.floor(selectedIndex / TIMELINE_PAGE_SIZE));
+    }
+  }, [selectedEntryId, timelineEntries]);
+
   return (
     <section className="archiveTimelineLayout">
       <div className="archiveTimelineSummaryRow">{summaryContent}</div>
@@ -184,7 +220,7 @@ export function LiveLogTimelineView({
           </div>
           {timelinePresentation === "cards" ? (
             <div className="archiveMonthStack">
-              {timelineGroups.map((group) => (
+              {visibleTimelineGroups.map((group) => (
                 <section key={group.monthKey} className="archiveMonthGroup">
                   <div className="archiveMonthHeading">
                     <strong>{group.monthLabel}</strong>
@@ -222,7 +258,7 @@ export function LiveLogTimelineView({
             </div>
           ) : (
             <RecordListTable
-              entries={timelineEntries}
+              entries={visibleTimelineEntries}
               selectedEntryId={selectedEntryId}
               highlightedEntryId={highlightedEntryId}
               selectedEntryIds={selectedEntryIds}
@@ -237,6 +273,33 @@ export function LiveLogTimelineView({
               onToggleDateSort={onToggleDateSort}
               onResizeStart={onResizeStart}
             />
+          )}
+          {timelineEntries.length > 0 ? (
+            <nav className="timelinePagination" aria-label="タイムラインのページ">
+              <button
+                type="button"
+                aria-label="前のページ"
+                title="前のページ"
+                disabled={safePageIndex === 0}
+                onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+              >
+                ←
+              </button>
+              <span>
+                {pageStart + 1}–{Math.min(pageStart + TIMELINE_PAGE_SIZE, timelineEntries.length)} / {timelineEntries.length}件
+              </span>
+              <button
+                type="button"
+                aria-label="次のページ"
+                title="次のページ"
+                disabled={safePageIndex >= pageCount - 1}
+                onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
+              >
+                →
+              </button>
+            </nav>
+          ) : (
+            <p className="timelineEmptyState">この年に一致する記録はありません。</p>
           )}
         </section>
         <div className="archiveTimelineDetailColumn">{detailContent}</div>

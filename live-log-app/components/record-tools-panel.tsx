@@ -1,18 +1,8 @@
 "use client";
 
-import { ChangeEvent, FormEvent, RefObject } from "react";
+import { ChangeEvent, FormEvent, RefObject, useState } from "react";
 import type { ManualEntryInput } from "@/lib/live-entry-utils";
-
-type PhotoUploadInput = {
-  title: string;
-  date: string;
-  place: string;
-  venue: string;
-  artistsText: string;
-  genre: string;
-  memo: string;
-  photoType: "signboard" | "eticket" | "paperTicket";
-};
+import type { AddImageReview, AddPhotoType } from "@/lib/live-add-flow";
 
 type BulkEditInput = {
   place: string;
@@ -25,16 +15,17 @@ type ActiveTool = "csv" | "bulk" | null;
 type RecordToolsPanelProps = {
   imageMessage: string;
   manualForm: ManualEntryInput;
-  photoForm: PhotoUploadInput;
+  addImageReview: AddImageReview | null;
   placeOptions: string[];
   genreOptions: string[];
-  driveFolderLabel: string;
   photoInputRef: RefObject<HTMLInputElement | null>;
   onManualSubmit(event: FormEvent<HTMLFormElement>): void;
   onPhotoImport(event: ChangeEvent<HTMLInputElement>): void;
+  onOpenAddPhotoPicker(photoType: AddPhotoType): void;
+  onClearAddImageReview(): void;
+  onRetryAddImageOcr(): void;
+  onAttachAddImageToMatch(): void;
   onUpdateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]): void;
-  onUpdatePhotoForm<K extends keyof PhotoUploadInput>(key: K, value: PhotoUploadInput[K]): void;
-  onConfigureDriveFolder(): void;
 };
 
 type RecordUtilitiesPanelProps = {
@@ -80,17 +71,19 @@ const PLACE_EXCLUDE_SET = new Set([
 export function RecordToolsPanel({
   imageMessage,
   manualForm,
-  photoForm,
+  addImageReview,
   placeOptions,
   genreOptions,
-  driveFolderLabel,
   photoInputRef,
   onManualSubmit,
   onPhotoImport,
-  onUpdateForm,
-  onUpdatePhotoForm,
-  onConfigureDriveFolder
+  onOpenAddPhotoPicker,
+  onClearAddImageReview,
+  onRetryAddImageOcr,
+  onAttachAddImageToMatch,
+  onUpdateForm
 }: RecordToolsPanelProps) {
+  const [entryMode, setEntryMode] = useState<"capture" | "manual">("capture");
   const normalizedPlaces = Array.from(
     new Set(
       placeOptions
@@ -110,11 +103,8 @@ export function RecordToolsPanel({
   const availableGenreOptions = manualForm.genre && !genreOptions.includes(manualForm.genre)
     ? [manualForm.genre, ...genreOptions]
     : genreOptions;
-  const coreFieldCount = [manualForm.date, manualForm.title, manualForm.venue].filter((value) => value.trim()).length;
-  const optionalFieldCount = [manualForm.place, manualForm.artistsText, manualForm.genre, manualForm.memo].filter(
-    (value) => value.trim()
-  ).length;
-  const hasPhotoIntent = photoForm.photoType !== "signboard";
+  const showEntryForm = entryMode === "manual" || Boolean(addImageReview);
+  const isImageBusy = addImageReview?.status === "processing" || addImageReview?.status === "saving";
 
   return (
     <>
@@ -123,26 +113,83 @@ export function RecordToolsPanel({
           <div>
             <p className="eyebrow">Add Event</p>
             <h2>ライブを追加する</h2>
-            <p>必要な情報から順に入れて、記録を軽く作れる入力画面です。</p>
-          </div>
-          <div className="archiveAddProgressCard">
-            <strong>入力の進み具合</strong>
-            <div className="archiveAddProgressRow">
-              <span>基本情報</span>
-              <b>{coreFieldCount}/3</b>
-            </div>
-            <div className="archiveAddProgressRow">
-              <span>補足情報</span>
-              <b>{optionalFieldCount}</b>
-            </div>
-            <div className="archiveAddProgressRow">
-              <span>写真</span>
-              <b>{hasPhotoIntent ? "準備中" : "任意"}</b>
-            </div>
           </div>
         </div>
 
-        <form className="archiveAddSteps" onSubmit={onManualSubmit}>
+        <div className="archiveCaptureChoices" role="group" aria-label="追加方法">
+          <button
+            type="button"
+            onClick={() => {
+              setEntryMode("capture");
+              onOpenAddPhotoPicker("eticket");
+            }}
+          >
+            電子チケットを選ぶ
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEntryMode("capture");
+              onOpenAddPhotoPicker("signboard");
+            }}
+          >
+            立て看板を撮る / 選ぶ
+          </button>
+          <button
+            className={entryMode === "manual" && !addImageReview ? "activeCaptureChoice" : ""}
+            type="button"
+            onClick={() => setEntryMode("manual")}
+          >
+            手入力
+          </button>
+        </div>
+        <input
+          ref={photoInputRef}
+          className="hiddenInput"
+          type="file"
+          accept="image/*"
+          onChange={onPhotoImport}
+        />
+
+        {addImageReview ? (
+          <section className="archiveAddImageReview" aria-live="polite">
+            <img src={addImageReview.previewUrl} alt={addImageReview.fileName} />
+            <div className="archiveAddImageReviewBody">
+              <strong>{addImageReview.fileName}</strong>
+              <span>
+                {addImageReview.status === "processing"
+                  ? `解析中 ${Math.round(addImageReview.progress * 100)}%`
+                  : addImageReview.status === "saving"
+                    ? "画像を保存中"
+                    : addImageReview.status === "review"
+                      ? "候補を反映済み"
+                      : "要確認"}
+              </span>
+              <small>{addImageReview.error ?? imageMessage}</small>
+              {addImageReview.matchedEntryId ? (
+                <button
+                  className="archiveMatchedEntryAction"
+                  type="button"
+                  disabled={isImageBusy}
+                  onClick={onAttachAddImageToMatch}
+                >
+                  「{addImageReview.matchedEntryTitle}」に画像を追加
+                  {addImageReview.matchReason ? <small>{addImageReview.matchReason}</small> : null}
+                </button>
+              ) : null}
+              <div className="archiveAddImageReviewActions">
+                <button type="button" disabled={isImageBusy} onClick={onRetryAddImageOcr}>
+                  再解析
+                </button>
+                <button type="button" disabled={addImageReview.status === "saving"} onClick={onClearAddImageReview}>
+                  画像を外す
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {showEntryForm ? <form className="archiveAddSteps" onSubmit={onManualSubmit}>
           <section className="archiveAddStep">
             <div className="archiveAddStepHeader">
               <span>1</span>
@@ -256,69 +303,16 @@ export function RecordToolsPanel({
             </div>
           </section>
 
-          <section className="archiveAddStep">
-            <div className="archiveAddStepHeader">
-              <span>3</span>
-              <div>
-                <strong>写真を追加する（任意）</strong>
-                <small>
-                  入力中の新しいイベントに、そのまま写真を添えて追加します。
-                </small>
-              </div>
-            </div>
-            <div className="archiveAddGrid">
-              <label className="archiveField">
-                <span>写真の種類</span>
-                <select
-                  value={photoForm.photoType}
-                  onChange={(event) =>
-                    onUpdatePhotoForm("photoType", event.target.value as PhotoUploadInput["photoType"])
-                  }
-                >
-                  <option value="signboard">立て看板</option>
-                  <option value="eticket">電子チケット</option>
-                  <option value="paperTicket">リアルチケット</option>
-                </select>
-              </label>
-              <div className="archiveField archiveFieldWide">
-                <span>保存先フォルダ</span>
-                <div className="archiveAddSubmitRow">
-                  <button className="actionButton secondaryButton" type="button" onClick={onConfigureDriveFolder}>
-                    保存先を選ぶ
-                  </button>
-                  <small className="importHint">{driveFolderLabel}</small>
-                </div>
-              </div>
-              <div className="archiveField archiveFieldWide">
-                <span>写真ファイル</span>
-                <div className="archiveAddSubmitRow">
-                  <button className="actionButton secondaryButton" type="button" onClick={() => photoInputRef.current?.click()}>
-                    写真を選ぶ
-                  </button>
-                  <small className="importHint">{imageMessage}</small>
-                </div>
-              </div>
-              <input
-                ref={photoInputRef}
-                className="hiddenInput"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={onPhotoImport}
-              />
-            </div>
-          </section>
-
           <div className="archiveAddSubmitRow">
             <div className="archiveAddSubmitHint">
               <strong>この内容で新しい記録を作成します。</strong>
               <small>追加したあとはタイムラインでこの記録を開きます。写真を選んでいれば、そのまま同じ記録に添えて追加されます。</small>
             </div>
-            <button className="actionButton" type="submit">
-              記録を追加
+            <button className="actionButton" type="submit" disabled={isImageBusy}>
+              {addImageReview ? "確認して登録" : "記録を追加"}
             </button>
           </div>
-        </form>
+        </form> : null}
       </section>
     </>
   );

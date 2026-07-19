@@ -185,3 +185,36 @@ export function sanitizeEntries(entries: LiveEntry[]) {
     }))
   }));
 }
+
+export function recoverInterruptedImageSync(entries: LiveEntry[]) {
+  return entries.map((entry) => ({
+    ...entry,
+    images: entry.images.map((image) => {
+      if (image.storageStatus !== "syncing") {
+        return image;
+      }
+
+      if (image.driveFileId) {
+        return {
+          ...image,
+          storageStatus: "cloud" as const,
+          uploadError: undefined
+        };
+      }
+
+      if (image.src.startsWith("data:")) {
+        return {
+          ...image,
+          storageStatus: "local_pending" as const,
+          uploadError: undefined
+        };
+      }
+
+      return {
+        ...image,
+        storageStatus: "error" as const,
+        uploadError: "前回の画像同期が完了しませんでした。元画像から再度追加してください。"
+      };
+    })
+  }));
+}

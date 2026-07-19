@@ -58,7 +58,11 @@
 
 - フロントは `Drive 保存したい / 削除したい` という要求だけを出す
 - 実際の Google Drive API 呼び出しはサーバー API 経由で行う
-- Drive セッションは `httpOnly cookie` に保存し、localStorage へは置かない
+- サーバー API は Drive の再開可能アップロードセッションだけを作成する
+- 画像本体はセッション URL を使ってブラウザから Drive へ直接送信し、Vercel Function を経由させない
+- Drive セッションは `httpOnly / Secure / SameSite=Strict cookie` に保存し、localStorage へは置かない
+- サーバー API は Firebase ID token の署名・期限・発行元・project ID を検証する
+- Drive セッションは Firebase UID に紐づけ、別アカウントから利用できないようにする
 - Drive 保存先フォルダは localStorage に加えて Firestore にも保存し、新しい URL や別ブラウザでも復元できるようにする
 - Firestore には `local_pending / syncing / cloud / error` を全部保存する
 

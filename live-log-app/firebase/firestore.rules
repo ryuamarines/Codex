@@ -2,11 +2,90 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isValidSettings(settings) {
+      return settings is map
+        && settings.keys().hasOnly(['driveFolderId'])
+        && settings.driveFolderId is string
+        && settings.driveFolderId.size() <= 200;
+    }
+
+    function isValidOwner(owner) {
+      return owner is map
+        && owner.keys().hasOnly(['displayName', 'email'])
+        && (owner.displayName == null
+          || (owner.displayName is string && owner.displayName.size() <= 200))
+        && (owner.email == null
+          || (owner.email is string && owner.email.size() <= 320));
+    }
+
+    function isValidArchive(data) {
+      return data.keys().hasOnly([
+          'settings',
+          'revision',
+          'entryIds',
+          'updatedAt',
+          'owner',
+          'entries'
+        ])
+        && isValidSettings(data.settings)
+        && data.revision is int
+        && data.revision >= 0
+        && data.entryIds is list
+        && data.entryIds.size() <= 5000
+        && data.updatedAt is timestamp
+        && isValidOwner(data.owner)
+        && (!('entries' in data)
+          || (data.entries is list && data.entries.size() <= 5000));
+    }
+
+    function isValidEntry(data) {
+      return data.keys().hasOnly([
+          'id',
+          'title',
+          'date',
+          'place',
+          'venue',
+          'artists',
+          'genre',
+          'memo',
+          'images',
+          'updatedAt'
+        ])
+        && data.id is string
+        && data.id.size() > 0
+        && data.id.size() <= 240
+        && data.title is string
+        && data.title.size() <= 500
+        && data.date is string
+        && data.date.size() <= 40
+        && data.place is string
+        && data.place.size() <= 300
+        && data.venue is string
+        && data.venue.size() <= 500
+        && data.artists is list
+        && data.artists.size() <= 200
+        && data.genre is string
+        && data.genre.size() <= 200
+        && data.memo is string
+        && data.memo.size() <= 20000
+        && data.images is list
+        && data.images.size() <= 30
+        && data.updatedAt is timestamp;
+    }
+
     match /liveLogArchives/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidArchive(request.resource.data);
+      allow delete: if isOwner(userId);
 
       match /entries/{entryId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidEntry(request.resource.data);
+        allow delete: if isOwner(userId);
       }
     }
   }

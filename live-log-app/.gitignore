@@ -1,9 +1,14 @@
 .next
 node_modules
 npm-debug.log*
+*.tsbuildinfo
+firebase-debug.log
+firestore-debug.log
+.firebase/
 .DS_Store
 .vercel
 .firebase
 out
 .env*.local
 .env*.wrong-vercel
+.env*

@@ -5,38 +5,25 @@ import { BatchImportBoard } from "@/components/batch-import-board";
 import { RecordToolsPanel } from "@/components/record-tools-panel";
 import type { ArchiveImageService } from "@/lib/archive-image-service";
 import type { ManualEntryInput } from "@/lib/live-entry-utils";
+import type { AddImageReview, AddPhotoType } from "@/lib/live-add-flow";
 import type { LiveEntry } from "@/lib/types";
-
-type PhotoUploadInput = {
-  title: string;
-  date: string;
-  place: string;
-  venue: string;
-  artistsText: string;
-  genre: string;
-  memo: string;
-  photoType: "signboard" | "eticket" | "paperTicket";
-};
-
 
 type AddViewProps = {
   imageMessage: string;
   manualForm: ManualEntryInput;
-  photoForm: PhotoUploadInput;
+  addImageReview: AddImageReview | null;
   placeOptions: string[];
   genreOptions: string[];
-  driveFolderLabel: string;
   photoInputRef: RefObject<HTMLInputElement | null>;
   entries: LiveEntry[];
   imageService: ArchiveImageService;
   onManualSubmit(event: FormEvent<HTMLFormElement>): void;
   onPhotoImport(event: ChangeEvent<HTMLInputElement>): void;
+  onOpenAddPhotoPicker(photoType: AddPhotoType): void;
+  onClearAddImageReview(): void;
+  onRetryAddImageOcr(): void;
+  onAttachAddImageToMatch(): void;
   onUpdateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]): void;
-  onUpdatePhotoForm<K extends keyof PhotoUploadInput>(
-    key: K,
-    value: PhotoUploadInput[K]
-  ): void;
-  onConfigureDriveFolder(): void;
   onBatchApply(entries: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])): void;
   onLinkedToEntry(entryId: string): void;
 };
@@ -44,18 +31,19 @@ type AddViewProps = {
 export function LiveLogAddView({
   imageMessage,
   manualForm,
-  photoForm,
+  addImageReview,
   placeOptions,
   genreOptions,
-  driveFolderLabel,
   photoInputRef,
   entries,
   imageService,
   onManualSubmit,
   onPhotoImport,
+  onOpenAddPhotoPicker,
+  onClearAddImageReview,
+  onRetryAddImageOcr,
+  onAttachAddImageToMatch,
   onUpdateForm,
-  onUpdatePhotoForm,
-  onConfigureDriveFolder,
   onBatchApply,
   onLinkedToEntry
 }: AddViewProps) {
@@ -64,32 +52,29 @@ export function LiveLogAddView({
       <RecordToolsPanel
         imageMessage={imageMessage}
         manualForm={manualForm}
-        photoForm={photoForm}
+        addImageReview={addImageReview}
         placeOptions={placeOptions}
         genreOptions={genreOptions}
-        driveFolderLabel={driveFolderLabel}
         photoInputRef={photoInputRef}
         onManualSubmit={onManualSubmit}
         onPhotoImport={onPhotoImport}
+        onOpenAddPhotoPicker={onOpenAddPhotoPicker}
+        onClearAddImageReview={onClearAddImageReview}
+        onRetryAddImageOcr={onRetryAddImageOcr}
+        onAttachAddImageToMatch={onAttachAddImageToMatch}
         onUpdateForm={onUpdateForm}
-        onUpdatePhotoForm={onUpdatePhotoForm}
-        onConfigureDriveFolder={onConfigureDriveFolder}
       />
-      <section className="panel archiveAddBatchPanel">
-        <div className="archiveSectionHeader">
-          <div>
-            <p className="eyebrow">Batch Import</p>
-            <h2>写真から候補を作る</h2>
-            <p>チケットや看板写真が多いときに、候補化してからタイムラインへ反映します。</p>
-          </div>
+      <details className="panel archiveAddBatchPanel archiveAddBatchDisclosure">
+        <summary>複数画像をまとめて整理</summary>
+        <div className="archiveAddBatchContent">
+          <BatchImportBoard
+            entries={entries}
+            imageService={imageService}
+            onApply={onBatchApply}
+            onLinkedToEntry={onLinkedToEntry}
+          />
         </div>
-        <BatchImportBoard
-          entries={entries}
-          imageService={imageService}
-          onApply={onBatchApply}
-          onLinkedToEntry={onLinkedToEntry}
-        />
-      </section>
+      </details>
     </section>
   );
 }

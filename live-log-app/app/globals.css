@@ -2183,6 +2183,39 @@ select {
   box-shadow: 0 0 0 3px color-mix(in srgb, #4ca070 24%, transparent);
 }
 
+.timelinePagination {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.timelinePagination button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font-size: 1.15rem;
+}
+
+.timelinePagination button:disabled {
+  opacity: 0.35;
+}
+
+.timelinePagination span,
+.timelineEmptyState {
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.86rem;
+}
+
+.timelineEmptyState {
+  margin: 18px 0 0;
+}
+
 .archiveTimelineDate {
   display: grid;
   gap: 3px;
@@ -2246,8 +2279,7 @@ select {
 
 .archiveAddComposer,
 .archiveAddUtilities,
-.archiveAddBatchPanel,
-.shareSnapshotCard {
+.archiveAddBatchPanel {
   display: grid;
   gap: 20px;
   padding: 28px;
@@ -2258,15 +2290,107 @@ select {
 }
 
 .archiveAddSteps,
-.archiveAddUtilityGrid,
-.shareSnapshotSectionStack {
+.archiveAddUtilityGrid {
   display: grid;
   gap: 18px;
 }
 
+.archiveCaptureChoices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.archiveCaptureChoices button {
+  min-height: 54px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.archiveCaptureChoices button:hover,
+.archiveCaptureChoices button:focus-visible,
+.archiveCaptureChoices .activeCaptureChoice {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.archiveAddImageReview {
+  display: grid;
+  grid-template-columns: minmax(110px, 180px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.archiveAddImageReview > img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--surface-soft);
+}
+
+.archiveAddImageReviewBody {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.archiveAddImageReviewBody strong,
+.archiveAddImageReviewBody small {
+  overflow-wrap: anywhere;
+}
+
+.archiveAddImageReviewBody span,
+.archiveAddImageReviewBody small {
+  color: var(--muted);
+}
+
+.archiveAddImageReviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.archiveAddImageReviewActions button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.archiveMatchedEntryAction {
+  display: grid;
+  gap: 3px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  color: var(--text);
+  text-align: left;
+  font-weight: 700;
+}
+
+.archiveMatchedEntryAction small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .archiveAddStep,
-.archiveUtilityCard,
-.shareSnapshotSectionCard {
+.archiveUtilityCard {
   display: grid;
   gap: 16px;
   padding: 18px;
@@ -2295,8 +2419,7 @@ select {
   font-weight: 700;
 }
 
-.archiveAddStepHeader strong,
-.shareSnapshotSectionCard h2 {
+.archiveAddStepHeader strong {
   font-size: 1.05rem;
 }
 
@@ -2342,33 +2465,8 @@ select {
   justify-items: start;
 }
 
-.archiveAddProgressCard {
-  min-width: 180px;
-  display: grid;
-  gap: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--panel-strong) 94%, transparent);
-}
-
-.archiveAddProgressCard strong,
 .archiveAddSubmitHint strong {
   font-size: 0.96rem;
-}
-
-.archiveAddProgressRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
-.archiveAddProgressRow b {
-  color: var(--text);
-  font-size: 0.84rem;
 }
 
 .archiveAddSubmitHint {
@@ -2388,117 +2486,14 @@ select {
   box-shadow: none;
 }
 
-.shareSnapshotPage {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 32px 18px;
-  background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--accent-soft) 65%, transparent), transparent 56%),
-    var(--background);
-}
-
-.shareSnapshotCard {
-  width: min(100%, 920px);
-}
-
-.shareSnapshotHeader {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.shareSnapshotEyebrow {
-  color: var(--accent);
-  font-size: 0.82rem;
+.archiveAddBatchDisclosure > summary {
+  cursor: pointer;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  list-style-position: inside;
 }
 
-.shareSnapshotGeneratedAt {
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.shareSnapshotMetricGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
-}
-
-.shareSnapshotMetricCard {
-  display: grid;
-  gap: 6px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--panel-strong) 88%, transparent);
-}
-
-.shareSnapshotMetricCard span {
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
-.shareSnapshotMetricCard strong {
-  font-size: clamp(1.4rem, 2vw, 2rem);
-}
-
-.shareSnapshotList,
-.shareSnapshotTrend,
-.shareSnapshotArtistYearList {
-  display: grid;
-  gap: 10px;
-}
-
-.shareSnapshotListItem,
-.shareSnapshotTrendRow,
-.shareSnapshotArtistYearRow {
-  display: grid;
-  gap: 12px;
-  align-items: center;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--panel-strong) 86%, transparent);
-}
-
-.shareSnapshotListItem {
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-}
-
-.shareSnapshotTrendRow {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.shareSnapshotArtistYearHeader,
-.shareSnapshotArtistYearValues {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
-  gap: 8px;
-}
-
-.shareSnapshotArtistYearHeader {
-  padding-left: min(42%, 240px);
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.shareSnapshotArtistYearRow {
-  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.4fr);
-}
-
-.shareSnapshotArtistYearMeta {
-  display: grid;
-  gap: 4px;
-}
-
-.shareSnapshotArtistYearMeta span {
-  color: var(--muted);
-  font-size: 0.84rem;
+.archiveAddBatchContent {
+  margin-top: 18px;
 }
 
 @media (max-width: 1100px) {
@@ -2517,8 +2512,7 @@ select {
   .archiveHeroStats,
   .archiveEntityStats,
   .archiveYearGrid,
-  .archiveAddGrid,
-  .shareSnapshotMetricGrid {
+  .archiveAddGrid {
     grid-template-columns: 1fr;
   }
 
@@ -2590,6 +2584,15 @@ select {
     border-radius: 24px;
   }
 
+  .archiveCaptureChoices,
+  .archiveAddImageReview {
+    grid-template-columns: 1fr;
+  }
+
+  .archiveAddImageReview > img {
+    max-height: 240px;
+  }
+
   .pageHeader,
   .listHeader,
   .detailHeader,
@@ -2627,20 +2630,14 @@ select {
   }
 
   .archiveAddComposer,
-  .archiveAddUtilities,
-  .shareSnapshotCard {
+  .archiveAddUtilities {
     padding: 22px;
     border-radius: 24px;
   }
 
   .archiveAddGridPrimary,
-  .archiveAddGrid,
-  .shareSnapshotArtistYearRow {
+  .archiveAddGrid {
     grid-template-columns: 1fr;
-  }
-
-  .shareSnapshotArtistYearHeader {
-    padding-left: 0;
   }
 
   .archiveTimelineCard,
@@ -2732,6 +2729,11 @@ select {
   }
 
   .mobileNavButton {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    place-items: center;
     border: 0;
     border-radius: 16px;
     padding: 10px 8px;
@@ -2740,8 +2742,51 @@ select {
     font-weight: 700;
   }
 
-.activeMobileNavButton {
-  background: var(--accent);
-  color: var(--button-on-accent);
-}
+  .mobileMoreNav {
+    position: relative;
+    min-width: 0;
+  }
+
+  .mobileMoreNav > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .mobileMoreNav > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobileMoreMenu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 14px);
+    display: grid;
+    width: min(240px, calc(100vw - 36px));
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel-strong);
+    box-shadow: var(--shadow);
+  }
+
+  .mobileMoreMenu button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    font-weight: 700;
+  }
+
+  .mobileMoreMenu button:hover,
+  .mobileMoreMenu button:focus-visible {
+    background: var(--accent-soft);
+  }
+
+  .activeMobileNavButton {
+    background: var(--accent);
+    color: var(--button-on-accent);
+  }
 }

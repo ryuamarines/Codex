@@ -2,9 +2,8 @@
 
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
-import { sampleEntries } from "@/data/live-entries";
 import {
-  createLocalStorageLiveEntryRepository,
+  createBrowserLiveEntryRepository,
   exportEntriesToCsv,
   type LiveEntryRepository
 } from "@/lib/live-entry-repository";
@@ -12,8 +11,18 @@ import {
   type ManualEntryInput
 } from "@/lib/live-entry-utils";
 import {
-  inferImageType,
-  type PhotoImportInput
+  applyOcrCandidatesToManualForm,
+  mapAddPhotoTypeToBatchType,
+  type AddImageReview,
+  type AddPhotoType
+} from "@/lib/live-add-flow";
+import {
+  extractCandidatesFromText,
+  findEntryMatchesForCandidates
+} from "@/lib/batch-image-import";
+import { runImageOcr } from "@/lib/image-ocr-service";
+import {
+  inferImageType
 } from "@/lib/live-import-utils";
 import {
   applyBulkEditToEntries,
@@ -92,8 +101,6 @@ import {
 import { useLiveCloudSync } from "@/hooks/use-live-cloud-sync";
 import type { LiveEntry } from "@/lib/types";
 
-type PhotoUploadInput = PhotoImportInput;
-
 type BulkEditInput = {
   place: string;
   venue: string;
@@ -133,7 +140,7 @@ const FIXED_TILE_SIZES: Partial<Record<AnalyticsTileId, TileSize>> = {};
 const ARTIST_ANALYTICS_WIDTH_MIGRATION_KEY = "live-log-artist-analytics-wide-v2";
 
 export function LiveLogPage() {
-  const [entries, setEntries] = useState<LiveEntry[]>(sampleEntries);
+  const [entries, setEntries] = useState<LiveEntry[]>([]);
   const [query, setQuery] = useState("");
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [timelinePresentation, setTimelinePresentation] = useState<TimelinePresentation>("cards");
@@ -146,6 +153,7 @@ export function LiveLogPage() {
   );
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [localEntriesReady, setLocalEntriesReady] = useState(false);
+  const [localEntriesUserId, setLocalEntriesUserId] = useState<string | null>(null);
   const [uiPreferencesReady, setUiPreferencesReady] = useState(false);
   const [activeTool, setActiveTool] = useState<ActiveTool>(null);
   const [selectedEntryId, setSelectedEntryId] = useState<string>("");
@@ -168,7 +176,7 @@ export function LiveLogPage() {
     "CSV は `日付,公演,出演者,場所,会場,ジャンル` または `date,event_title,venue,venues_raw,area,artists,event_type,notes` で読み込めます。"
   );
   const [imageMessage, setImageMessage] = useState(
-    "写真は必要なときだけ取り込み欄から登録できます。"
+    "画像は選択されていません。"
   );
   const [backupMessage, setBackupMessage] = useState(
     "CSV 書き出しで、元の取り込み形式に合わせてバックアップできます。"
@@ -182,16 +190,7 @@ export function LiveLogPage() {
     genre: "",
     memo: ""
   });
-  const [photoForm, setPhotoForm] = useState<PhotoUploadInput>({
-    title: "",
-    date: "",
-    place: "",
-    venue: "",
-    artistsText: "",
-    genre: "",
-    memo: "",
-    photoType: "signboard"
-  });
+  const [addImageReview, setAddImageReview] = useState<AddImageReview | null>(null);
   const [bulkEdit, setBulkEdit] = useState<BulkEditInput>({
     place: "",
     venue: "",
@@ -200,15 +199,19 @@ export function LiveLogPage() {
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const detailPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const addOcrAbortControllerRef = useRef<AbortController | null>(null);
+  const addImagePreviewUrlRef = useRef("");
+  const selectedAddPhotoTypeRef = useRef<AddPhotoType>("signboard");
   const analyticsTileRefs = useRef<Partial<Record<AnalyticsTileId, HTMLDivElement | null>>>({});
   const yearlySummaryRef = useRef<HTMLDivElement | null>(null);
   const yearlyAggregateRefs = useRef<Partial<Record<YearlyAggregateKey, HTMLDivElement | null>>>({});
-  const entriesRef = useRef<LiveEntry[]>(sampleEntries);
+  const entriesRef = useRef<LiveEntry[]>([]);
   const restorePointThrottleRef = useRef<Record<string, number>>({});
   const resizeStateRef = useRef<{ column: TableColumn; startX: number; startWidth: number } | null>(
     null
   );
   const repositoryRef = useRef<LiveEntryRepository | null>(null);
+  const localScopeLoadingRef = useRef(false);
   const pendingEntryPersistTimeoutsRef = useRef<Record<string, number>>({});
   const [shareMessage, setShareMessage] = useState("");
   const [actionNotice, setActionNotice] = useState("");
@@ -216,6 +219,7 @@ export function LiveLogPage() {
   const [highlightedEntryId, setHighlightedEntryId] = useState("");
   const {
     firebaseUser,
+    firebaseAuthReady,
     authMessage,
     syncStatus,
     lastSyncedAtLabel,
@@ -238,22 +242,12 @@ export function LiveLogPage() {
   } = useLiveCloudSync({
     entries,
     setEntries,
-    localEntriesReady
+    localEntriesReady,
+    localEntriesUserId
   });
 
   useEffect(() => {
-    repositoryRef.current = createLocalStorageLiveEntryRepository(window.localStorage);
     const savedPreferences = loadUiPreferences(window.localStorage);
-    repositoryRef.current
-      .load(sampleEntries)
-      .then((loadedEntries) => {
-        setEntries(loadedEntries);
-        setLocalEntriesReady(true);
-      })
-      .catch(() => {
-        setEntries(sampleEntries);
-        setLocalEntriesReady(true);
-      });
 
     if (savedPreferences.columnWidths) {
       setColumnWidths((current) => ({ ...current, ...savedPreferences.columnWidths }));
@@ -284,13 +278,64 @@ export function LiveLogPage() {
   }, []);
 
   useEffect(() => {
-    entriesRef.current = entries;
-
-    if (!localEntriesReady) {
+    if (!firebaseAuthReady) {
       return;
     }
 
-    repositoryRef.current?.save(entries).catch(() => undefined);
+    let cancelled = false;
+    const nextUserId = firebaseUser?.uid ?? "";
+    const repository = createBrowserLiveEntryRepository(
+      window.localStorage,
+      firebaseUser?.uid
+    );
+    localScopeLoadingRef.current = true;
+    setLocalEntriesReady(false);
+    setLocalEntriesUserId(null);
+    repositoryRef.current = repository;
+
+    repository
+      .load([])
+      .then((loadedEntries) => {
+        if (cancelled) {
+          return;
+        }
+
+        entriesRef.current = loadedEntries;
+        setEntries(loadedEntries);
+        setLocalEntriesUserId(nextUserId);
+        localScopeLoadingRef.current = false;
+        setLocalEntriesReady(true);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        entriesRef.current = [];
+        setEntries([]);
+        setActionNotice("端末に保存された記録を読み込めませんでした。バックアップを確認してください。");
+        setLocalEntriesUserId(nextUserId);
+        localScopeLoadingRef.current = false;
+        setLocalEntriesReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseAuthReady, firebaseUser?.uid]);
+
+  useEffect(() => {
+    entriesRef.current = entries;
+
+    if (!localEntriesReady || localScopeLoadingRef.current) {
+      return;
+    }
+
+    repositoryRef.current?.save(entries).catch(() => {
+      setActionNotice(
+        "端末への保存に失敗しました。写真を追加した直後は、この画面を閉じずに同期状態を確認してください。"
+      );
+    });
   }, [entries, localEntriesReady]);
 
   useEffect(() => {
@@ -302,7 +347,7 @@ export function LiveLogPage() {
       const payload = {
         generatedAt: new Date().toISOString(),
         entries: entriesRef.current,
-        restorePoints: loadRestorePoints(window.localStorage)
+        restorePoints: loadRestorePoints(window.localStorage, firebaseUser?.uid)
       };
       const json = JSON.stringify(payload, null, 2);
       const blob = new Blob([json], { type: "application/json;charset=utf-8" });
@@ -318,7 +363,7 @@ export function LiveLogPage() {
     return () => {
       delete window.liveLogEmergencyExport;
     };
-  }, [localEntriesReady]);
+  }, [firebaseUser?.uid, localEntriesReady]);
 
   useEffect(() => {
     saveColumnWidths(window.localStorage, columnWidths);
@@ -513,6 +558,10 @@ export function LiveLogPage() {
   );
 
   useEffect(() => {
+    if (!localEntriesReady) {
+      return;
+    }
+
     if (availableYears.length === 0) {
       setSelectedYear("");
       return;
@@ -521,7 +570,7 @@ export function LiveLogPage() {
     if (!selectedYear || !availableYears.includes(selectedYear)) {
       setSelectedYear(availableYears[0]);
     }
-  }, [availableYears, selectedYear]);
+  }, [availableYears, localEntriesReady, selectedYear]);
 
   useEffect(() => {
     if (artistArchive.length === 0) {
@@ -546,16 +595,20 @@ export function LiveLogPage() {
   }, [selectedVenueName, venueArchive]);
 
   useEffect(() => {
-    if (filteredEntries.length === 0) {
+    if (!localEntriesReady) {
+      return;
+    }
+
+    if (timelineEntries.length === 0) {
       setSelectedEntryId("");
       setIsDetailDrawerOpen(false);
       return;
     }
 
-    if (!filteredEntries.some((entry) => entry.id === selectedEntryId)) {
-      setSelectedEntryId(filteredEntries[0].id);
+    if (!timelineEntries.some((entry) => entry.id === selectedEntryId)) {
+      setSelectedEntryId(timelineEntries[0].id);
     }
-  }, [filteredEntries, selectedEntryId]);
+  }, [localEntriesReady, selectedEntryId, timelineEntries]);
 
   useEffect(() => {
     if ((!actionNotice || deleteUndoState) && !highlightedEntryId) {
@@ -577,15 +630,16 @@ export function LiveLogPage() {
         window.clearTimeout(timeoutId)
       );
       pendingEntryPersistTimeoutsRef.current = {};
+      addOcrAbortControllerRef.current?.abort();
+      if (addImagePreviewUrlRef.current) {
+        URL.revokeObjectURL(addImagePreviewUrlRef.current);
+        addImagePreviewUrlRef.current = "";
+      }
     };
   }, []);
 
   function updateForm<K extends keyof ManualEntryInput>(key: K, value: ManualEntryInput[K]) {
     setManualForm((current) => ({ ...current, [key]: value }));
-  }
-
-  function updatePhotoForm<K extends keyof PhotoUploadInput>(key: K, value: PhotoUploadInput[K]) {
-    setPhotoForm((current) => ({ ...current, [key]: value }));
   }
 
   function updateBulkEdit<K extends keyof BulkEditInput>(key: K, value: BulkEditInput[K]) {
@@ -605,7 +659,7 @@ export function LiveLogPage() {
     }
 
     restorePointThrottleRef.current[label] = now;
-    saveRestorePoint(window.localStorage, label, targetEntries);
+    saveRestorePoint(window.localStorage, label, targetEntries, firebaseUser?.uid);
   }
 
   function toggleTool(tool: Exclude<ActiveTool, null>) {
@@ -637,6 +691,12 @@ export function LiveLogPage() {
   }
 
   function handleSelectEntry(entryId: string) {
+    const nextEntry = entriesRef.current.find((entry) => entry.id === entryId);
+
+    if (nextEntry) {
+      setSelectedYear(extractYear(nextEntry.date));
+    }
+
     setSelectedEntryId(entryId);
     setIsDetailDrawerOpen(true);
   }
@@ -981,13 +1041,231 @@ export function LiveLogPage() {
     setBackupMessage("元のインポート形式に合わせた CSV を書き出しました。");
   }
 
-  function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
+  function openAddPhotoPicker(photoType: AddPhotoType) {
+    selectedAddPhotoTypeRef.current = photoType;
+    photoInputRef.current?.click();
+  }
+
+  function clearAddImageReview() {
+    addOcrAbortControllerRef.current?.abort();
+    addOcrAbortControllerRef.current = null;
+
+    if (addImagePreviewUrlRef.current) {
+      URL.revokeObjectURL(addImagePreviewUrlRef.current);
+      addImagePreviewUrlRef.current = "";
+    }
+
+    setAddImageReview(null);
+    setImageMessage("画像は選択されていません。");
+  }
+
+  async function analyzeAddImage(file: File, previewUrl: string, photoType: AddPhotoType) {
+    addOcrAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    addOcrAbortControllerRef.current = controller;
+    setAddImageReview({
+      file,
+      fileName: file.name,
+      previewUrl,
+      photoType,
+      status: "processing",
+      progress: 0,
+      ocrConfidence: null,
+      candidateConfidence: null
+    });
+    setImageMessage("画像を端末内で解析しています。");
+
+    if (file.size > 8_000_000) {
+      setAddImageReview((current) =>
+        current
+          ? {
+              ...current,
+              status: "error",
+              error: "OCR は8MB以下の画像に対応しています。画像はそのまま記録へ追加できます。"
+            }
+          : current
+      );
+      setImageMessage("OCR対象サイズを超えています。必要項目を手入力してください。");
+      return;
+    }
+
+    try {
+      const batchImageType = mapAddPhotoTypeToBatchType(photoType);
+      const result = await runImageOcr(file, batchImageType, {
+        signal: controller.signal,
+        timeoutMs: 45_000,
+        onProgress(completed, total) {
+          if (addOcrAbortControllerRef.current !== controller) {
+            return;
+          }
+
+          setAddImageReview((current) =>
+            current
+              ? { ...current, progress: total > 0 ? completed / total : 0 }
+              : current
+          );
+        }
+      });
+
+      if (addOcrAbortControllerRef.current !== controller) {
+        return;
+      }
+
+      const candidates = extractCandidatesFromText(
+        result.text,
+        batchImageType,
+        entriesRef.current,
+        ""
+      );
+      const matchedEntry =
+        photoType === "signboard"
+          ? findEntryMatchesForCandidates(entriesRef.current, candidates)[0]
+          : undefined;
+      setManualForm((current) => applyOcrCandidatesToManualForm(current, candidates));
+      setAddImageReview((current) =>
+        current
+          ? {
+              ...current,
+              status: "review",
+              progress: 1,
+              ocrConfidence: result.confidence,
+              candidateConfidence: candidates.confidence,
+              matchedEntryId: matchedEntry?.entryId,
+              matchedEntryTitle: matchedEntry?.title,
+              matchReason: matchedEntry?.reason,
+              error: undefined
+            }
+          : current
+      );
+      setImageMessage("候補を入力欄へ反映しました。内容を確認して登録してください。");
+    } catch (error) {
+      if (controller.signal.aborted || addOcrAbortControllerRef.current !== controller) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "OCR に失敗しました。";
+      setAddImageReview((current) =>
+        current ? { ...current, status: "error", progress: 0, error: message } : current
+      );
+      setImageMessage("画像は保持しています。必要項目を手入力して登録できます。");
+    } finally {
+      if (addOcrAbortControllerRef.current === controller) {
+        addOcrAbortControllerRef.current = null;
+      }
+    }
+  }
+
+  function retryAddImageOcr() {
+    if (!addImageReview || addImageReview.status === "processing" || addImageReview.status === "saving") {
+      return;
+    }
+
+    void analyzeAddImage(
+      addImageReview.file,
+      addImageReview.previewUrl,
+      addImageReview.photoType
+    );
+  }
+
+  async function attachAddImageToMatchedEntry() {
+    if (!addImageReview?.matchedEntryId || addImageReview.status === "saving") {
+      return;
+    }
+
+    const matchedEntry = entriesRef.current.find(
+      (entry) => entry.id === addImageReview.matchedEntryId
+    );
+
+    if (!matchedEntry) {
+      setImageMessage("候補の記録が見つかりませんでした。新しい記録として確認してください。");
+      return;
+    }
+
+    setAddImageReview((current) => (current ? { ...current, status: "saving" } : current));
+
+    try {
+      const image = await imageService.saveFile(
+        addImageReview.file,
+        addImageReview.photoType,
+        addImageReview.fileName
+      );
+      const mergedImages = mergeImagesWithDedup(matchedEntry.images, [image]);
+
+      if (mergedImages.addedCount > 0) {
+        createRestorePoint("写真追加前");
+      }
+
+      const nextEntries = entriesRef.current.map((entry) =>
+        entry.id === matchedEntry.id ? { ...entry, images: mergedImages.images } : entry
+      );
+      const nextEntry = nextEntries.find((entry) => entry.id === matchedEntry.id);
+      entriesRef.current = nextEntries;
+      setEntries(nextEntries);
+
+      if (nextEntry && mergedImages.addedCount > 0) {
+        void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
+          setActionNotice("写真は追加しました。クラウド保存は自動で再確認します。");
+        });
+      }
+
+      setSelectedYear(extractYear(matchedEntry.date));
+      setSelectedEntryId(matchedEntry.id);
+      setHighlightedEntryId(matchedEntry.id);
+      setActiveView("timeline");
+      setIsDetailDrawerOpen(true);
+      setActionNotice(
+        mergedImages.addedCount > 0
+          ? `「${matchedEntry.title}」に写真を追加しました。`
+          : `「${matchedEntry.title}」には同じ写真が登録済みです。`
+      );
+      setManualForm({
+        title: "",
+        date: "",
+        place: "",
+        venue: "",
+        artistsText: "",
+        genre: "",
+        memo: ""
+      });
+      clearAddImageReview();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "画像を追加できませんでした。";
+      setAddImageReview((current) =>
+        current ? { ...current, status: "error", error: message } : current
+      );
+      setImageMessage(message);
+    }
+  }
+
+  async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextEntry = createManualEntry(manualForm);
+    const createdEntry = createManualEntry(manualForm);
 
-    if (!nextEntry) {
+    if (!createdEntry || addImageReview?.status === "processing" || addImageReview?.status === "saving") {
       return;
+    }
+
+    let nextEntry = createdEntry;
+
+    if (addImageReview) {
+      setAddImageReview((current) => (current ? { ...current, status: "saving" } : current));
+
+      try {
+        const image = await imageService.saveFile(
+          addImageReview.file,
+          addImageReview.photoType,
+          addImageReview.fileName
+        );
+        nextEntry = { ...createdEntry, images: [image] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "画像を端末に保存できませんでした。";
+        setAddImageReview((current) =>
+          current ? { ...current, status: "error", error: message } : current
+        );
+        setImageMessage(message);
+        return;
+      }
     }
 
     createRestorePoint("追加前");
@@ -997,10 +1275,15 @@ export function LiveLogPage() {
     void persistEntryToCloud(nextEntries, nextEntry).catch(() => {
       setActionNotice("追加は反映しました。タイムラインで確認でき、クラウド保存は自動で再確認します。");
     });
+    setSelectedYear(extractYear(nextEntry.date));
     setSelectedEntryId(nextEntry.id);
     setHighlightedEntryId(nextEntry.id);
     setDeleteUndoState(null);
-    setActionNotice(`「${nextEntry.title}」を追加しました。タイムラインで確認できます。`);
+    setActionNotice(
+      addImageReview
+        ? `「${nextEntry.title}」を写真付きで追加しました。タイムラインで確認できます。`
+        : `「${nextEntry.title}」を追加しました。タイムラインで確認できます。`
+    );
     setActiveView("timeline");
     setIsDetailDrawerOpen(true);
     setActiveTool(null);
@@ -1013,6 +1296,7 @@ export function LiveLogPage() {
       genre: "",
       memo: ""
     });
+    clearAddImageReview();
   }
 
   async function handleCsvImport(event: ChangeEvent<HTMLInputElement>) {
@@ -1043,6 +1327,7 @@ export function LiveLogPage() {
       }
       entriesRef.current = nextEntries;
       setEntries(nextEntries);
+      setSelectedYear(nextEntries[0] ? extractYear(nextEntries[0].date) : "");
       setSelectedEntryId(nextEntries[0]?.id ?? "");
       if (mergeResult.addedCount > 0 && nextEntries[0]) {
         setHighlightedEntryId(nextEntries[0].id);
@@ -1119,65 +1404,27 @@ export function LiveLogPage() {
   }
 
   async function handlePhotoImport(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
+    const file = event.target.files?.[0];
+    event.target.value = "";
 
-    if (files.length === 0) {
+    if (!file) {
       return;
     }
 
-    try {
-      const nextImages = await Promise.all(
-        files.map(async (file) =>
-          imageService.saveFile(
-            file,
-            photoForm.photoType,
-            file.name
-          )
-        )
-      );
-
-      const nextEntry = createManualEntry(manualForm);
-
-      if (!nextEntry) {
-        setImageMessage("日付・公演名・会場を入れてから写真を追加してください。");
-        event.target.value = "";
-        return;
-      }
-
-      createRestorePoint("写真付き追加前");
-      const entryWithImages = { ...nextEntry, images: nextImages };
-      const nextEntries = [entryWithImages, ...entriesRef.current];
-      entriesRef.current = nextEntries;
-      setEntries(nextEntries);
-      if (nextImages.length > 0) {
-        void persistEntryToCloud(nextEntries, entryWithImages).catch(() => {
-          setImageMessage("写真付きの記録は追加しました。タイムラインで確認でき、クラウド保存は自動で再確認します。");
-        });
-      }
-      setSelectedEntryId(entryWithImages.id);
-      setHighlightedEntryId(entryWithImages.id);
-      setActiveView("timeline");
-      setIsDetailDrawerOpen(true);
-      const importMessage =
-        nextImages.length === 1
-          ? `「${entryWithImages.title}」を作成して写真を追加しました。タイムラインで確認できます。`
-          : `「${entryWithImages.title}」を作成して写真を ${nextImages.length} 件追加しました。タイムラインで確認できます。`;
-      setActionNotice(importMessage);
-      setImageMessage(importMessage);
-      setActiveTool(null);
-      setManualForm({
-        title: "",
-        date: "",
-        place: "",
-        venue: "",
-        artistsText: "",
-        genre: "",
-        memo: ""
-      });
-      event.target.value = "";
-    } catch {
-      setImageMessage("写真取り込みに失敗しました。別の画像で試してください。");
+    if (!file.type.startsWith("image/")) {
+      setImageMessage("画像ファイルを選んでください。");
+      return;
     }
+
+    addOcrAbortControllerRef.current?.abort();
+    if (addImagePreviewUrlRef.current) {
+      URL.revokeObjectURL(addImagePreviewUrlRef.current);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    const photoType = selectedAddPhotoTypeRef.current;
+    addImagePreviewUrlRef.current = previewUrl;
+    void analyzeAddImage(file, previewUrl, photoType);
   }
 
   function updateEntryField(
@@ -1363,14 +1610,15 @@ export function LiveLogPage() {
   }
 
   function handleBatchApply(nextEntriesOrUpdater: LiveEntry[] | ((current: LiveEntry[]) => LiveEntry[])) {
+    const previousEntries = entriesRef.current;
     const nextEntries =
       typeof nextEntriesOrUpdater === "function"
-        ? nextEntriesOrUpdater(entriesRef.current)
+        ? nextEntriesOrUpdater(previousEntries)
         : nextEntriesOrUpdater;
 
+    createRestorePoint("画像ロット取り込み前", previousEntries);
     entriesRef.current = nextEntries;
     setEntries(nextEntries);
-    createRestorePoint("画像ロット取り込み前");
     void persistEntriesToCloud(nextEntries).catch(() => {
       setActionNotice("画像ロット取り込みは反映しました。クラウド保存は自動で再確認します。");
     });
@@ -1503,11 +1751,10 @@ export function LiveLogPage() {
         csvMessage={csvMessage}
         imageMessage={imageMessage}
         manualForm={manualForm}
-        photoForm={photoForm}
+        addImageReview={addImageReview}
         bulkEdit={bulkEdit}
         placeOptions={placeOptions}
         genreOptions={genreOptions}
-        driveFolderLabel={driveFolderId ? "保存先設定済み" : "まだ保存先が設定されていません"}
         csvInputRef={csvInputRef}
         photoInputRef={photoInputRef}
         entries={entries}
@@ -1549,8 +1796,11 @@ export function LiveLogPage() {
         onManualSubmit={handleManualSubmit}
         onCsvImport={handleCsvImport}
         onPhotoImport={handlePhotoImport}
+        onOpenAddPhotoPicker={openAddPhotoPicker}
+        onClearAddImageReview={clearAddImageReview}
+        onRetryAddImageOcr={retryAddImageOcr}
+        onAttachAddImageToMatch={attachAddImageToMatchedEntry}
         onUpdateForm={updateForm}
-        onUpdatePhotoForm={updatePhotoForm}
         onUpdateBulkEdit={updateBulkEdit}
         onApplyBulkUpdate={applyBulkUpdate}
         onDeleteSelectedEntries={deleteSelectedEntries}

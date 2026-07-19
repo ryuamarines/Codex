@@ -1,207 +1,108 @@
-# Live Log
+# LiveLog
 
-ライブ体験を後から辿るための、個人用アーカイブアプリです。
-`Next.js + TypeScript` ベースで、開発の正本は GitHub、公開先は Vercel を前提にしています。まずは Web アプリとしてスマホで使いやすくしつつ、将来的な Android 公開につながる土台を入れています。
+ライブの記録を、電子チケットや立て看板の画像から登録し、履歴・会場・アーティスト別に振り返る個人向けWebアプリです。
 
-## 今回の到達点
+- アプリ: Next.js + TypeScript
+- 認証・記録同期: Firebase Authentication + Cloud Firestore
+- 画像保管: ユーザー自身のGoogle Drive
+- OCR: Tesseract.jsをブラウザ内で実行
+- 公開先: VercelのNext.js server runtime
 
-- PWA の最低限対応
-  - ホーム画面追加
-  - standalone 起動
-  - manifest
-  - icon
-  - service worker 登録
-- Firebase の土台追加
-  - Google ログイン導線
-  - Cloud Firestore 保存 / 読込の基盤
-  - Google Drive 画像保存の基盤
-- 保存層の整理
-  - `localStorage` 直書き依存を repository 層へ寄せた
-  - 画像も service 層を通す形へ整理した
-- CSV バックアップ導線は維持
+## 現在の主要フロー
 
-## いま実装済みのこと
+### 電子チケットから登録
 
-### 基本機能
+1. `イベント追加` で `電子チケットを選ぶ` を押す
+2. 端末内でOCRを自動実行する
+3. 日付・公演名・会場・出演者の候補を確認、必要なら修正する
+4. 登録後、Timelineの作成レコードをDETAILで開く
 
-- 一覧表示
-- 検索
-- 手動登録
-- CSV 取込み
-- 写真登録
-- 画像ロット取り込み
-  - OCR 実行で候補補強
-  - 候補確定 → 本登録 の 2 段階
-- 一覧編集
-- 一括更新 / 一括削除
-- 集計
-- 年別まとめ
-- 集計タイルの画像共有
-  - 1タイルだけ PNG 化
-  - スマホは共有シート
-  - PC は PNG 保存
+### 立て看板から登録・添付
 
-### PWA
+1. `立て看板を撮る / 選ぶ` を押す
+2. 端末内でOCRを自動実行する
+3. 既存公演と一致した場合は、そのレコードへ画像だけを添付できる
+4. 一致しない場合は、候補を確認して新規登録する
 
-- `app/manifest.ts`
-- `public/sw.js`
-- `components/pwa-register.tsx`
-- `public/icon.svg`
-- `public/apple-icon.svg`
-- `public/maskable-icon.svg`
+手入力、CSV取込み、複数画像の一括整理も利用できます。一括整理は補助機能として折りたたんであります。
 
-本番ビルドで開いたとき、スマホのブラウザからホーム画面に追加して、アプリっぽく起動できます。
+## 実装済みの機能
 
-### Firebase
+- Timeline、検索、DETAIL、編集、削除
+- 年別・アーティスト別・会場別の集計
+- 電子チケット・立て看板のOCR登録
+- 表記揺れを考慮したアーティスト・会場候補
+- CSV入出力
+- 集計タイル・年別まとめのPNG保存
+- iOS / Androidの共有シートへの画像共有
+- Googleログイン
+- Firestoreの差分同期と競合検出
+- Google Driveへの画像保存と失敗時の再試行
+- UIDごとに分離したローカル保存
+- PWAホーム画面追加
 
-- `lib/firebase/client.ts`
-- `lib/firebase/auth.ts`
-- `lib/firebase/firestore-repository.ts`
-- `lib/archive-image-service.ts`
-- `lib/google-drive-image-service.ts`
+共有はPNG画像だけを対象とします。記録を開く共有URLや、Drive画像原本の公開リンクは作成しません。
 
-いまの段階では、次が使えます。
+## データの保存と保護
 
-- Google ログイン
-- Cloud Firestore へ保存
-- Cloud Firestore から読込
-- 画像本体を Google Drive へ保存
-- 同期状態表示
-  - `ローカル保存 / 未同期の変更あり / クラウド同期済み`
-  - `最終同期` の時刻表示
+### ローカル
 
-## 保存責務の整理
+- IndexedDBを正本として利用します
+- 小さいデータはlocalStorageにも予備保存します
+- Firebase UIDごとに保存領域を分離します
+- 旧localStorageデータは、同じUIDと確認できた場合だけ非破壊で移行します
+- 更新前の内部復元点を自動作成します
 
-現在の Live Log は、保存先を次のように分けています。
+### Firestore
 
-- Firestore
-  - `liveLogArchives/{uid}`
-    - owner
-    - updatedAt
-    - `settings.driveFolderId`
-  - `liveLogArchives/{uid}/entries/{entryId}`
-    - 公演テキストの正本
-    - 画像メタ情報
-      - `storageStatus`
-      - `uploadError`
-      - `driveFileId`
-      - `driveWebUrl`
-      - `driveThumbnailUrl`
-- Google Drive
-  - 画像本体
-- ローカルブラウザ
-  - 追加直後の一時プレビュー
-  - 未同期の作業状態
-- CSV
-  - 手動バックアップ
+- `liveLogArchives/{uid}`: 設定、revision、記録ID一覧
+- `liveLogArchives/{uid}/entries/{entryId}`: 各ライブ記録
+- 保存はentry単位の差分更新です
+- 競合時は最新revisionへ付け替え、別レコードの更新は保持します
+- 同じレコードを複数端末で同時変更した場合は自動上書きせず停止します
+- 大量更新は300件ずつ処理し、中断後も再開可能です
 
-### 画像同期の現時点の方針
+### Google Drive
 
-- 画像はまずローカルに追加されます
-- その後、Google Drive にアップロードします
-- Firestore には画像本体ではなく、Drive 参照と同期状態だけを保存します
-- 別ブラウザでは Drive サムネイルが表示できないことがあるため、最低保証は `Driveで開く` です
-- Drive 保存先フォルダは Firestore にも保存し、新しいURLや別ブラウザでは復元を優先します
+- 画像本体はユーザー自身のDriveへ保存します
+- FirestoreにはDrive参照と同期状態だけを保存します
+- サーバーは認証済みの再開可能アップロードURLだけを発行し、画像本体はブラウザからDriveへ直接送ります
+- Vercel Functionの4.5MB body上限を画像が通過しない構成です
+- Driveアクセストークンは1時間有効の`httpOnly`、`Secure`、`SameSite=Strict` cookieです
+- Drive APIはFirebase IDトークンの署名、期限、発行元、project IDをサーバーで検証します
+- DriveセッションはFirebase UIDに紐づくため、別アカウントへ引き継ぎません
 
-### 画像ロット取り込みの現時点の方針
+GitHubが保存するのはアプリのコードです。入力したライブ記録はGitHubへ保存されません。日常運用ではFirestore同期に加えて、節目ごとのCSV書き出しを推奨します。
 
-- 電子チケット
-  - `新規候補` の主ソース
-- 立て看板
-  - `既存照合` の補助を優先
-  - 一致候補が弱いときは安易に新規候補へ寄せず、まず `添付のみ` 側で扱います
-- その他画像
-  - 添付寄り
+## OCR
 
-OCR の候補は、そのまま本登録せず
+OCRは`public/tesseract`のworker、WASM、`jpn / eng`言語データを同一オリジンから読み込み、画像も文字列も外部OCRサービスへ送信しません。
 
-1. 候補確定
-2. 本登録
+現在の処理:
 
-の順で確認する前提です。
+- スマホの大画像をOCR向け上限へ縮小
+- 電子チケットと立て看板で前処理・認識範囲を変更
+- 有力な結果を得た時点で不要な再解析を終了
+- 45秒でタイムアウトし、再試行・中止が可能
+- 不正な日付・時刻を候補から除外
+- `OPEN / START`、出演者、未知の会場名を抽出
+- 汎用ファイル名でもOCR本文から画像種別を推定
+- 既存記録と照合し、重複登録を避ける
 
-### Google Drive 連携の位置づけ
+OCR結果は必ず確認画面を経由します。実写データに対する数値精度は未測定のため、公開判定前に電子チケット20枚・立て看板20枚程度の非公開画像セットで計測してください。
 
-現在は Next.js のサーバー API (`/api/drive/*`) を経由して Google Drive API を呼んでいます。  
-Drive のアクセストークンは `httpOnly cookie` に保存し、ブラウザの `localStorage` には置きません。
-
-- いまの利点
-  - フロントから Drive API を直叩きしないので、トークン管理を UI から切り離せる
-  - 各ユーザーの個人 Drive に画像を保存できる
-  - 保存先フォルダは Firestore にも持つので、新しいURLや別ブラウザで復元しやすい
-- いまの制約
-  - Drive アクセストークンの更新はまだ必要
-  - ブラウザや端末によってサムネイル表示が不安定なことがある
-  - そのため画像の最低保証は `Driveで開く` に置いています
-  - ドメイン変更後は Drive セッション cookie が引き継がれないため、`Drive連携更新` が必要になることがあります
-  - ログアウトや別ユーザー利用時は、ローカルに残った Drive 保存先を引き継がない前提です
-
-### モバイル Google ログインの前提
-
-Vercel のような Firebase Hosting 以外のドメインで `signInWithRedirect()` を使う場合、Chrome / Brave などの third-party storage 制限に引っかかることがあります。Live Log では Firebase 公式の redirect 対策に合わせて、`/__/auth/*` を Firebase の helper へ同一ドメインでプロキシする構成にしています。
-
-- `next.config.ts`
-  - `https://<app-domain>/__/auth/*` を `https://<project>.firebaseapp.com/__/auth/*` へ rewrite
-- `lib/firebase/client.ts`
-  - 本番では `authDomain` を現在の app domain に寄せる
-
-Firebase Console 側では、公開ドメインを `Authentication > Settings > Authorized domains` に追加してください。`同期 / バックアップ` タブでの再連携導線とセットで使います。
-
-### 公開URLの土台
-
-- `next.config.ts`
-  - `next build` / `next start` の server runtime 前提です
-- `app/api/drive/*`
-  - Drive 保存 / 削除 / セッション更新のサーバー API
-
-現在の画像同期構成は、静的 export 前提の Hosting とは両立しません。  
-Google Drive API をサーバー側で呼ぶため、公開にはサーバー runtime が必要です。
-
-現時点では、公開先は **Vercel のような Next.js server runtime が使える環境** を前提にしてください。
-
-## GitHub / Vercel メモ
-
-- GitHub リポジトリ: `ryuamarines/Codex`
-- アプリのディレクトリ: `live-log-app`
-- Vercel の Root Directory: `live-log-app`
-- 現在の公開URL: `https://live-log-web.vercel.app`
-- 公開は Vercel 前提、Firebase はアプリ内部の認証 / 保存基盤として使っています
-
-## まだ今後必要なこと
-
-今回の実装は「土台」です。次はこのへんが残っています。
-
-- entry 単位更新のさらなる徹底
-  いまは Firestore の保存先を `liveLogArchives/{uid}/entries/{entryId}` に分け、追加・画像追加・単体削除は entry 単位保存へ寄せています。CSV / 一括編集 / 複数削除はまだ全体 autosave 寄りです。
-- Google Drive 画像同期の本格安定化
-  Drive トークン更新や別ブラウザでのプレビュー保証は今後の改善項目です。
-- オフライン同期設計
-  PWA と Firebase をどう整合させるかは次の段階です。
-- Android 公開向けの最終調整
-  アイコン、スプラッシュ、利用規約、PWA の最終調整など。
-
-## 共有の考え方
-
-共有は、個別記録や画像原本ではなく、まず集計結果の共有から進めます。
-
-- 現在の共有対象
-  - 集計タイルの PNG
-  - 年別まとめの PNG
-  - 集計専用の共有スナップショット URL
-- 今後の計画
-  - `docs/share-plan.md`
-
-個別記録や Drive 上の画像原本をそのまま共有する方針にはしていません。
-
-## 環境変数
-
-`.env.example` をもとに `.env.local` を作ってください。
+## セットアップ
 
 ```bash
+cd "/Users/Ryu/AI Workspace/Codex/live-log-app"
+npm install
 cp .env.example .env.local
+npm run dev
 ```
 
-必要な環境変数は次です。
+ローカルURLは [http://localhost:3000](http://localhost:3000) です。Firebase未設定でもローカル保存部分は動作します。
+
+### 環境変数
 
 ```env
 NEXT_PUBLIC_FIREBASE_API_KEY=
@@ -210,192 +111,59 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY=
+NEXT_PUBLIC_CANONICAL_HOST=live-log-web.vercel.app
 ```
 
-Firebase をまだ設定していない場合でも、アプリ自体はローカル保存で動きます。  
-その場合、Google ログインやクラウド同期ボタンは実質無効です。
+`NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY`はreCAPTCHA Enterpriseのサイトキーです。未設定時はApp Checkを初期化しません。
 
-## セットアップ手順
-
-### 1. フォルダへ移動
+## 検証コマンド
 
 ```bash
-cd /Users/Ryu/Documents/Codex/live-log-app
-```
-
-### 2. 依存関係を入れる
-
-```bash
-npm install
-```
-
-### 3. Firebase を使うなら `.env.local` を作る
-
-```bash
-cp .env.example .env.local
-```
-
-そのうえで Firebase の Web アプリ設定値を入れます。
-
-Vercel に設定済みの開発用環境変数をローカルへ反映したい場合は、次でも構いません。
-
-```bash
-npm run env:pull
-```
-
-### 4. 開発サーバー起動
-
-```bash
-npm run dev
-```
-
-### 5. ブラウザで開く
-
-[http://localhost:3000](http://localhost:3000)
-
-## 本番ビルド確認
-
-PWA を確認したいときは本番ビルドで見るのが確実です。
-
-```bash
+npm test
+npm run typecheck
 npm run build
-npm run start
+npm audit
 ```
 
-そのあとスマホで同じ URL にアクセスして、ホーム画面追加を試してください。
+同じ検査は`.github/workflows/live-log-ci.yml`でpushとpull requestごとに実行します。
 
-## Firebase 側で必要な設定
+## 公開前チェック
 
-### Auth
+1. Firebase AuthenticationでGoogleログインを有効化する
+2. FirebaseのAuthorized domainsへ正規公開ドメインを登録する
+3. VercelのRoot Directoryを`live-log-app`にする
+4. Vercelへ上記環境変数を設定する
+5. `firebase/firestore.rules`をFirebaseへデプロイする
+6. reCAPTCHA EnterpriseのWebキーを作成し、App Checkへ登録する
+7. App Check入りのアプリを先に公開し、Firestoreのverified request比率を確認する
+8. 正常端末がverifiedになった後で、FirestoreのApp Check enforcementを有効化する
+9. CSVを取得してから、別ブラウザでログイン・同期・追加・編集・画像再表示を確認する
+10. 実写OCR評価セットで候補精度と登録完了率を記録する
 
-- Google ログインを有効化
+Firestoreルールは`firebase.json`からデプロイできます。Firebase CLIで対象projectを明示して実行してください。
 
-### Firestore
-
-- Firestore Database を作成
-- [firebase/firestore.rules](/Users/Ryu/Documents/Codex/live-log-app/firebase/firestore.rules) をベースに Rules を設定
-- `liveLogArchives/{userId}` と `liveLogArchives/{userId}/entries/{entryId}` は、`request.auth.uid == userId` で read / write できるようにする
-- ルール反映後、Google ログインしたユーザーが自分の `uid` 配下だけ読める / 書ける状態を前提にする
-
-### Firestore トラブルシュート
-
-- `Missing or insufficient permissions.` が出るとき
-  - Firestore Rules が初期テンプレのままか、`request.auth.uid == userId` の条件と path がずれていることが多いです
-  - `liveLogArchives/{uid}` と `liveLogArchives/{uid}/entries/{entryId}` の両方に、自分の `uid` で read / write できる rule が必要です
-- `Unsupported field value: undefined` が出るとき
-  - 古い保存データや途中状態をそのまま Firestore に投げている可能性があります
-  - 現在の実装では serializer 側で `undefined` を落とし、entry document id も Firestore 向けに安全化しています
-
-### Google Drive API
-
-- Google Drive API を有効化
-- 画像を各ユーザーの個人 Drive フォルダへ保存できるようにする
-
-## 公開と実行の前提
-
-外出先やスマホ本運用で使うなら、`npm run dev` のローカルサーバーではなく公開URLが必要です。  
-ただし現在は Google Drive 連携をサーバー API 経由にしたため、**静的書き出しだけの Hosting では動きません**。
-
-### いま必要な実行形態
-
-- `npm run build`
-- `npm run start`
-
-のような serverful な実行環境が必要です。
-
-### 補足
-
-公開デプロイは Vercel 前提で、`npm run deploy` を使います。
-
-## 保存の考え方
-
-このアプリは、クラウドだけに依存しない前提です。
-
-- 普段の軽い利用: ローカル保存
-- 同期 / 引き継ぎ / 将来の本番利用: Firebase
-- 手元バックアップ: CSV 書き出し
-
-この 3 本立てを崩さない方針です。
-
-GitHub が履歴管理するのはアプリのコードです。ユーザーが入力したライブ記録は GitHub には自動保存されないため、ローカル保存・Firebase 同期・CSV 書き出しで守ります。
-
-ローカル保存の JSON が壊れて読めない場合は、元の値を `live-log.entries.corrupt.*` として退避してから初期表示へ戻します。非常時はブラウザコンソールで `window.liveLogEmergencyExport()` を実行すると、現在の記録と内部退避データを JSON で書き出せます。
-
-## 同期の使い方
-
-- 普段は Google ログインしておけば、変更は自動でクラウドへ同期されます
-- ヘッダーには `同期状態` と `最終同期` が出ます
-- `クラウド同期`
-  - クラウド側の内容を確認し、この端末の表示へ反映します
-- `この端末をクラウドへ保存`
-  - 現在の表示内容をクラウドへ保存します
-
-普段はログインしたまま使えば自動同期されます。表示内容に不安があるときは、先に CSV 書き出しで手元バックアップを取ってから同期してください。
-
-## 共有
-
-集計タイル右上の `共有` ボタンで、そのタイルだけを画像にできます。
-
-- スマホ
-  - 共有シートへそのまま渡す
-- PC
-  - PNG ファイルとして保存する
-
-全画面共有ではなく、`1つのタイルだけを切り出して共有する` 方針です。
-
-## CSV バックアップ
-
-CSV 書き出しは引き続き使えます。  
-出力ヘッダーは次です。
-
-```csv
-date,event_title,venue,venues_raw,area,artists,event_type,notes
+```bash
+npx firebase-tools use <firebase-project-id>
+npx firebase-tools deploy --only firestore:rules
 ```
 
-## 画像ロット取り込み
+App CheckはSDKを追加しただけでは通信を遮断しません。Firebase Consoleのメトリクス確認後にenforcementを有効化します。先にenforcementだけを有効にすると、未対応版や設定漏れの端末がFirestoreへ接続できなくなります。
 
-`イベント追加` 画面の下段にあるロット取り込みから、複数画像をまとめて投入できます。
+## 公開構成
 
-- チケット / 立て看板 / その他を仮分類
-- 日付候補 / 会場候補 / 開場候補 / 開演候補 / アーティスト候補 / タイトル断片を保持
-- OCR で取れたテキストを確認しながら候補を補強
-- 既存公演との照合候補を一覧表示
-- `既存公演に紐づける / 新規公演として作る / 添付のみ / 除外` をまとめて確定
+- GitHub: `ryuamarines/Codex`
+- アプリディレクトリ: `live-log-app`
+- Vercel Root Directory: `live-log-app`
+- 正規URL: `https://live-log-web.vercel.app`
+- Firestore Rules: `firebase/firestore.rules`
 
-OCR は `tesseract.js` ベースで、画像解析はブラウザ内で実行します。Tesseract の worker / core / 言語データは `public/tesseract` から同一オリジン配信し、OCR実行時に外部CDNへ取りに行かない構成です。言語データは精度優先の `tessdata_best` 系を使い、チケットでは全体画像と切り出し画像で認識モードを分けています。チケットでは `日付 / 会場 / 開場 / 開演 / タイトル断片` を優先して補強し、立て看板では照合キーを補強する方向です。まずは `大量画像を一覧で整理して、人間が短時間で確定できる流れ` を優先しています。
+`app/api/drive/*`を使うため、静的exportでは動作しません。VercelなどのNext.js server runtimeが必要です。
 
-## 関連ファイル
+## PWAの範囲
 
-### PWA
+manifest、アイコン、service worker登録によりホーム画面へ追加できます。現在のservice workerは更新ループを防ぐためキャッシュを持たず、オフライン動作は保証しません。
 
-- `app/layout.tsx`
-- `app/manifest.ts`
-- `components/pwa-register.tsx`
-- `public/sw.js`
-- `public/icon.svg`
-- `public/apple-icon.svg`
-- `public/maskable-icon.svg`
+## 緊急時
 
-### Firebase
-
-- `lib/firebase/client.ts`
-- `lib/firebase/auth.ts`
-- `lib/firebase/firestore-repository.ts`
-- `lib/live-cloud-service.ts`
-- `lib/archive-image-service.ts`
-- `lib/google-drive-image-service.ts`
-- `firebase/firestore.rules`
-- `.env.example`
-- `docs/image-sync-architecture.md`
-
-### 保存層
-
-- `lib/live-entry-repository.ts`
-- `lib/live-entry-utils.ts`
-- `components/live-log-page.tsx`
-
-## 補足
-
-このアプリは SNS ではなく、非公開前提の個人アーカイブです。  
-共有機能は **公開投稿** ではなく、集計タイルや年別まとめを画像として切り出す用途に限定しています。  
-まずは「自分の記録を安全に持ち、スマホで振り返れること」を優先しています。
+通常UIに危険な復元操作は置いていません。内部保存が壊れた場合は元データを退避します。開発者向けの最終手段として、ブラウザコンソールで`window.liveLogEmergencyExport()`を実行すると、現在記録と内部退避データをJSONで書き出せます。
