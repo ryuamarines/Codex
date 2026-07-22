@@ -8,6 +8,9 @@ import type {
 } from "@/lib/types";
 import { normalizeDateValue } from "@/lib/live-entry-utils";
 
+const OCR_OPEN_TIME_KEYWORDS = [/\b[o0]pen\b/i, /開場/];
+const OCR_START_TIME_KEYWORDS = [/\b(?:start|s[il1]tart|st\s*art)\b/i, /開演/];
+
 export function createBatchImportItems(files: File[], entries: LiveEntry[]) {
   return files.map((file, index) => createBatchImportItem(file, entries, index));
 }
@@ -91,13 +94,13 @@ export function extractCandidatesFromText(
 ): ExtractedImageCandidate {
   const dateCandidate = extractDateCandidateFromText(text, entries);
   const fallbackTimes = extractTimeCandidates(text);
-  const openTimeCandidate = extractKeywordTime(text, [/open/i, /開場/]) ?? fallbackTimes[0];
-  const startTimeCandidate = extractKeywordTime(text, [/start/i, /開演/]) ?? fallbackTimes[1];
+  const openTimeCandidate = extractKeywordTime(text, OCR_OPEN_TIME_KEYWORDS) ?? fallbackTimes[0];
+  const startTimeCandidate = extractKeywordTime(text, OCR_START_TIME_KEYWORDS) ?? fallbackTimes[1];
   const venueCandidate = extractVenueCandidateFromText(text, entries);
   const artistCandidates = selectArtistCandidates(text, entries, imageType);
   const titleFragment =
     imageType === "ticket"
-      ? buildTicketTitleFragment(text, fallbackTitle)
+      ? buildTicketTitleFragment(text, fallbackTitle, artistCandidates)
       : buildTitleFragmentFromText(text, fallbackTitle);
   const explicitSignals = countExplicitSignals(text, imageType);
 
@@ -352,7 +355,7 @@ function extractTimeCandidates(value: string) {
   return matches.slice(0, 2);
 }
 
-function extractKeywordTime(value: string, keywords: RegExp[]) {
+function extractKeywordTime(value: string, keywords: readonly RegExp[]) {
   const lines = value.split(/\r?\n/);
 
   for (const line of lines) {
@@ -408,17 +411,23 @@ function buildTitleFragmentFromText(value: string, fallbackTitle = "") {
   return (lines[0] ?? fallbackTitle ?? "").slice(0, 80).trim();
 }
 
-function buildTicketTitleFragment(value: string, fallbackTitle = "") {
+function buildTicketTitleFragment(
+  value: string,
+  fallbackTitle = "",
+  artistCandidates: string[] = []
+) {
+  const artistKeys = new Set(artistCandidates.map(normalizeMatchText));
   const lines = value
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean)
     .filter((line) => !/(open|start|開場|開演|整理番号|座席|料金|税込|ドリンク|入場|枚|出演(?:者)?|artist|act)/i.test(line))
     .filter((line) => !/(電子チケット|ticket\s*board|eplus|イープラス|ローチケ|ぴあ|qr\s*code|受付番号)/i.test(line))
-    .filter((line) => !/^\d{1,2}[:時]\d{2}/.test(line))
+    .filter((line) => !/\d{1,2}[:時]\d{2}/.test(line))
     .filter((line) => !/^\d{4}[\/.\-年]\d{1,2}[\/.\-月]\d{1,2}/.test(line))
     .filter((line) => !/^\d+$/.test(line))
-    .filter((line) => !isLikelyVenueLine(line));
+    .filter((line) => !isLikelyVenueLine(line))
+    .filter((line) => !artistKeys.has(normalizeMatchText(line)));
 
   const candidate = lines
     .slice(0, 3)
@@ -523,7 +532,8 @@ function selectArtistCandidates(value: string, entries: LiveEntry[], imageType: 
   const normalized = normalizeText(value);
   const known = findKnownTokens(entries.flatMap((entry) => entry.artists), normalized);
   const labeled = extractLabeledArtistCandidates(value);
-  const combined = Array.from(new Set([...known, ...labeled]));
+  const inferred = imageType === "ticket" ? extractUnlabeledArtistCandidates(value) : [];
+  const combined = uniqueNormalizedCandidates([...known, ...labeled, ...inferred]);
 
   if (combined.length > 0) {
     return combined.slice(0, imageType === "ticket" ? 8 : 6);
@@ -532,11 +542,76 @@ function selectArtistCandidates(value: string, entries: LiveEntry[], imageType: 
   return [];
 }
 
+function extractUnlabeledArtistCandidates(value: string) {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const logisticsIndex = lines.findIndex(isTicketLogisticsLine);
+  const leadingLines = logisticsIndex >= 0 ? lines.slice(0, logisticsIndex) : lines.slice(0, 6);
+  const candidates: string[] = [];
+
+  for (const line of leadingLines) {
+    if (isGenericTicketHeading(line)) {
+      continue;
+    }
+
+    const hasExplicitSeparator = /(?:\/|／|\||、|,)/.test(line);
+    const fragments = hasExplicitSeparator ? splitArtistCandidateText(line) : [line];
+
+    for (const fragment of fragments) {
+      const latinLetters = Array.from(fragment).filter((char) => /[a-z]/i.test(char));
+      const uppercaseLetters = latinLetters.filter((char) => /[A-Z]/.test(char));
+      const uppercaseRatio = latinLetters.length > 0 ? uppercaseLetters.length / latinLetters.length : 0;
+      const bracketedName = /^\[[A-Za-z0-9][A-Za-z0-9 '&.\-]{1,60}\]$/.test(fragment);
+      const uppercaseName = latinLetters.length >= 4 && uppercaseRatio >= 0.8;
+
+      if (hasExplicitSeparator || bracketedName || uppercaseName) {
+        candidates.push(fragment);
+      }
+    }
+  }
+
+  return uniqueNormalizedCandidates(candidates).slice(0, 8);
+}
+
+function isTicketLogisticsLine(value: string) {
+  const normalized = normalizeOcrDateText(value);
+
+  return (
+    /(20\d{2})\s*[\/.\-年]\s*(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})/.test(normalized) ||
+    /\d{1,2}[:時]\d{2}/.test(normalized) ||
+    /^(会場|venue|場所)[:：]?/i.test(value) ||
+    /(電子チケット|整理番号|座席|発券|入場口|qr\s*code)/i.test(value)
+  );
+}
+
+function isGenericTicketHeading(value: string) {
+  return /\b(?:live\s*(?:event|tour)|tour|festival|fes|anniversary|presents?|final|ocr\s*test)\b/i.test(
+    value
+  );
+}
+
+function uniqueNormalizedCandidates(values: string[]) {
+  const seen = new Set<string>();
+
+  return values.filter((value) => {
+    const key = normalizeMatchText(value);
+
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
 function countExplicitSignals(value: string, imageType: BatchImageType) {
   const patterns =
     imageType === "ticket"
-      ? [/open/i, /start/i, /会場/, /venue/i, /開場/, /開演/]
-      : [/open/i, /start/i, /開場/, /開演/];
+      ? [...OCR_OPEN_TIME_KEYWORDS, ...OCR_START_TIME_KEYWORDS, /会場/, /venue/i]
+      : [...OCR_OPEN_TIME_KEYWORDS, ...OCR_START_TIME_KEYWORDS];
 
   return patterns.reduce((count, pattern) => (pattern.test(value) ? count + 1 : count), 0);
 }

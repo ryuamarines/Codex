@@ -37,6 +37,34 @@ describe("extractCandidatesFromText", () => {
     expect(result.dateCandidate).toBeUndefined();
     expect(result.openTimeCandidate).toBeUndefined();
   });
+
+  it("extracts unlabeled artists from real OCR output and tolerates a distorted START label", () => {
+    const result = extractCandidatesFromText(
+      [
+        "UNISON SQUARE GARDEN",
+        "ASIAN KUNG-FU GENERATION",
+        "2026年7月19日(日)",
+        "会場: Zepp Shinjuku",
+        "OPEN 17:00",
+        "SITART 18:00",
+        "電子チケット",
+        "LIVELOG OCR TEST"
+      ].join("\n"),
+      "ticket",
+      []
+    );
+
+    expect(result.dateCandidate).toBe("2026-07-19");
+    expect(result.venueCandidate).toBe("Zepp Shinjuku");
+    expect(result.artistCandidates).toEqual([
+      "UNISON SQUARE GARDEN",
+      "ASIAN KUNG-FU GENERATION"
+    ]);
+    expect(result.openTimeCandidate).toBe("17:00");
+    expect(result.startTimeCandidate).toBe("18:00");
+    expect(result.titleFragment).toBe("LIVELOG OCR TEST");
+    expect(result.confidence).toBeGreaterThan(0.8);
+  });
 });
 
 describe("inferBatchImageTypeFromText", () => {
