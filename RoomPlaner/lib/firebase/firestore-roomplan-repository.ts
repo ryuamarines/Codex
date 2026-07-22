@@ -53,6 +53,7 @@ export class FirestoreRoomPlanRepository {
     }
 
     const cloud = buildCloudWorkspace(snapshot);
+    const updatedAtMs = Date.now();
     const payload = {
       workspace: cloud.workspace,
       project: cloud.legacyProject,
@@ -74,7 +75,7 @@ export class FirestoreRoomPlanRepository {
         workspace: cloud.workspace,
         project: cloud.legacyProject,
         updatedAt: serverTimestamp(),
-        updatedAtMs: Date.now(),
+        updatedAtMs,
         owner: {
           uid: user.uid,
           displayName: user.displayName ?? null,
@@ -85,7 +86,8 @@ export class FirestoreRoomPlanRepository {
     );
 
     return {
-      backgroundsOmitted: cloud.backgroundsOmitted
+      backgroundsOmitted: cloud.backgroundsOmitted,
+      updatedAtMs
     };
   }
 

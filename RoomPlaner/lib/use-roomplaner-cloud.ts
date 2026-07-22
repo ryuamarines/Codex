@@ -71,6 +71,7 @@ export function useRoomPlanerCloud({
     isFirebaseConfigured() ? "" : "Firebase環境変数を入れると、Googleログインとクラウド保存を使えます。"
   );
   const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudUpdatedAtMs, setCloudUpdatedAtMs] = useState<number | null>(null);
   const [hydratingScope, setHydratingScope] = useState<PlannerStorageScope | null>(null);
   const [readyScope, setReadyScope] = useState<PlannerStorageScope | null>(null);
   const expectedScope = buildPlannerStorageScope(firebaseUser?.uid ?? null);
@@ -90,6 +91,7 @@ export function useRoomPlanerCloud({
   useEffect(() => {
     cloudOperationRef.current += 1;
     setCloudBusy(false);
+    setCloudUpdatedAtMs(null);
   }, [firebaseUser?.uid]);
 
   useEffect(() => {
@@ -120,6 +122,7 @@ export function useRoomPlanerCloud({
         if (!active) return;
 
         if (!cloudRecord) {
+          setCloudUpdatedAtMs(null);
           setCloudMessage("このアカウントには保存済みプロジェクトがありません。サンプルから開始できます。");
           return;
         }
@@ -128,6 +131,7 @@ export function useRoomPlanerCloud({
           setCloudMessage("クラウドデータを端末へ保存できなかったため、読込を中断しました。ブラウザの空き容量を確認してください。");
           return;
         }
+        setCloudUpdatedAtMs(cloudRecord.updatedAtMs > 0 ? cloudRecord.updatedAtMs : null);
 
         if (cloudRecord.migratedLegacy || cloudRecord.schemaVersion < FirestoreRoomPlanRepository.schemaVersion) {
           setCloudMessage(
@@ -191,6 +195,7 @@ export function useRoomPlanerCloud({
           ? `${workspaceSnapshot.projects.length}件をクラウド保存しました。背景画像${result.backgroundsOmitted}件は端末内だけに保持しています。`
           : `${workspaceSnapshot.projects.length}件のプロジェクトをクラウド保存しました。`
       );
+      setCloudUpdatedAtMs(result.updatedAtMs);
     } catch (error) {
       if (cloudOperationRef.current === operationId && contextIsCurrent(targetUserId, targetProjectId)) {
         setCloudMessage(getCloudErrorMessage(error));
@@ -221,6 +226,7 @@ export function useRoomPlanerCloud({
         return;
       }
       if (!cloudRecord) {
+        setCloudUpdatedAtMs(null);
         setCloudMessage("Firestoreに保存済みのプロジェクトが見つかりませんでした。");
         return;
       }
@@ -228,6 +234,7 @@ export function useRoomPlanerCloud({
         setCloudMessage("クラウドデータを端末へ保存できなかったため、読込を中断しました。ブラウザの空き容量を確認してください。");
         return;
       }
+      setCloudUpdatedAtMs(cloudRecord.updatedAtMs > 0 ? cloudRecord.updatedAtMs : null);
       setCloudMessage(`${cloudRecord.workspace.projects.length}件のプロジェクトをクラウドから読み込みました。`);
     } catch (error) {
       if (cloudOperationRef.current === operationId && contextIsCurrent(targetUserId, targetProjectId)) {
@@ -241,6 +248,7 @@ export function useRoomPlanerCloud({
   return {
     cloudMessage,
     cloudBusy,
+    cloudUpdatedAtMs,
     cloudHydrating,
     cloudReady,
     firebaseConfigured: isFirebaseConfigured(),

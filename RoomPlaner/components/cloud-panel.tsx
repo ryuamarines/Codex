@@ -18,6 +18,7 @@ type CloudPanelProps = {
   storageNotice: string;
   cloudHydrating: boolean;
   cloudBusy: boolean;
+  cloudUpdatedAtMs: number | null;
   authBusy: boolean;
   firebaseConfigured: boolean;
   projectCount: number;
@@ -37,6 +38,7 @@ export function CloudPanel({
   storageNotice,
   cloudHydrating,
   cloudBusy,
+  cloudUpdatedAtMs,
   authBusy,
   firebaseConfigured,
   projectCount,
@@ -65,9 +67,15 @@ export function CloudPanel({
       </div>
 
       {firebaseUser ? (
-        <div className="mt-3 flex items-center justify-between border-t border-neutral-200 pt-3 text-xs text-neutral-600">
-          <span>クラウド保存対象</span>
-          <strong className="text-neutral-950">{projectCount}件</strong>
+        <div className="mt-3 space-y-2 border-t border-neutral-200 pt-3 text-xs text-neutral-600">
+          <div className="flex items-center justify-between gap-2">
+            <span>クラウド保存対象</span>
+            <strong className="text-neutral-950">{projectCount}件</strong>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span>最終同期</span>
+            <strong className="text-right text-neutral-950">{formatCloudUpdatedAt(cloudUpdatedAtMs)}</strong>
+          </div>
         </div>
       ) : null}
 
@@ -125,4 +133,16 @@ export function CloudPanel({
       </div>
     </div>
   );
+}
+
+function formatCloudUpdatedAt(updatedAtMs: number | null) {
+  if (!updatedAtMs) return "未確認";
+  const date = new Date(updatedAtMs);
+  if (!Number.isFinite(updatedAtMs) || Number.isNaN(date.getTime())) return "日時不明";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }

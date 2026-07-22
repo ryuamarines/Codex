@@ -7,6 +7,7 @@ import {
   Boxes,
   Cloud,
   Database,
+  Download,
   LayoutPanelTop,
   MousePointer2,
   Plus,
@@ -78,6 +79,10 @@ import { usePlannerProject } from "@/lib/use-planner-project";
 import { useRoomPlanerAuth } from "@/lib/use-roomplaner-auth";
 import { useRoomPlanerCloud } from "@/lib/use-roomplaner-cloud";
 import { usePlannerUi } from "@/lib/use-planner-ui";
+import {
+  parsePlannerWorkspaceBackup,
+  serializePlannerWorkspaceBackup
+} from "@/lib/workspace-backup";
 import type {
   CollisionIssue,
   DoorOpenDirection,
@@ -120,6 +125,7 @@ type MobileWorkspaceView = "canvas" | "add" | "inspect";
 
 const MAX_CSV_IMPORT_BYTES = 12 * 1024 * 1024;
 const MAX_JSON_IMPORT_BYTES = 25 * 1024 * 1024;
+const MAX_WORKSPACE_BACKUP_IMPORT_BYTES = 60 * 1024 * 1024;
 
 const LEFT_PANEL_OPTIONS: PlannerNavigationOption<LeftPanelTab>[] = [
   { value: "add", label: "追加", icon: Shapes },
@@ -199,8 +205,11 @@ export function PlannerShell() {
   } = usePlannerUi();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importJsonInputRef = useRef<HTMLInputElement | null>(null);
+  const importWorkspaceBackupInputRef = useRef<HTMLInputElement | null>(null);
   const activeProjectIdRef = useRef(activeProjectId);
   activeProjectIdRef.current = activeProjectId;
+  const storageScopeRef = useRef(storageScope);
+  storageScopeRef.current = storageScope;
   const [migrationWallPath, setMigrationWallPath] = useState("right 4200\ndown 2600\nleft 1800\ndown 1200\nleft 2400\nup 3800");
   const [migrationFurnitureCsv, setMigrationFurnitureCsv] = useState(
     "name,width,depth,x,y,rotation\nBed,1400,2000,2900,2800,90\nDesk,1200,600,900,800,0"
@@ -274,6 +283,7 @@ export function PlannerShell() {
   const {
     cloudMessage,
     cloudBusy,
+    cloudUpdatedAtMs,
     cloudHydrating,
     cloudReady,
     firebaseConfigured,
@@ -521,13 +531,57 @@ export function PlannerShell() {
 
   const exportProject = () => {
     const blob = new Blob(["\ufeff", exportProjectCsv(project)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${project.name || "RoomPlaner-project"}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${project.name || "RoomPlaner-project"}.csv`);
     showNotice("現在のプロジェクトをCSVへ書き出しました。", "success");
+  };
+
+  const exportWorkspaceBackup = () => {
+    try {
+      const snapshot = getWorkspaceSnapshot();
+      if (!snapshot) throw new Error("全プロジェクトをバックアップ用に準備できませんでした。");
+      const raw = serializePlannerWorkspaceBackup(snapshot);
+      const blob = new Blob([raw], { type: "application/json;charset=utf-8" });
+      downloadBlob(blob, `RoomPlaner-workspace-${localDateStamp()}.json`);
+      showNotice(`${snapshot.projects.length}件のプロジェクトをバックアップしました。`, "success");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "バックアップを書き出せませんでした。", "error");
+    }
+  };
+
+  const importWorkspaceBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const targetScope = storageScope;
+    event.target.value = "";
+    try {
+      if (!targetScope) throw new Error("保存先が確定してからバックアップを復元してください。");
+      if (file.size > MAX_WORKSPACE_BACKUP_IMPORT_BYTES) {
+        throw new Error("バックアップが60MBを超えています。背景画像を整理したバックアップを選んでください。");
+      }
+      const snapshot = parsePlannerWorkspaceBackup(await file.text());
+      if (storageScopeRef.current !== targetScope) {
+        showNotice("バックアップ読込中にアカウントが切り替わったため、適用を中断しました。", "info");
+        return;
+      }
+
+      setConfirmation({
+        title: "全プロジェクトを復元",
+        message: `${snapshot.projects.length}件のプロジェクトで現在の一覧を置き換えます。同じIDでバックアップに背景がない場合は、端末内の背景を保持します。`,
+        confirmLabel: "復元する",
+        danger: true,
+        onConfirm: () => {
+          if (storageScopeRef.current !== targetScope) {
+            showNotice("アカウントが切り替わったため、復元を中断しました。", "info");
+            return;
+          }
+          if (hydrateWorkspaceState(snapshot)) {
+            showNotice(`${snapshot.projects.length}件のプロジェクトを復元しました。`, "success");
+          }
+        }
+      });
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "バックアップを読み込めませんでした。", "error");
+    }
   };
 
   const importProject = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1022,6 +1076,13 @@ export function PlannerShell() {
           className="hidden"
           onChange={importLegacyJsonProject}
         />
+        <input
+          ref={importWorkspaceBackupInputRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={importWorkspaceBackup}
+        />
         <PlannerAppHeader
           projects={projects}
           activeProjectId={activeProjectId}
@@ -1183,13 +1244,21 @@ export function PlannerShell() {
                 storageNotice={storageNotice}
                 cloudHydrating={cloudHydrating}
                 cloudBusy={cloudBusy}
+                cloudUpdatedAtMs={cloudUpdatedAtMs}
                 authBusy={authBusy}
                 firebaseConfigured={firebaseConfigured}
                 projectCount={projects.length}
                 guestTransfer={guestTransfer}
                 onSignIn={handleSignIn}
                 onSignOut={handleSignOut}
-                onSaveProjectToCloud={saveProjectToCloud}
+                onSaveProjectToCloud={() => {
+                  setConfirmation({
+                    title: "全プロジェクトをクラウド保存",
+                    message: `${projects.length}件のプロジェクトでクラウドの現在内容を上書きします。背景画像は端末内だけに保持されます。`,
+                    confirmLabel: "保存する",
+                    onConfirm: () => { void saveProjectToCloud(); }
+                  });
+                }}
                 onLoadProjectFromCloud={() => {
                   setConfirmation({
                     title: "クラウドから読み込む",
@@ -1352,6 +1421,14 @@ export function PlannerShell() {
                   </button>
                   <button className="button-soft w-full" onClick={exportProject}>
                     CSVを書き出す
+                  </button>
+                  <button className="button-soft w-full" onClick={exportWorkspaceBackup}>
+                    <Download size={15} />
+                    全件バックアップ保存
+                  </button>
+                  <button className="button-soft w-full" onClick={() => importWorkspaceBackupInputRef.current?.click()}>
+                    <Upload size={15} />
+                    全件バックアップ復元
                   </button>
                 </div>
               </div>
@@ -1933,6 +2010,25 @@ function modeDescriptionShort(mode: PlannerMode) {
     default:
       return "選択";
   }
+}
+
+function localDateStamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").slice(0, 180);
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function issueKindLabel(issue: CollisionIssue) {
